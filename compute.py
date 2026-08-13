@@ -194,6 +194,12 @@ for pos in POS:
     for i, pid in enumerate(ranked):
         pool_ids[pid]["adp_pos"] = i + 1
 
+def dyn_adp(pid):
+    """Dynasty half-PPR ADP from Sleeper projections (999 = unranked)."""
+    st = proj.get(pid) or {}
+    v = st.get("adp_dynasty_half_ppr") or st.get("adp_dynasty")
+    return round(v, 1) if v and v < 900 else None
+
 players_out = []
 for pid, extra in pool_ids.items():
     p = players_db[pid]
@@ -217,6 +223,7 @@ for pid, extra in pool_ids.items():
         "adp_hi": extra.get("adp_hi"),
         "adp_lo": extra.get("adp_lo"),
         "adp_pos": extra.get("adp_pos"),
+        "dyn": dyn_adp(pid),
         "proj": round(proj_pts.get(pid, 0), 1) or None,
         "p25": season25.get(pid, {}).get("pts"),
         "ppg25": season25.get(pid, {}).get("ppg"),
@@ -237,7 +244,7 @@ for t in all_teams:
     players_out.append({
         "id": t, "name": t, "team": t, "pos": "DEF",
         "bye": byes.get(t),
-        "adp": None, "adp_pos": None,
+        "adp": None, "adp_pos": None, "dyn": dyn_adp(t),
         "proj": round(def_proj.get(t, 0), 1) or None,
         "p25": season25.get(t, {}).get("pts"),
         "ppg25": season25.get(t, {}).get("ppg"),
@@ -439,6 +446,7 @@ if consensus_path.exists():
             if hit:
                 hit["cr"] = c["avg"]
                 hit["cr_n"] = c["n"]
+                hit["crs"] = c["ranks"]
                 matched += 1
             else:
                 unmatched_cr += 1

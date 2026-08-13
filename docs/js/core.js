@@ -48,10 +48,10 @@
   LAB.posBadge = pos => el('span', { class: 'badge pos-' + pos }, pos);
 
   // ADP-vs-rank dot color (green = value, red = reach), same spirit as v1 site
-  LAB.adpColor = function (rank, adp) {
+  LAB.adpColor = function (rank, adp, scale) {
     if (rank == null || adp == null) return '#3a4656';
     const diff = adp - rank;
-    const t = Math.max(-1, Math.min(1, diff / 12));
+    const t = Math.max(-1, Math.min(1, diff / (scale || 12)));
     if (t >= 0) { // value: toward green
       return `rgb(${Math.round(58 + (70 - 58) * t)},${Math.round(70 + (214 - 70) * t)},${Math.round(86 + (140 - 86) * t)})`;
     }

@@ -64,6 +64,15 @@
     render();
   }));
 
+  // dynasty lens slider (view-only blend, never writes the board)
+  state.dynW = 0;
+  const dynSlider = LAB.$('#dynSlider');
+  dynSlider.addEventListener('input', () => {
+    state.dynW = Number(dynSlider.value) / 100;
+    LAB.$('#dynPct').textContent = dynSlider.value + '%';
+    render();
+  });
+
   LAB.$('#leagueOverlay').value = state.overlay;
   LAB.$('#leagueOverlay').addEventListener('change', e => {
     state.overlay = e.target.value; LAB.prefs.boardOverlay = state.overlay; LAB.savePrefs(); render();
@@ -331,13 +340,122 @@
       }));
   }
 
+  // ---------- analyst compare view ----------
+  const SRC_META = [['joel', 'Joel Smyth'], ['fp', 'FantasyPros'], ['flock', 'Flock'], ['fb', 'Footballers']];
+  function renderCompare(root) {
+    if (state.tab === 'OVR') {
+      root.append(LAB.el('div', { class: 'empty' },
+        'Analyst lists are positional — pick a position tab (QB / RB / WR / TE) to compare.'));
+      return;
+    }
+    const pos = state.tab;
+    const myRanks = LAB.posRanks(board, pos);
+    const posPlayers = players.filter(p => p.pos === pos);
+    const srcs = SRC_META.filter(([key]) => posPlayers.some(p => p.crs && p.crs[key] != null));
+    if (!srcs.length) {
+      root.append(LAB.el('div', { class: 'empty' }, 'No analyst lists loaded for ' + pos + '.'));
+      return;
+    }
+    const cell = (rank, p, myRank, mine) => {
+      const diff = mine || myRank == null || rank == null ? null : rank - myRank;
+      const col = mine ? 'transparent' : LAB.adpColor(myRank, rank, 8);
+      return LAB.el('div', {
+        class: 'flex',
+        style: `padding:3px 7px;border-radius:6px;margin-top:3px;font-size:12.5px;gap:6px;` +
+          (mine ? 'background:var(--raised);border:1px solid var(--border-strong)'
+                : `background:${col}22;box-shadow:inset 2px 0 0 ${col}`),
+        title: p ? `${p.name} — you: ${pos}${myRank ?? '?'}` +
+          (mine ? '' : ` · them: ${pos}${rank}` +
+            (diff == null ? '' : diff === 0 ? ' (same)' : diff > 0 ? ` (you're ${diff} higher)` : ` (they're ${-diff} higher)`)) : '',
+        onclick: p ? (() => LAB.playerCard(p.id)) : null,
+      },
+        LAB.el('span', { class: 'mono muted', style: 'width:22px;text-align:right;flex:none' }, rank),
+        p ? LAB.headshot(p.id, 'sm') : '',
+        LAB.el('span', { style: 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600;cursor:pointer' }, p ? p.name : '?'),
+        !mine && diff != null && diff !== 0
+          ? LAB.el('span', { class: 'mono', style: `margin-left:auto;flex:none;font-size:11px;color:${col}` },
+              (diff > 0 ? '+' : '') + diff)
+          : '');
+    };
+    const colWrap = (title, rows) => LAB.el('div', { style: 'flex:1;min-width:210px' },
+      LAB.el('div', { style: 'font-family:var(--font-display);font-weight:700;text-transform:uppercase;letter-spacing:.05em;font-size:14px;color:var(--ink-2);padding:2px 7px' }, title),
+      rows);
+    const wrap = LAB.el('div', { style: 'display:flex;gap:12px;overflow-x:auto;align-items:flex-start' });
+    // my column, in board order
+    const myOrdered = [];
+    board.pos[pos].tiers.forEach(t => t.players.forEach(pid => myOrdered.push(byId[pid])));
+    wrap.append(colWrap('My board', myOrdered.filter(Boolean).slice(0, 60)
+      .map(p => cell(myRanks[p.id], p, myRanks[p.id], true))));
+    // one column per source, each in that source's order; colored vs my rank
+    for (const [key, label] of srcs) {
+      const theirs = posPlayers.filter(p => p.crs && p.crs[key] != null)
+        .sort((a, b) => a.crs[key] - b.crs[key]).slice(0, 60);
+      wrap.append(colWrap(label, theirs.map(p => cell(p.crs[key], p, myRanks[p.id], false))));
+    }
+    root.append(LAB.el('p', { class: 'muted', style: 'font-size:12px;margin:4px 0 10px' },
+      'Analyst columns are colored against YOUR board: ',
+      LAB.el('b', { class: 'good' }, 'green'), ' = you rank the player higher than they do, ',
+      LAB.el('b', { class: 'bad' }, 'red'), ' = they rank him higher than you. Click a name for the card.'));
+    root.append(wrap);
+  }
+
+  // ---------- dynasty lens (view-only blend) ----------
+  function renderDynasty(root, ovl) {
+    const w = state.dynW;
+    let list, myRankOf;
+    if (state.tab === 'OVR') {
+      const oRanks = LAB.overallRanks(board);
+      list = players.filter(p => oRanks[p.id] != null);
+      myRankOf = p => oRanks[p.id];
+    } else {
+      const pRanks = LAB.posRanks(board, state.tab);
+      list = players.filter(p => p.pos === state.tab && pRanks[p.id] != null);
+      myRankOf = p => pRanks[p.id];
+    }
+    // dynasty rank within this list (nulls sink to the bottom)
+    const byDyn = [...list].sort((a, b) => (a.dyn ?? 9999) - (b.dyn ?? 9999));
+    const dynRank = {};
+    byDyn.forEach((p, i) => (dynRank[p.id] = p.dyn != null ? i + 1 : null));
+    const score = p => (1 - w) * myRankOf(p) + w * (dynRank[p.id] ?? list.length);
+    const blended = [...list].sort((a, b) => score(a) - score(b));
+    root.append(LAB.el('div', { class: 'card raised', style: 'margin-bottom:10px;padding:9px 13px;border-color:var(--accent)' },
+      LAB.el('b', { class: 'accent' }, `Dynasty lens ${Math.round(w * 100)}%`),
+      LAB.el('span', { class: 'dim', style: 'margin-left:8px;font-size:12.5px' },
+        'view-only blend of your board with Sleeper dynasty half-PPR ADP — drag disabled, slide to 0% to edit')));
+    blended.slice(0, 120).forEach((p, i) => {
+      const my = myRankOf(p);
+      const move = my - (i + 1);
+      const row = LAB.el('div', { class: 'prow', style: 'cursor:pointer' },
+        LAB.el('span', { class: 'rank' }, i + 1),
+        LAB.headshot(p.id),
+        LAB.el('div', { class: 'pmeta' },
+          LAB.teamLogo(p.team),
+          LAB.el('span', { class: 'pname' }, p.name),
+          state.tab === 'OVR' ? LAB.posBadge(p.pos) : '',
+          p.rookie ? LAB.el('span', { class: 'badge rookie' }, 'R') : ''),
+        LAB.el('div', { class: 'stats' },
+          LAB.el('span', { class: 'stat', title: 'my rank' }, '#' + my),
+          LAB.el('span', { class: 'stat', title: 'dynasty rank here' }, dynRank[p.id] ? 'D' + dynRank[p.id] : '–'),
+          LAB.el('span', { class: 'stat w40 ' + (move > 0 ? 'good' : move < 0 ? 'bad' : 'muted'), title: 'movement vs my board' },
+            move === 0 ? '·' : (move > 0 ? '▲' + move : '▼' + -move))));
+      row.addEventListener('click', () => LAB.playerCard(p.id));
+      if (state.search && !p.name.toLowerCase().includes(state.search)) row.style.display = 'none';
+      root.append(row);
+    });
+  }
+
   // ---------- render ----------
   const root = LAB.$('#boardRoot');
   function render() {
     root.innerHTML = '';
     const ovl = overlayInfo();
-    LAB.$('#addTierBtn').style.display = (state.tab === 'OVR' || state.view === 'grid') ? 'none' : '';
+    const dynActive = state.dynW > 0 && state.view === 'list';
+    LAB.$('#addTierBtn').style.display =
+      (state.tab === 'OVR' || state.view !== 'list' || dynActive) ? 'none' : '';
+    LAB.$('#dynWrap').style.display = state.view === 'list' ? '' : 'none';
+    if (state.view === 'compare') return renderCompare(root);
     if (state.view === 'grid') return renderGrid(root, ovl);
+    if (dynActive) return renderDynasty(root, ovl);
     if (state.tab === 'OVR') renderOverall(root, ovl);
     else renderPosition(root, state.tab, ovl);
   }

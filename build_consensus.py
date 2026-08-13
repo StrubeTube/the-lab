@@ -25,15 +25,15 @@ JOEL_RB = ["Jahmyr Gibbs", "Bijan Robinson", "Christian McCaffrey", "Jonathan Ta
 "Saquon Barkley", "Derrick Henry", "De'Von Achane", "Jeremiyah Love", "Josh Jacobs",
 "Kyren Williams", "Breece Hall", "Javonte Williams", "Cam Skattebo", "Bucky Irving",
 "David Montgomery", "Travis Etienne Jr.", "Bhayshul Tuten", "D'Andre Swift",
-"Quinshon Judkins", "TreVeyon Henderson", "Jadarian Price", "Chuba Hubbard",
-"Rhamondre Stevenson", "Jaylen Warren", "Rico Dowdle", "RJ Harvey", "Jonathon Brooks",
-"Tony Pollard", "Blake Corum", "Kyle Monangai", "Jordan Mason", "J.K. Dobbins",
+"Quinshon Judkins", "TreVeyon Henderson", "Jadarian Price", "Jonathon Brooks",
+"Rhamondre Stevenson", "Jaylen Warren", "Rico Dowdle", "RJ Harvey", "Tony Pollard",
+"Chuba Hubbard", "Blake Corum", "Kyle Monangai", "Jordan Mason", "J.K. Dobbins",
 "Jacory Croskey-Merritt", "Rachaad White", "Kenny Gainwell", "Zach Charbonnet",
 "Chris Rodriguez Jr.", "Aaron Jones Sr.", "Keaton Mitchell", "Tank Bigsby",
-"Tyler Allgeier", "Isiah Pacheco", "Alvin Kamara", "Ray Davis", "Tyrone Tracy Jr.",
-"Woody Marks", "Jonah Coleman", "Tyjae Spears", "Brian Robinson Jr.",
-"Mike Washington Jr.", "Isaiah Davis", "Emmett Johnson", "Jaydon Blue",
-"Ollie Gordon II", "Dylan Sampson", "Nicholas Singleton", "James Conner"]
+"Isiah Pacheco", "Tyler Allgeier", "Ray Davis", "Tyrone Tracy Jr.", "Alvin Kamara",
+"Woody Marks", "Jonah Coleman", "Brian Robinson Jr.", "Tyjae Spears", "Isaiah Davis",
+"Emmett Johnson", "Mike Washington Jr.", "Jaydon Blue", "Ollie Gordon II",
+"Dylan Sampson", "Nicholas Singleton", "James Conner"]
 
 JOEL_WR = ["Ja'Marr Chase", "Puka Nacua", "Amon-Ra St. Brown", "Jaxon Smith-Njigba",
 "CeeDee Lamb", "Justin Jefferson", "Drake London", "A.J. Brown", "George Pickens",

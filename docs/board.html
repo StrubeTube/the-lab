@@ -27,6 +27,7 @@
     <div class="seg" id="viewTabs">
       <button data-view="list" class="active">List</button>
       <button data-view="grid">Big Board</button>
+      <button data-view="compare">Analysts</button>
     </div>
     <button class="btn small" id="addTierBtn">+ Tier</button>
     <select id="leagueOverlay" title="League overlay">
@@ -34,6 +35,11 @@
       <option value="ggg">GGG overlay</option>
       <option value="lob">LOB overlay</option>
     </select>
+    <label class="flex dim" id="dynWrap" style="gap:6px;font-size:12px" title="Blend your board with Dynasty ADP — view only, your saved rankings don't change">
+      Dynasty lens
+      <input type="range" id="dynSlider" min="0" max="100" step="5" value="0" style="width:110px;accent-color:var(--accent)">
+      <span class="mono" id="dynPct" style="width:34px">0%</span>
+    </label>
   </div>
 
   <div id="boardRoot"></div>

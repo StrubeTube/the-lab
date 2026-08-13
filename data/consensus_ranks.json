@@ -770,16 +770,6 @@
    }
   },
   {
-   "name": "Chuba Hubbard",
-   "avg": 30.0,
-   "n": 3,
-   "ranks": {
-    "joel": 27,
-    "flock": 35,
-    "fb": 28
-   }
-  },
-  {
    "name": "Rico Dowdle",
    "avg": 31.0,
    "n": 3,
@@ -791,12 +781,32 @@
   },
   {
    "name": "Tony Pollard",
-   "avg": 31.33,
+   "avg": 31.0,
+   "n": 3,
+   "ranks": {
+    "joel": 32,
+    "flock": 28,
+    "fb": 33
+   }
+  },
+  {
+   "name": "Chuba Hubbard",
+   "avg": 32.0,
    "n": 3,
    "ranks": {
     "joel": 33,
-    "flock": 28,
-    "fb": 33
+    "flock": 35,
+    "fb": 28
+   }
+  },
+  {
+   "name": "Jonathon Brooks",
+   "avg": 33.0,
+   "n": 3,
+   "ranks": {
+    "joel": 27,
+    "flock": 30,
+    "fb": 42
    }
   },
   {
@@ -817,16 +827,6 @@
     "joel": 37,
     "flock": 32,
     "fb": 32
-   }
-  },
-  {
-   "name": "Jonathon Brooks",
-   "avg": 34.67,
-   "n": 3,
-   "ranks": {
-    "joel": 32,
-    "flock": 30,
-    "fb": 42
    }
   },
   {
@@ -911,10 +911,10 @@
   },
   {
    "name": "Tyrone Tracy Jr.",
-   "avg": 44.33,
+   "avg": 44.0,
    "n": 3,
    "ranks": {
-    "joel": 50,
+    "joel": 49,
     "flock": 43,
     "fb": 40
    }
@@ -927,6 +927,16 @@
     "joel": 44,
     "flock": 46,
     "fb": 48
+   }
+  },
+  {
+   "name": "Isiah Pacheco",
+   "avg": 46.33,
+   "n": 3,
+   "ranks": {
+    "joel": 46,
+    "flock": 47,
+    "fb": 46
    }
   },
   {
@@ -950,16 +960,6 @@
    }
   },
   {
-   "name": "Isiah Pacheco",
-   "avg": 46.67,
-   "n": 3,
-   "ranks": {
-    "joel": 47,
-    "flock": 47,
-    "fb": 46
-   }
-  },
-  {
    "name": "Tank Bigsby",
    "avg": 48.0,
    "n": 3,
@@ -967,16 +967,6 @@
     "joel": 45,
     "flock": 49,
     "fb": 50
-   }
-  },
-  {
-   "name": "Tyler Allgeier",
-   "avg": 49.33,
-   "n": 3,
-   "ranks": {
-    "joel": 46,
-    "flock": 48,
-    "fb": 54
    }
   },
   {
@@ -990,23 +980,43 @@
    }
   },
   {
-   "name": "Tyjae Spears",
+   "name": "Tyler Allgeier",
    "avg": 49.67,
    "n": 3,
    "ranks": {
-    "joel": 53,
+    "joel": 47,
+    "flock": 48,
+    "fb": 54
+   }
+  },
+  {
+   "name": "Tyjae Spears",
+   "avg": 50.0,
+   "n": 3,
+   "ranks": {
+    "joel": 54,
     "flock": 53,
     "fb": 43
    }
   },
   {
    "name": "Alvin Kamara",
-   "avg": 50.0,
+   "avg": 50.67,
    "n": 3,
    "ranks": {
-    "joel": 48,
+    "joel": 50,
     "flock": 50,
     "fb": 52
+   }
+  },
+  {
+   "name": "Brian Robinson Jr.",
+   "avg": 53.33,
+   "n": 3,
+   "ranks": {
+    "joel": 53,
+    "flock": 54,
+    "fb": 53
    }
   },
   {
@@ -1020,31 +1030,21 @@
    }
   },
   {
-   "name": "Brian Robinson Jr.",
-   "avg": 53.67,
-   "n": 3,
-   "ranks": {
-    "joel": 54,
-    "flock": 54,
-    "fb": 53
-   }
-  },
-  {
    "name": "Emmett Johnson",
-   "avg": 57.67,
+   "avg": 57.33,
    "n": 3,
    "ranks": {
-    "joel": 57,
+    "joel": 56,
     "flock": 58,
     "fb": 58
    }
   },
   {
    "name": "Mike Washington Jr.",
-   "avg": 58.33,
+   "avg": 59.0,
    "n": 3,
    "ranks": {
-    "joel": 55,
+    "joel": 57,
     "flock": 60,
     "fb": 60
    }
@@ -1061,10 +1061,10 @@
   },
   {
    "name": "Ray Davis",
-   "avg": 60.33,
+   "avg": 60.0,
    "n": 3,
    "ranks": {
-    "joel": 49,
+    "joel": 48,
     "flock": 61,
     "fb": 71
    }
@@ -1134,22 +1134,22 @@
    }
   },
   {
+   "name": "Isaiah Davis",
+   "avg": 68.0,
+   "n": 3,
+   "ranks": {
+    "joel": 55,
+    "flock": 81,
+    "fb": 68
+   }
+  },
+  {
    "name": "Justice Hill",
    "avg": 68.0,
    "n": 2,
    "ranks": {
     "flock": 79,
     "fb": 57
-   }
-  },
-  {
-   "name": "Isaiah Davis",
-   "avg": 68.33,
-   "n": 3,
-   "ranks": {
-    "joel": 56,
-    "flock": 81,
-    "fb": 68
    }
   },
   {
