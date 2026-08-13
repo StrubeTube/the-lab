@@ -425,6 +425,29 @@ for pid, p in players_db.items():
 for t in all_teams:
     lookup[t] = [t + " DEF", "DEF", t]
 
+# ---- analyst consensus ranks (data/consensus_ranks.json from build_consensus.py) ----
+consensus_path = ROOT / "data" / "consensus_ranks.json"
+if consensus_path.exists():
+    consensus = json.loads(consensus_path.read_text(encoding="utf-8"))
+    pool_by_pos = {}
+    for e in players_out:
+        pool_by_pos.setdefault(e["pos"], {}).setdefault(norm(e["name"] or ""), e)
+    matched = unmatched_cr = 0
+    for pos, entries in consensus.items():
+        for c in entries:
+            hit = pool_by_pos.get(pos, {}).get(norm(c["name"]))
+            if hit:
+                hit["cr"] = c["avg"]
+                hit["cr_n"] = c["n"]
+                matched += 1
+            else:
+                unmatched_cr += 1
+    print(f"  consensus: {matched} matched to pool, {unmatched_cr} outside pool")
+    top_missing = [e["name"] for e in players_out
+                   if e["pos"] in POS and e.get("adp") and e["adp"] <= 100 and "cr" not in e]
+    if top_missing:
+        print(f"  WARNING top-100-ADP players with no consensus rank: {top_missing}")
+
 # BC freshness guard: only trust tiers if they cover the top of current ADP
 top30 = sorted((p for p in players_out if p.get("adp") and p["pos"] in POS),
                key=lambda x: x["adp"])[:30]

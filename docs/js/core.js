@@ -6,7 +6,7 @@
   LAB.POS = ['QB', 'RB', 'WR', 'TE', 'DEF'];
   LAB.SKILL = ['QB', 'RB', 'WR', 'TE'];
   LAB.API = 'https://api.sleeper.app/v1';
-  LAB.KEY_BOARD = 'thelab-board-v1';
+  LAB.KEY_BOARD = 'thelab-board-v2'; // v2: seeds from analyst consensus (cr), not raw ADP
   LAB.KEY_PREFS = 'thelab-prefs-v1';
 
   // ---------- tiny helpers ----------
@@ -97,15 +97,19 @@
     localStorage.setItem(LAB.KEY_BOARD, JSON.stringify(board));
   };
 
-  // auto-tier seeding: cut on ADP gaps, cap tier size
+  // auto-tier seeding: cut on consensus-rank gaps (or ADP gaps past the
+  // consensus horizon), cap tier size
   function seedTiers(list, gapThresh, maxSize) {
+    const CR_GAP = 2; // avg positional ranks this far apart = real tier break
     const tiers = [];
     let cur = [];
     for (let i = 0; i < list.length; i++) {
       const p = list[i];
       const prev = list[i - 1];
-      const gap = prev && p.adp != null && prev.adp != null ? p.adp - prev.adp : 0;
-      if (cur.length && (cur.length >= maxSize || gap >= gapThresh)) {
+      let gap = 0, thresh = gapThresh;
+      if (prev && p.cr != null && prev.cr != null) { gap = p.cr - prev.cr; thresh = CR_GAP; }
+      else if (prev && p.adp != null && prev.adp != null) gap = p.adp - prev.adp;
+      if (cur.length && (cur.length >= maxSize || gap >= thresh)) {
         tiers.push(cur); cur = [];
       }
       cur.push(p);
@@ -124,23 +128,30 @@
     const MAX = { QB: 6, RB: 8, WR: 9, TE: 6, DEF: 8 };
     for (const pos of LAB.POS) {
       let list = players.filter(p => p.pos === pos);
-      list.sort((a, b) => (a.adp ?? (1000 - (a.proj || 0))) - (b.adp ?? (1000 - (b.proj || 0))));
+      // consensus rank first, then ADP, then projections
+      const key = p => p.cr != null ? p.cr : 200 + (p.adp ?? (500 - (p.proj || 0)));
+      list.sort((a, b) => key(a) - key(b));
       const tiers = seedTiers(list, GAPS[pos], MAX[pos]).map(t => ({
         id: newTierId(), players: t.map(p => p.id),
       }));
       board.pos[pos] = { tiers };
     }
-    // overall: order blocks by best ADP inside each block
+    // overall: k-way merge of each position's tier sequence by median ADP —
+    // tiers of one position always stay in order; only the interleave varies
     const byId = LAB.playersById(players);
-    const blocks = [];
-    for (const pos of LAB.POS) {
-      board.pos[pos].tiers.forEach(t => {
-        const best = Math.min(...t.players.map(id => byId[id]?.adp ?? 500));
-        blocks.push({ pos, tierId: t.id, best });
-      });
+    const queues = LAB.POS.map(pos => board.pos[pos].tiers.map(t => {
+      const adps = t.players.map(id => byId[id]?.adp ?? 500).sort((a, b) => a - b);
+      return { pos, tierId: t.id, med: adps.length ? adps[Math.floor(adps.length / 2)] : 500 };
+    }));
+    board.overall = [];
+    while (queues.some(q => q.length)) {
+      let best = null;
+      for (const q of queues) {
+        if (q.length && (!best || q[0].med < best[0].med)) best = q;
+      }
+      const blk = best.shift();
+      board.overall.push({ pos: blk.pos, tierId: blk.tierId });
     }
-    blocks.sort((a, b) => a.best - b.best);
-    board.overall = blocks.map(b => ({ pos: b.pos, tierId: b.tierId }));
     return board;
   };
 
