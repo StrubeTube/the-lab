@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Strength of Schedule — The Lab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/lab.css">
+<link rel="icon" href="https://sleepercdn.com/images/team_logos/nfl/car.png">
+</head>
+<body>
+<div class="page">
+  <h1>Strength of Schedule</h1>
+  <p class="dim" style="max-width:680px">2026 schedule difficulty by position, from 2025 fantasy points allowed (your scoring). <b style="color:var(--sos-easy)">Orange = juicy matchup</b> (defense bled points to this position), <b style="color:var(--sos-hard)">teal = tough</b>. Number in each cell = the opponent defense's rank vs that position (1 = allowed most). Fantasy playoff weeks 15–17 are outlined.</p>
+  <div class="toolbar">
+    <div class="seg" id="posSeg">
+      <button data-p="QB" class="pos-active-QB active">QB</button>
+      <button data-p="RB" class="pos-active-RB">RB</button>
+      <button data-p="WR" class="pos-active-WR">WR</button>
+      <button data-p="TE" class="pos-active-TE">TE</button>
+      <button data-p="DEF" class="pos-active-DEF">DEF</button>
+    </div>
+    <div class="seg" id="sortSeg">
+      <button data-s="team" class="active">A–Z</button>
+      <button data-s="season">Easiest season</button>
+      <button data-s="playoffs">Easiest playoffs</button>
+    </div>
+  </div>
+  <div class="heat-wrap card" id="heatRoot"></div>
+</div>
+<script src="js/core.js"></script>
+<script src="js/sos.js"></script>
+</body>
+</html>

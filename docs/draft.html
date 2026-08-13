@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Draft Room — The Lab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/lab.css">
+<link rel="icon" href="https://sleepercdn.com/images/team_logos/nfl/car.png">
+</head>
+<body>
+<div class="page">
+  <div class="flex" style="justify-content:space-between;flex-wrap:wrap;gap:10px">
+    <h1>Draft Room</h1>
+    <div class="toolbar" style="margin:0">
+      <div class="seg league-pick" id="leagueSeg">
+        <button data-lg="ggg" class="active">GGG</button>
+        <button data-lg="lob">LOB</button>
+      </div>
+      <div class="seg" id="modeSeg">
+        <button data-mode="live" class="active">Live</button>
+        <button data-mode="mock">Mock</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="statusBar" class="card" style="margin-top:12px"></div>
+  <div id="mockControls" style="margin-top:10px;display:none"></div>
+  <div id="onClock" style="margin-top:10px"></div>
+  <div id="ticker" style="margin-top:10px"></div>
+
+  <div class="draft-layout" style="margin-top:14px">
+    <div>
+      <div class="toolbar" style="margin:0 0 8px">
+        <div class="seg" id="posFilter">
+          <button data-p="ALL" class="active">Best available</button>
+          <button data-p="QB" class="pos-active-QB">QB</button>
+          <button data-p="RB" class="pos-active-RB">RB</button>
+          <button data-p="WR" class="pos-active-WR">WR</button>
+          <button data-p="TE" class="pos-active-TE">TE</button>
+          <button data-p="DEF" class="pos-active-DEF">DEF</button>
+        </div>
+        <label class="flex dim" style="font-size:12px"><input type="checkbox" id="hideDrafted" checked> hide drafted</label>
+      </div>
+      <div id="bestBoard"></div>
+    </div>
+    <div>
+      <div class="card" id="myRosterCard"></div>
+      <div class="card" style="margin-top:12px" id="intelPanel"></div>
+      <div class="card" style="margin-top:12px" id="reportPanel"></div>
+    </div>
+  </div>
+</div>
+<script src="js/core.js"></script>
+<script src="js/draft.js"></script>
+</body>
+</html>
