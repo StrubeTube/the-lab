@@ -377,6 +377,21 @@
     const myCell = pid => {
       const p = byId[pid];
       if (!p) return null;
+      // vs the average of the analyst lists on this page (consensus avg)
+      let vsAvg = '';
+      const avg = p.cr;
+      const my = myRanks[pid];
+      if (avg != null && my != null) {
+        const d = avg - my; // positive = I'm higher than their average
+        const near = Math.abs(d) < 1;
+        const sym = near ? '＝' : d > 0 ? '▲' : '▼';
+        const col = near ? 'var(--ink-3)' : d > 0 ? '#3ee68f' : '#f5c542';
+        vsAvg = LAB.el('span', {
+          style: `flex:none;font-size:${near ? 9 : 10}px;color:${col};width:14px;text-align:center`,
+          title: `You: ${pos}${my} · their average: ${pos}${avg.toFixed(1)}` +
+            (near ? ' — right at the average' : d > 0 ? ` — you're ${d.toFixed(1)} higher` : ` — you're ${(-d).toFixed(1)} lower`),
+        }, sym);
+      }
       const c = LAB.el('div', {
         class: 'cmp-mine', 'data-pid': pid,
         style: CELL_BASE + 'background:var(--raised);border:1px solid var(--border-strong);cursor:grab',
@@ -385,6 +400,7 @@
         LAB.el('span', { class: 'mono muted', style: 'width:22px;text-align:right;flex:none' }, myRanks[pid]),
         LAB.headshot(pid, 'sm'),
         LAB.el('span', { style: 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600' }, p.name),
+        vsAvg,
         LAB.el('button', { class: 'qa-btn', style: 'margin-left:auto', onclick: e => { e.stopPropagation(); quickActions(pid); } }, '⋮'));
       c.addEventListener('dblclick', () => LAB.playerCard(pid));
       return c;
