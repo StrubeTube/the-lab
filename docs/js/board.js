@@ -399,49 +399,78 @@
     root.append(wrap);
   }
 
-  // ---------- dynasty lens (view-only blend) ----------
+  // ---------- dynasty lens (view-only blend; tiers stay fixed, players
+  // re-order only WITHIN their tier) ----------
   function renderDynasty(root, ovl) {
     const w = state.dynW;
-    let list, myRankOf;
-    if (state.tab === 'OVR') {
-      const oRanks = LAB.overallRanks(board);
-      list = players.filter(p => oRanks[p.id] != null);
-      myRankOf = p => oRanks[p.id];
-    } else {
-      const pRanks = LAB.posRanks(board, state.tab);
-      list = players.filter(p => p.pos === state.tab && pRanks[p.id] != null);
-      myRankOf = p => pRanks[p.id];
-    }
-    // dynasty rank within this list (nulls sink to the bottom)
-    const byDyn = [...list].sort((a, b) => (a.dyn ?? 9999) - (b.dyn ?? 9999));
+    // per-position dynasty ranks (nulls sink)
     const dynRank = {};
-    byDyn.forEach((p, i) => (dynRank[p.id] = p.dyn != null ? i + 1 : null));
-    const score = p => (1 - w) * myRankOf(p) + w * (dynRank[p.id] ?? list.length);
-    const blended = [...list].sort((a, b) => score(a) - score(b));
+    for (const pos of LAB.POS) {
+      const list = players.filter(p => p.pos === pos)
+        .sort((a, b) => (a.dyn ?? 9999) - (b.dyn ?? 9999));
+      list.forEach((p, i) => (dynRank[p.id] = p.dyn != null ? i + 1 : null));
+    }
     root.append(LAB.el('div', { class: 'card raised', style: 'margin-bottom:10px;padding:9px 13px;border-color:var(--accent)' },
       LAB.el('b', { class: 'accent' }, `Dynasty lens ${Math.round(w * 100)}%`),
       LAB.el('span', { class: 'dim', style: 'margin-left:8px;font-size:12.5px' },
-        'view-only blend of your board with Sleeper dynasty half-PPR ADP — drag disabled, slide to 0% to edit')));
-    blended.slice(0, 120).forEach((p, i) => {
-      const my = myRankOf(p);
-      const move = my - (i + 1);
+        'tiers stay put — players re-order inside their tier by a blend of your rank and Sleeper dynasty half-PPR ADP. View only; slide to 0% to edit.')));
+
+    const dynRow = (pid, showPos, displayRank, move) => {
+      const p = byId[pid];
+      if (!p) return null;
       const row = LAB.el('div', { class: 'prow', style: 'cursor:pointer' },
-        LAB.el('span', { class: 'rank' }, i + 1),
-        LAB.headshot(p.id),
+        LAB.el('span', { class: 'rank' }, displayRank),
+        LAB.headshot(pid),
         LAB.el('div', { class: 'pmeta' },
           LAB.teamLogo(p.team),
           LAB.el('span', { class: 'pname' }, p.name),
-          state.tab === 'OVR' ? LAB.posBadge(p.pos) : '',
+          showPos ? LAB.posBadge(p.pos) : '',
           p.rookie ? LAB.el('span', { class: 'badge rookie' }, 'R') : ''),
         LAB.el('div', { class: 'stats' },
-          LAB.el('span', { class: 'stat', title: 'my rank' }, '#' + my),
-          LAB.el('span', { class: 'stat', title: 'dynasty rank here' }, dynRank[p.id] ? 'D' + dynRank[p.id] : '–'),
-          LAB.el('span', { class: 'stat w40 ' + (move > 0 ? 'good' : move < 0 ? 'bad' : 'muted'), title: 'movement vs my board' },
+          LAB.el('span', { class: 'stat', title: 'dynasty positional rank' }, dynRank[pid] ? 'D' + dynRank[pid] : '–'),
+          LAB.el('span', { class: 'stat w40 ' + (move > 0 ? 'good' : move < 0 ? 'bad' : 'muted'), title: 'movement within tier vs my order' },
             move === 0 ? '·' : (move > 0 ? '▲' + move : '▼' + -move))));
-      row.addEventListener('click', () => LAB.playerCard(p.id));
+      row.addEventListener('click', () => LAB.playerCard(pid));
       if (state.search && !p.name.toLowerCase().includes(state.search)) row.style.display = 'none';
-      root.append(row);
-    });
+      return row;
+    };
+
+    // blend WITHIN one tier: my order index vs dynasty rank
+    const blendTier = (tier, pos) => {
+      const pRanks = LAB.posRanks(board, pos);
+      const orig = tier.players.filter(pid => byId[pid]);
+      const sorted = [...orig].sort((a, b) => {
+        const sa = (1 - w) * pRanks[a] + w * (dynRank[a] ?? 999);
+        const sb = (1 - w) * pRanks[b] + w * (dynRank[b] ?? 999);
+        return sa - sb;
+      });
+      return sorted.map(pid => ({ pid, move: orig.indexOf(pid) - sorted.indexOf(pid) }));
+    };
+
+    if (state.tab === 'OVR') {
+      let rank = 1;
+      for (const ref of board.overall) {
+        const tiers = board.pos[ref.pos].tiers;
+        const ti = tiers.findIndex(t => t.id === ref.tierId);
+        if (ti === -1) continue;
+        const blk = LAB.el('div', { class: `block block-${ref.pos}` },
+          LAB.el('div', { class: 'block-head', style: 'cursor:default' }, `${ref.pos} · Tier ${ti + 1}`),
+          LAB.el('div', { class: 'block-body' },
+            blendTier(tiers[ti], ref.pos).map(x => dynRow(x.pid, true, rank++, x.move))));
+        root.append(blk);
+      }
+    } else {
+      const tiers = board.pos[state.tab].tiers;
+      let rank = 1;
+      tiers.forEach((t, ti) => {
+        root.append(LAB.el('div', { class: 'tier-head' + (ti === 0 ? ' t1' : ''), style: 'cursor:default' },
+          `Tier ${ti + 1}`, LAB.el('span', { class: 'count' }, `${t.players.length}`)));
+        blendTier(t, state.tab).forEach(x => {
+          const r = dynRow(x.pid, false, rank++, x.move);
+          if (r) root.append(r);
+        });
+      });
+    }
   }
 
   // ---------- render ----------
