@@ -341,7 +341,18 @@
   }
 
   // ---------- analyst compare view ----------
+  // Rows align by rank; my tier breaks run as full-width bars across every
+  // column; my column stays drag-editable (writes the real board).
   const SRC_META = [['joel', 'Joel Smyth'], ['fp', 'FantasyPros'], ['flock', 'Flock'], ['fb', 'Footballers']];
+  function diffColor(myRank, theirRank) {
+    if (myRank == null || theirRank == null) return null;
+    const t = Math.max(-1, Math.min(1, (theirRank - myRank) / 6));
+    if (t === 0) return null;
+    const from = [86, 98, 116];                       // neutral slate
+    const to = t > 0 ? [62, 230, 143] : [255, 92, 92]; // bright green / bright red
+    const u = Math.abs(t);
+    return `rgb(${from.map((f, i) => Math.round(f + (to[i] - f) * u)).join(',')})`;
+  }
   function renderCompare(root) {
     if (state.tab === 'OVR') {
       root.append(LAB.el('div', { class: 'empty' },
@@ -356,47 +367,103 @@
       root.append(LAB.el('div', { class: 'empty' }, 'No analyst lists loaded for ' + pos + '.'));
       return;
     }
-    const cell = (rank, p, myRank, mine) => {
-      const diff = mine || myRank == null || rank == null ? null : rank - myRank;
-      const col = mine ? 'transparent' : LAB.adpColor(myRank, rank, 8);
-      return LAB.el('div', {
-        class: 'flex',
-        style: `padding:3px 7px;border-radius:6px;margin-top:3px;font-size:12.5px;gap:6px;` +
-          (mine ? 'background:var(--raised);border:1px solid var(--border-strong)'
-                : `background:${col}22;box-shadow:inset 2px 0 0 ${col}`),
-        title: p ? `${p.name} — you: ${pos}${myRank ?? '?'}` +
-          (mine ? '' : ` · them: ${pos}${rank}` +
-            (diff == null ? '' : diff === 0 ? ' (same)' : diff > 0 ? ` (you're ${diff} higher)` : ` (they're ${-diff} higher)`)) : '',
-        onclick: p ? (() => LAB.playerCard(p.id)) : null,
+    const srcLists = {};
+    for (const [key] of srcs) {
+      srcLists[key] = posPlayers.filter(p => p.crs && p.crs[key] != null)
+        .sort((a, b) => a.crs[key] - b.crs[key]);
+    }
+
+    const CELL_BASE = 'display:flex;align-items:center;gap:6px;padding:4px 7px;border-radius:7px;margin-top:4px;font-size:12.5px;min-height:32px;';
+    const myCell = pid => {
+      const p = byId[pid];
+      if (!p) return null;
+      const c = LAB.el('div', {
+        class: 'cmp-mine', 'data-pid': pid,
+        style: CELL_BASE + 'background:var(--raised);border:1px solid var(--border-strong);cursor:grab',
+        title: `${p.name} — drag to re-rank, ⋮ for actions`,
       },
-        LAB.el('span', { class: 'mono muted', style: 'width:22px;text-align:right;flex:none' }, rank),
-        p ? LAB.headshot(p.id, 'sm') : '',
-        LAB.el('span', { style: 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600;cursor:pointer' }, p ? p.name : '?'),
-        !mine && diff != null && diff !== 0
-          ? LAB.el('span', { class: 'mono', style: `margin-left:auto;flex:none;font-size:11px;color:${col}` },
-              (diff > 0 ? '+' : '') + diff)
+        LAB.el('span', { class: 'mono muted', style: 'width:22px;text-align:right;flex:none' }, myRanks[pid]),
+        LAB.headshot(pid, 'sm'),
+        LAB.el('span', { style: 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600' }, p.name),
+        LAB.el('button', { class: 'qa-btn', style: 'margin-left:auto', onclick: e => { e.stopPropagation(); quickActions(pid); } }, '⋮'));
+      c.addEventListener('dblclick', () => LAB.playerCard(pid));
+      return c;
+    };
+    const analystCell = (p, rank) => {
+      if (!p) return LAB.el('div', { style: CELL_BASE + 'opacity:0' }, '·');
+      const myRank = myRanks[p.id];
+      const diff = myRank != null ? rank - myRank : null;
+      const col = diffColor(myRank, rank);
+      const bg = col ? `background:${col.replace('rgb', 'rgba').replace(')', ',0.28)')};box-shadow:inset 3px 0 0 ${col};` : 'background:var(--surface);border:1px solid var(--border);';
+      return LAB.el('div', {
+        style: CELL_BASE + bg + 'cursor:pointer',
+        title: `${p.name} — you: ${pos}${myRank ?? '—'} · them: ${pos}${rank}` +
+          (diff == null ? ' (not on your board)' : diff === 0 ? ' (same)' : diff > 0 ? ` — you're ${diff} higher` : ` — they're ${-diff} higher`),
+        onclick: () => LAB.playerCard(p.id),
+      },
+        LAB.el('span', { class: 'mono', style: 'width:22px;text-align:right;flex:none;color:' + (col || 'var(--ink-3)') }, rank),
+        LAB.headshot(p.id, 'sm'),
+        LAB.el('span', { style: 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600' }, p.name),
+        diff != null && diff !== 0
+          ? LAB.el('b', { class: 'mono', style: `margin-left:auto;flex:none;font-size:11.5px;color:${col}` }, (diff > 0 ? '+' : '') + diff)
           : '');
     };
-    const colWrap = (title, rows) => LAB.el('div', { style: 'flex:1;min-width:210px' },
-      LAB.el('div', { style: 'font-family:var(--font-display);font-weight:700;text-transform:uppercase;letter-spacing:.05em;font-size:14px;color:var(--ink-2);padding:2px 7px' }, title),
-      rows);
-    const wrap = LAB.el('div', { style: 'display:flex;gap:12px;overflow-x:auto;align-items:flex-start' });
-    // my column, in board order
-    const myOrdered = [];
-    board.pos[pos].tiers.forEach(t => t.players.forEach(pid => myOrdered.push(byId[pid])));
-    wrap.append(colWrap('My board', myOrdered.filter(Boolean).slice(0, 60)
-      .map(p => cell(myRanks[p.id], p, myRanks[p.id], true))));
-    // one column per source, each in that source's order; colored vs my rank
-    for (const [key, label] of srcs) {
-      const theirs = posPlayers.filter(p => p.crs && p.crs[key] != null)
-        .sort((a, b) => a.crs[key] - b.crs[key]).slice(0, 60);
-      wrap.append(colWrap(label, theirs.map(p => cell(p.crs[key], p, myRanks[p.id], false))));
-    }
+
     root.append(LAB.el('p', { class: 'muted', style: 'font-size:12px;margin:4px 0 10px' },
-      'Analyst columns are colored against YOUR board: ',
-      LAB.el('b', { class: 'good' }, 'green'), ' = you rank the player higher than they do, ',
-      LAB.el('b', { class: 'bad' }, 'red'), ' = they rank him higher than you. Click a name for the card.'));
-    root.append(wrap);
+      'Rows align by rank; the bars are YOUR tiers. Analyst cells vs your board: ',
+      LAB.el('b', { style: 'color:#3ee68f' }, 'green = you\'re higher on him'), ', ',
+      LAB.el('b', { style: 'color:#ff5c5c' }, 'red = they\'re higher'), '. Drag in the My column to edit for real.'));
+
+    const grid = LAB.el('div', { style: 'min-width:' + (210 * (srcs.length + 1) + 12 * srcs.length) + 'px' });
+    const outer = LAB.el('div', { style: 'overflow-x:auto' }, grid);
+    const colStyle = 'flex:1;min-width:210px';
+    // header row
+    grid.append(LAB.el('div', { style: 'display:flex;gap:12px' },
+      [['', 'My board'], ...srcs].map(([, label], i) => LAB.el('div', {
+        style: colStyle + ';font-family:var(--font-display);font-weight:700;text-transform:uppercase;letter-spacing:.05em;font-size:14px;color:var(--ink-2);padding:2px 7px',
+      }, i === 0 ? 'My board' : label))));
+
+    const tiers = board.pos[pos].tiers;
+    let cursor = 0; // rank index consumed so far
+    const sections = []; // for drag rebuild
+    tiers.forEach((t, ti) => {
+      const n = t.players.length;
+      // full-width tier bar
+      grid.append(LAB.el('div', { class: 'tier-head' + (ti === 0 ? ' t1' : ''), style: 'cursor:default;margin-top:10px' },
+        `Tier ${ti + 1}`, LAB.el('span', { class: 'count' }, `${n}`)));
+      const row = LAB.el('div', { style: 'display:flex;gap:12px;align-items:flex-start' });
+      const mineCol = LAB.el('div', { class: 'cmp-tier', 'data-tier': t.id, style: colStyle });
+      t.players.forEach(pid => { const c = myCell(pid); if (c) mineCol.append(c); });
+      row.append(mineCol);
+      sections.push(mineCol);
+      for (const [key] of srcs) {
+        const col = LAB.el('div', { style: colStyle });
+        for (let i = cursor; i < cursor + n; i++) {
+          const p = srcLists[key][i];
+          col.append(analystCell(p, p ? p.crs[key] : null));
+        }
+        row.append(col);
+      }
+      grid.append(row);
+      cursor += n;
+    });
+    root.append(outer);
+
+    // my column editable: drag within and across tier sections
+    sections.forEach(sec => {
+      new Sortable(sec, {
+        group: 'cmp-' + pos, animation: 120, draggable: '.cmp-mine',
+        filter: '.qa-btn', delay: 150, delayOnTouchOnly: true,
+        onEnd: () => {
+          snapshot();
+          sections.forEach(s => {
+            const tier = board.pos[pos].tiers.find(x => x.id === s.dataset.tier);
+            if (tier) tier.players = Array.from(s.querySelectorAll('.cmp-mine')).map(c => c.dataset.pid);
+          });
+          commit();
+        },
+      });
+    });
   }
 
   // ---------- dynasty lens (view-only blend; tiers stay fixed, players
