@@ -444,76 +444,104 @@
         style: colStyle + ';font-family:var(--font-display);font-weight:700;text-transform:uppercase;letter-spacing:.05em;font-size:14px;color:var(--ink-2);padding:2px 7px',
       }, i === 0 ? 'My board' : label))));
 
-    // tier blocks: positional tiers, or the overall board's tier-block ordering
-    const blocks = isOvr
-      ? board.overall.map(ref => {
-          const posTiers = board.pos[ref.pos]?.tiers || [];
-          const i = posTiers.findIndex(x => x.id === ref.tierId);
-          return i >= 0 ? { tier: posTiers[i], pos: ref.pos, label: `${ref.pos} · Tier ${i + 1}` } : null;
-        }).filter(Boolean)
-      : board.pos[pos].tiers.map((t, i) => ({ tier: t, pos, label: `Tier ${i + 1}` }));
-    let cursor = 0; // rank index consumed so far
-    const sections = []; // for drag rebuild
-    blocks.forEach(({ tier: t, pos: bpos, label }, ti) => {
-      const n = t.players.length;
-      // block = full-width tier bar + its row; the bar is the drag handle
-      const blk = LAB.el('div', { class: 'cmp-block', 'data-tier': t.id, 'data-pos': bpos });
-      blk.append(LAB.el('div', { class: 'tier-head' + (ti === 0 ? ' t1' : ''), style: 'cursor:grab;margin-top:10px', title: 'drag to move this whole tier' },
-        LAB.el('span', { class: 'grip', style: 'margin-right:6px' }, '⠿'),
-        label, LAB.el('span', { class: 'count' }, `${n}`)));
-      const row = LAB.el('div', { style: 'display:flex;gap:12px;align-items:flex-start' });
-      const mineCol = LAB.el('div', { class: 'cmp-tier', 'data-tier': t.id, style: colStyle });
-      t.players.forEach(pid => { const c = myCell(pid); if (c) mineCol.append(c); });
-      row.append(mineCol);
-      sections.push(mineCol);
-      for (const [key] of srcs) {
-        const col = LAB.el('div', { style: colStyle });
-        for (let i = cursor; i < cursor + n; i++) {
-          const p = srcLists[key][i];
-          col.append(analystCell(p, p ? ranksOf(p)[key] : null));
-        }
-        row.append(col);
-      }
-      blk.append(row);
-      grid.append(blk);
-      cursor += n;
-    });
-    root.append(outer);
+    const totalW = COLW * (srcs.length + 1) + 12 * srcs.length;
 
-    // whole-tier reorder by dragging the bar: overall order on the OVR tab,
-    // this position's tier order on a position tab
-    new Sortable(grid, {
-      animation: 130, handle: '.tier-head', draggable: '.cmp-block',
-      onEnd: () => {
-        snapshot();
-        const order = Array.from(grid.querySelectorAll('.cmp-block'));
-        if (isOvr) {
-          board.overall = order.map(b => ({ pos: b.dataset.pos, tierId: b.dataset.tier }));
-        } else {
-          const byTierId = {};
-          board.pos[pos].tiers.forEach(t => (byTierId[t.id] = t));
-          board.pos[pos].tiers = order.map(b => byTierId[b.dataset.tier]).filter(Boolean);
+    if (isOvr) {
+      // ---- OVR: whole tier blocks (the overall board arranges blocks) ----
+      const blocks = board.overall.map(ref => {
+        const posTiers = board.pos[ref.pos]?.tiers || [];
+        const i = posTiers.findIndex(x => x.id === ref.tierId);
+        return i >= 0 ? { tier: posTiers[i], pos: ref.pos, label: `${ref.pos} · Tier ${i + 1}` } : null;
+      }).filter(Boolean);
+      let cursor = 0; // rank index consumed so far
+      blocks.forEach(({ tier: t, pos: bpos, label }, ti) => {
+        const n = t.players.length;
+        const blk = LAB.el('div', { class: 'cmp-block', 'data-tier': t.id, 'data-pos': bpos });
+        blk.append(LAB.el('div', { class: 'tier-head' + (ti === 0 ? ' t1' : ''), style: 'cursor:grab;margin-top:10px', title: 'drag to move this whole tier block (overall arranges blocks)' },
+          LAB.el('span', { class: 'grip', style: 'margin-right:6px' }, '⠿'),
+          label, LAB.el('span', { class: 'count' }, `${n}`)));
+        const row = LAB.el('div', { style: 'display:flex;gap:12px;align-items:flex-start' });
+        const mineCol = LAB.el('div', { style: colStyle });
+        t.players.forEach(pid => { const c = myCell(pid); if (c) mineCol.append(c); });
+        row.append(mineCol);
+        for (const [key] of srcs) {
+          const col = LAB.el('div', { style: colStyle });
+          for (let i = cursor; i < cursor + n; i++) {
+            const p = srcLists[key][i];
+            col.append(analystCell(p, p ? ranksOf(p)[key] : null));
+          }
+          row.append(col);
         }
-        commit();
-      },
-    });
-
-    // my column editable: drag within and across tier sections (positional
-    // tabs only — the overall board is edited by moving whole tier blocks)
-    if (isOvr) return;
-    sections.forEach(sec => {
-      new Sortable(sec, {
-        group: 'cmp-' + pos, animation: 120, draggable: '.cmp-mine',
-        filter: '.qa-btn', delay: 150, delayOnTouchOnly: true,
+        blk.append(row);
+        grid.append(blk);
+        cursor += n;
+      });
+      root.append(outer);
+      new Sortable(grid, {
+        animation: 130, handle: '.tier-head', draggable: '.cmp-block',
         onEnd: () => {
           snapshot();
-          sections.forEach(s => {
-            const tier = board.pos[pos].tiers.find(x => x.id === s.dataset.tier);
-            if (tier) tier.players = Array.from(s.querySelectorAll('.cmp-mine')).map(c => c.dataset.pid);
-          });
+          board.overall = Array.from(grid.querySelectorAll('.cmp-block'))
+            .map(b => ({ pos: b.dataset.pos, tierId: b.dataset.tier }));
           commit();
         },
       });
+      return;
+    }
+
+    // ---- position tab: one flat my-column; tier bars are movable BREAKS —
+    // drag a bar between players to re-split tiers, drag players to re-rank
+    grid.style.width = totalW + 'px'; // fixed widths keep the bars spanning exactly
+    const tiers = board.pos[pos].tiers;
+    const BAR_H = 36; // fixed bar height so analyst columns stay row-aligned
+    const myCol = LAB.el('div', { style: colStyle });
+    tiers.forEach((t, ti) => {
+      myCol.append(LAB.el('div', {
+        class: 'tier-head' + (ti === 0 ? ' t1' : ''), 'data-tier': t.id,
+        style: `width:${totalW}px;height:${BAR_H}px;box-sizing:border-box;position:relative;z-index:2`,
+        title: 'drag between players to move this tier break',
+      },
+        LAB.el('span', { class: 'grip', style: 'margin-right:6px;color:var(--ink-3)' }, '⠿'),
+        `Tier ${ti + 1}`, LAB.el('span', { class: 'count' }, `${t.players.length}`)));
+      t.players.forEach(pid => { const c = myCell(pid); if (c) myCol.append(c); });
+    });
+    const row = LAB.el('div', { style: 'display:flex;gap:12px;align-items:flex-start' });
+    row.append(myCol);
+    for (const [key] of srcs) {
+      const col = LAB.el('div', { style: colStyle });
+      let i = 0;
+      tiers.forEach(t => {
+        col.append(LAB.el('div', { style: `height:${BAR_H}px;margin-top:10px` })); // aligns with the bar
+        for (let k = 0; k < t.players.length; k++, i++) {
+          const p = srcLists[key][i];
+          col.append(analystCell(p, p ? ranksOf(p)[key] : null));
+        }
+      });
+      row.append(col);
+    }
+    grid.append(row);
+    root.append(outer);
+
+    new Sortable(myCol, {
+      animation: 120, draggable: '.cmp-mine, .tier-head', filter: '.qa-btn',
+      delay: 150, delayOnTouchOnly: true,
+      onEnd: () => {
+        snapshot();
+        const newTiers = [];
+        let cur = null;
+        const leading = []; // players dropped above the Tier 1 bar
+        Array.from(myCol.children).forEach(k => {
+          if (k.classList.contains('tier-head')) {
+            cur = { id: k.dataset.tier, players: [] };
+            newTiers.push(cur);
+          } else if (k.classList.contains('cmp-mine')) {
+            (cur ? cur.players : leading).push(k.dataset.pid);
+          }
+        });
+        if (newTiers.length) newTiers[0].players = leading.concat(newTiers[0].players);
+        board.pos[pos].tiers = newTiers;
+        commit();
+      },
     });
   }
 
