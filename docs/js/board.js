@@ -449,15 +449,17 @@
       ? board.overall.map(ref => {
           const posTiers = board.pos[ref.pos]?.tiers || [];
           const i = posTiers.findIndex(x => x.id === ref.tierId);
-          return i >= 0 ? { tier: posTiers[i], label: `${ref.pos} · Tier ${i + 1}` } : null;
+          return i >= 0 ? { tier: posTiers[i], pos: ref.pos, label: `${ref.pos} · Tier ${i + 1}` } : null;
         }).filter(Boolean)
-      : board.pos[pos].tiers.map((t, i) => ({ tier: t, label: `Tier ${i + 1}` }));
+      : board.pos[pos].tiers.map((t, i) => ({ tier: t, pos, label: `Tier ${i + 1}` }));
     let cursor = 0; // rank index consumed so far
     const sections = []; // for drag rebuild
-    blocks.forEach(({ tier: t, label }, ti) => {
+    blocks.forEach(({ tier: t, pos: bpos, label }, ti) => {
       const n = t.players.length;
-      // full-width tier bar
-      grid.append(LAB.el('div', { class: 'tier-head' + (ti === 0 ? ' t1' : ''), style: 'cursor:default;margin-top:10px' },
+      // block = full-width tier bar + its row; the bar is the drag handle
+      const blk = LAB.el('div', { class: 'cmp-block', 'data-tier': t.id, 'data-pos': bpos });
+      blk.append(LAB.el('div', { class: 'tier-head' + (ti === 0 ? ' t1' : ''), style: 'cursor:grab;margin-top:10px', title: 'drag to move this whole tier' },
+        LAB.el('span', { class: 'grip', style: 'margin-right:6px' }, '⠿'),
         label, LAB.el('span', { class: 'count' }, `${n}`)));
       const row = LAB.el('div', { style: 'display:flex;gap:12px;align-items:flex-start' });
       const mineCol = LAB.el('div', { class: 'cmp-tier', 'data-tier': t.id, style: colStyle });
@@ -472,10 +474,29 @@
         }
         row.append(col);
       }
-      grid.append(row);
+      blk.append(row);
+      grid.append(blk);
       cursor += n;
     });
     root.append(outer);
+
+    // whole-tier reorder by dragging the bar: overall order on the OVR tab,
+    // this position's tier order on a position tab
+    new Sortable(grid, {
+      animation: 130, handle: '.tier-head', draggable: '.cmp-block',
+      onEnd: () => {
+        snapshot();
+        const order = Array.from(grid.querySelectorAll('.cmp-block'));
+        if (isOvr) {
+          board.overall = order.map(b => ({ pos: b.dataset.pos, tierId: b.dataset.tier }));
+        } else {
+          const byTierId = {};
+          board.pos[pos].tiers.forEach(t => (byTierId[t.id] = t));
+          board.pos[pos].tiers = order.map(b => byTierId[b.dataset.tier]).filter(Boolean);
+        }
+        commit();
+      },
+    });
 
     // my column editable: drag within and across tier sections (positional
     // tabs only — the overall board is edited by moving whole tier blocks)
