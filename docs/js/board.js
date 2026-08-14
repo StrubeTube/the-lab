@@ -353,6 +353,73 @@
     const u = Math.abs(t);
     return `rgb(${from.map((f, i) => Math.round(f + (to[i] - f) * u)).join(',')})`;
   }
+  // target overall rank for a player under the analyst consensus
+  const consensusTarget = pid => { const p = byId[pid]; return p ? (p.ocr ?? p.adp ?? null) : null; };
+
+  // total |my overall rank - consensus| for a given block ordering
+  function overallNetDiff(order) {
+    let sum = 0, r = 0;
+    for (const ref of order) {
+      const t = board.pos[ref.pos]?.tiers.find(x => x.id === ref.tierId);
+      if (!t) continue;
+      for (const pid of t.players) {
+        r++;
+        const tg = consensusTarget(pid);
+        if (tg != null) sum += Math.abs(r - tg);
+      }
+    }
+    return Math.round(sum);
+  }
+
+  // Exact best interleave of the five positions' tier sequences (each position's
+  // tier order fixed, players inside tiers untouched), minimising overallNetDiff.
+  // DP over "tiers consumed per position"; a block's cost depends only on how
+  // many players precede it, so ~80k states x 5 moves solves it instantly.
+  function bestTierOrder() {
+    const seqs = LAB.POS.map(pos => board.pos[pos].tiers.map(t => ({
+      pos, tierId: t.id, targets: t.players.map(consensusTarget),
+    })));
+    const K = seqs.length;
+    const counts = seqs.map(s => s.length);
+    const strides = new Array(K);
+    let total = 1;
+    for (let k = K - 1; k >= 0; k--) { strides[k] = total; total *= counts[k] + 1; }
+    const cost = new Float64Array(total).fill(Infinity);
+    const choice = new Int8Array(total).fill(-1);
+    cost[0] = 0;
+    const digits = new Array(K);
+    for (let s = 0; s < total; s++) {
+      if (cost[s] === Infinity) continue;
+      let rem = s, off = 0;
+      for (let k = 0; k < K; k++) {
+        digits[k] = Math.floor(rem / strides[k]);
+        rem %= strides[k];
+        for (let t = 0; t < digits[k]; t++) off += seqs[k][t].targets.length;
+      }
+      for (let k = 0; k < K; k++) {
+        if (digits[k] >= counts[k]) continue;
+        const tier = seqs[k][digits[k]];
+        let c = 0;
+        for (let j = 0; j < tier.targets.length; j++) {
+          const tg = tier.targets[j];
+          if (tg != null) c += Math.abs(off + j + 1 - tg);
+        }
+        const ns = s + strides[k];
+        if (cost[s] + c < cost[ns]) { cost[ns] = cost[s] + c; choice[ns] = k; }
+      }
+    }
+    // walk back from the fully-consumed state
+    let s = total - 1;
+    const order = [];
+    while (s > 0) {
+      const k = choice[s];
+      s -= strides[k];
+      const ik = Math.floor(s % (strides[k] * (counts[k] + 1)) / strides[k]);
+      order.push({ pos: seqs[k][ik].pos, tierId: seqs[k][ik].tierId });
+    }
+    return order.reverse();
+  }
+
   function renderCompare(root) {
     const pos = state.tab;
     const isOvr = pos === 'OVR';
@@ -433,6 +500,22 @@
       LAB.el('b', { style: 'color:#ff5c5c' }, 'red = they\'re higher'), '. ',
       isOvr ? 'Overall lists: analyst rank numbers keep their K/DST gaps. Edit on a position tab.'
         : 'Drag in the My column to edit for real.'));
+
+    if (isOvr) {
+      root.append(LAB.el('div', { style: 'margin:0 0 10px' },
+        LAB.el('button', {
+          class: 'btn small',
+          title: 'Re-order the tier blocks (players inside each tier untouched, position tier order preserved) so your overall ranks land as close as possible to the analyst average',
+          onclick: () => {
+            snapshot();
+            const before = overallNetDiff(board.overall);
+            board.overall = bestTierOrder();
+            const after = overallNetDiff(board.overall);
+            commit();
+            LAB.toast(`Tiers sorted to consensus — net rank gap ${before} → ${after}`, 'good');
+          },
+        }, '⚖ Sort tiers to consensus')));
+    }
 
     const COLW = isOvr ? 235 : 210;
     const grid = LAB.el('div', { style: 'min-width:' + (COLW * (srcs.length + 1) + 12 * srcs.length) + 'px' });
