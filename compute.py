@@ -330,13 +330,18 @@ def league_out(tag):
         "fpts": (r.get("settings") or {}).get("fpts", 0),
     } for r in L["rosters"]]
     d0 = (L["drafts"] or [{}])[0]
-    # keeper cost basis: round drafted last season (from most recent completed draft)
+    # keeper cost basis: round drafted last season (from most recent completed draft).
+    # A pick with is_keeper means the player was KEPT last year — his slot round is what
+    # the keep cost, so this year's keep escalates one round earlier from there.
     last_rounds = {}
+    last_kept = []
     for h in L["history"]:
         if h["season"] == str(PREV):
             for d in h["drafts"]:
                 for pk in d["picks"]:
                     last_rounds[pk["player_id"]] = pk["round"]
+                    if pk.get("is_keeper"):
+                        last_kept.append(pk["player_id"])
     return {
         "id": L["league"]["league_id"],
         "name": L["league"]["name"].strip(),
@@ -348,6 +353,7 @@ def league_out(tag):
         "rosters": rosters,
         "myUserId": my_uid,
         "lastDraftRound": last_rounds,
+        "lastKept": last_kept,
         "keeperRule": "round_slot" if tag == "ggg" else "round_minus_1",
         "keeperMax": (L["league"].get("settings") or {}).get("max_keepers", 3),
     }

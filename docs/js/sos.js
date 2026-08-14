@@ -16,10 +16,10 @@
     render();
   }));
 
-  // diverging color: rank 1 (easy, orange) <-> rank 32 (hard, teal), neutral mid
+  // diverging color: rank 1 (easy, green) <-> rank 32 (hard, orange), neutral mid
   function cellColor(rank) {
     const t = (rank - 16.5) / 15.5; // -1 easy .. +1 hard
-    const mid = [58, 68, 82], easy = [255, 138, 77], hard = [31, 163, 133];
+    const mid = [58, 68, 82], easy = [31, 163, 133], hard = [255, 138, 77];
     const from = t < 0 ? easy : hard;
     const u = Math.abs(t);
     const c = mid.map((m, i) => Math.round(m + (from[i] - m) * u));
