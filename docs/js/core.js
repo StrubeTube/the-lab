@@ -136,12 +136,13 @@
       }));
       board.pos[pos] = { tiers };
     }
-    // overall: k-way merge of each position's tier sequence by median ADP —
-    // tiers of one position always stay in order; only the interleave varies
+    // overall: k-way merge of each position's tier sequence by median overall
+    // consensus rank (ADP fallback) — tiers of one position always stay in
+    // order; only the interleave varies
     const byId = LAB.playersById(players);
     const queues = LAB.POS.map(pos => board.pos[pos].tiers.map(t => {
-      const adps = t.players.map(id => byId[id]?.adp ?? 500).sort((a, b) => a - b);
-      return { pos, tierId: t.id, med: adps.length ? adps[Math.floor(adps.length / 2)] : 500 };
+      const ms = t.players.map(id => byId[id]?.ocr ?? byId[id]?.adp ?? 500).sort((a, b) => a - b);
+      return { pos, tierId: t.id, med: ms.length ? ms[Math.floor(ms.length / 2)] : 500 };
     }));
     board.overall = [];
     while (queues.some(q => q.length)) {
@@ -199,7 +200,7 @@
     if (!board) {
       board = LAB.seedBoard(players);
       LAB.saveBoard(board);
-      LAB.toast('Fresh board seeded from ADP');
+      LAB.toast('Fresh board seeded from your analyst consensus');
     } else {
       const { newcomers } = LAB.reconcileBoard(board, players);
       if (newcomers.length) {

@@ -447,6 +447,8 @@ if consensus_path.exists():
         pool_by_pos.setdefault(e["pos"], {}).setdefault(norm(e["name"] or ""), e)
     matched = unmatched_cr = 0
     for pos, entries in consensus.items():
+        if pos == "OVR":
+            continue
         for c in entries:
             hit = pool_by_pos.get(pos, {}).get(norm(c["name"]))
             if hit:
@@ -457,6 +459,22 @@ if consensus_path.exists():
             else:
                 unmatched_cr += 1
     print(f"  consensus: {matched} matched to pool, {unmatched_cr} outside pool")
+    # overall lists ("OVR") match by name across the whole skill pool
+    pool_by_name = {}
+    for e in players_out:
+        if e["pos"] in POS:
+            pool_by_name.setdefault(norm(e["name"] or ""), e)
+    omatched = ounmatched = 0
+    for c in consensus.get("OVR", []):
+        hit = pool_by_name.get(norm(c["name"]))
+        if hit:
+            hit["ocr"] = c["avg"]
+            hit["ocr_n"] = c["n"]
+            hit["ocrs"] = c["ranks"]
+            omatched += 1
+        else:
+            ounmatched += 1
+    print(f"  overall consensus: {omatched} matched, {ounmatched} outside pool")
     top_missing = [e["name"] for e in players_out
                    if e["pos"] in POS and e.get("adp") and e["adp"] <= 100 and "cr" not in e]
     if top_missing:

@@ -81,13 +81,13 @@
   LAB.$('#exportBtn').addEventListener('click', LAB.exportBoard);
   LAB.$('#importBtn').addEventListener('click', () => LAB.importBoard(() => { board = LAB.loadBoard(); LAB.reconcileBoard(board, players); render(); }));
   LAB.$('#resetBtn').addEventListener('click', () => {
-    if (!confirm('Reset the ENTIRE board (all positions + overall) back to ADP-seeded tiers? Notes survive. This cannot be undone past the undo stack.')) return;
+    if (!confirm('Reset the ENTIRE board (all positions + overall) back to the average of your analyst rankings, tiers included? Notes survive. This cannot be undone past the undo stack.')) return;
     snapshot();
     const notes = board.notes || {};
     board = LAB.seedBoard(players);
     board.notes = notes;
     commit();
-    LAB.toast('Board reseeded from ADP', 'good');
+    LAB.toast('Board + tiers reseeded from your analyst consensus', 'good');
   });
   LAB.$('#addTierBtn').addEventListener('click', () => {
     if (state.tab === 'OVR') return LAB.toast('Add tiers on a position tab — overall arranges those tiers');
@@ -344,9 +344,9 @@
   // Rows align by rank; my tier breaks run as full-width bars across every
   // column; my column stays drag-editable (writes the real board).
   const SRC_META = [['joel', 'Joel Smyth'], ['fp', 'FantasyPros'], ['flock', 'Flock'], ['fb', 'Footballers']];
-  function diffColor(myRank, theirRank) {
+  function diffColor(myRank, theirRank, span) {
     if (myRank == null || theirRank == null) return null;
-    const t = Math.max(-1, Math.min(1, (theirRank - myRank) / 6));
+    const t = Math.max(-1, Math.min(1, (theirRank - myRank) / (span || 6)));
     if (t === 0) return null;
     const from = [86, 98, 116];                       // neutral slate
     const to = t > 0 ? [62, 230, 143] : [255, 92, 92]; // bright green / bright red
@@ -354,23 +354,23 @@
     return `rgb(${from.map((f, i) => Math.round(f + (to[i] - f) * u)).join(',')})`;
   }
   function renderCompare(root) {
-    if (state.tab === 'OVR') {
-      root.append(LAB.el('div', { class: 'empty' },
-        'Analyst lists are positional — pick a position tab (QB / RB / WR / TE) to compare.'));
-      return;
-    }
     const pos = state.tab;
-    const myRanks = LAB.posRanks(board, pos);
-    const posPlayers = players.filter(p => p.pos === pos);
-    const srcs = SRC_META.filter(([key]) => posPlayers.some(p => p.crs && p.crs[key] != null));
+    const isOvr = pos === 'OVR';
+    const myRanks = isOvr ? LAB.overallRanks(board) : LAB.posRanks(board, pos);
+    const ranksOf = p => isOvr ? p.ocrs : p.crs;      // per-source rank map
+    const avgOf = p => isOvr ? p.ocr : p.cr;          // consensus average
+    const SPAN = isOvr ? 15 : 6;                      // full-color diff distance
+    const tag = r => isOvr ? '#' + r : pos + r;
+    const posPlayers = isOvr ? players : players.filter(p => p.pos === pos);
+    const srcs = SRC_META.filter(([key]) => posPlayers.some(p => ranksOf(p) && ranksOf(p)[key] != null));
     if (!srcs.length) {
       root.append(LAB.el('div', { class: 'empty' }, 'No analyst lists loaded for ' + pos + '.'));
       return;
     }
     const srcLists = {};
     for (const [key] of srcs) {
-      srcLists[key] = posPlayers.filter(p => p.crs && p.crs[key] != null)
-        .sort((a, b) => a.crs[key] - b.crs[key]);
+      srcLists[key] = posPlayers.filter(p => ranksOf(p) && ranksOf(p)[key] != null)
+        .sort((a, b) => ranksOf(a)[key] - ranksOf(b)[key]);
     }
 
     const CELL_BASE = 'display:flex;align-items:center;gap:6px;padding:4px 7px;border-radius:7px;margin-top:4px;font-size:12.5px;min-height:32px;';
@@ -379,27 +379,28 @@
       if (!p) return null;
       // vs the average of the analyst lists on this page (consensus avg)
       let vsAvg = '';
-      const avg = p.cr;
+      const avg = avgOf(p);
       const my = myRanks[pid];
       if (avg != null && my != null) {
         const d = avg - my; // positive = I'm higher than their average
-        const near = Math.abs(d) < 1;
+        const near = Math.abs(d) < (isOvr ? 3 : 1);
         const sym = near ? '＝' : d > 0 ? '▲' : '▼';
         const col = near ? 'var(--ink-3)' : d > 0 ? '#3ee68f' : '#f5c542';
         vsAvg = LAB.el('span', {
           style: `flex:none;font-size:${near ? 9 : 10}px;color:${col};width:14px;text-align:center`,
-          title: `You: ${pos}${my} · their average: ${pos}${avg.toFixed(1)}` +
+          title: `You: ${tag(my)} · their average: ${tag(avg.toFixed(1))}` +
             (near ? ' — right at the average' : d > 0 ? ` — you're ${d.toFixed(1)} higher` : ` — you're ${(-d).toFixed(1)} lower`),
         }, sym);
       }
       const c = LAB.el('div', {
         class: 'cmp-mine', 'data-pid': pid,
-        style: CELL_BASE + 'background:var(--raised);border:1px solid var(--border-strong);cursor:grab',
-        title: `${p.name} — drag to re-rank, ⋮ for actions`,
+        style: CELL_BASE + 'background:var(--raised);border:1px solid var(--border-strong)' + (isOvr ? '' : ';cursor:grab'),
+        title: p.name + (isOvr ? ' — edit on a position tab; ⋮ for actions' : ' — drag to re-rank, ⋮ for actions'),
       },
         LAB.el('span', { class: 'mono muted', style: 'width:22px;text-align:right;flex:none' }, myRanks[pid]),
         LAB.headshot(pid, 'sm'),
         LAB.el('span', { style: 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600' }, p.name),
+        isOvr ? LAB.posBadge(p.pos) : '',
         vsAvg,
         LAB.el('button', { class: 'qa-btn', style: 'margin-left:auto', onclick: e => { e.stopPropagation(); quickActions(pid); } }, '⋮'));
       c.addEventListener('dblclick', () => LAB.playerCard(pid));
@@ -409,17 +410,18 @@
       if (!p) return LAB.el('div', { style: CELL_BASE + 'opacity:0' }, '·');
       const myRank = myRanks[p.id];
       const diff = myRank != null ? rank - myRank : null;
-      const col = diffColor(myRank, rank);
+      const col = diffColor(myRank, rank, SPAN);
       const bg = col ? `background:${col.replace('rgb', 'rgba').replace(')', ',0.28)')};box-shadow:inset 3px 0 0 ${col};` : 'background:var(--surface);border:1px solid var(--border);';
       return LAB.el('div', {
         style: CELL_BASE + bg + 'cursor:pointer',
-        title: `${p.name} — you: ${pos}${myRank ?? '—'} · them: ${pos}${rank}` +
+        title: `${p.name} — you: ${myRank != null ? tag(myRank) : '—'} · them: ${tag(rank)}` +
           (diff == null ? ' (not on your board)' : diff === 0 ? ' (same)' : diff > 0 ? ` — you're ${diff} higher` : ` — they're ${-diff} higher`),
         onclick: () => LAB.playerCard(p.id),
       },
         LAB.el('span', { class: 'mono', style: 'width:22px;text-align:right;flex:none;color:' + (col || 'var(--ink-3)') }, rank),
         LAB.headshot(p.id, 'sm'),
         LAB.el('span', { style: 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600' }, p.name),
+        isOvr ? LAB.posBadge(p.pos) : '',
         diff != null && diff !== 0
           ? LAB.el('b', { class: 'mono', style: `margin-left:auto;flex:none;font-size:11.5px;color:${col}` }, (diff > 0 ? '+' : '') + diff)
           : '');
@@ -428,25 +430,35 @@
     root.append(LAB.el('p', { class: 'muted', style: 'font-size:12px;margin:4px 0 10px' },
       'Rows align by rank; the bars are YOUR tiers. Analyst cells vs your board: ',
       LAB.el('b', { style: 'color:#3ee68f' }, 'green = you\'re higher on him'), ', ',
-      LAB.el('b', { style: 'color:#ff5c5c' }, 'red = they\'re higher'), '. Drag in the My column to edit for real.'));
+      LAB.el('b', { style: 'color:#ff5c5c' }, 'red = they\'re higher'), '. ',
+      isOvr ? 'Overall lists: analyst rank numbers keep their K/DST gaps. Edit on a position tab.'
+        : 'Drag in the My column to edit for real.'));
 
-    const grid = LAB.el('div', { style: 'min-width:' + (210 * (srcs.length + 1) + 12 * srcs.length) + 'px' });
+    const COLW = isOvr ? 235 : 210;
+    const grid = LAB.el('div', { style: 'min-width:' + (COLW * (srcs.length + 1) + 12 * srcs.length) + 'px' });
     const outer = LAB.el('div', { style: 'overflow-x:auto' }, grid);
-    const colStyle = 'flex:1;min-width:210px';
+    const colStyle = 'flex:1;min-width:' + COLW + 'px';
     // header row
     grid.append(LAB.el('div', { style: 'display:flex;gap:12px' },
       [['', 'My board'], ...srcs].map(([, label], i) => LAB.el('div', {
         style: colStyle + ';font-family:var(--font-display);font-weight:700;text-transform:uppercase;letter-spacing:.05em;font-size:14px;color:var(--ink-2);padding:2px 7px',
       }, i === 0 ? 'My board' : label))));
 
-    const tiers = board.pos[pos].tiers;
+    // tier blocks: positional tiers, or the overall board's tier-block ordering
+    const blocks = isOvr
+      ? board.overall.map(ref => {
+          const posTiers = board.pos[ref.pos]?.tiers || [];
+          const i = posTiers.findIndex(x => x.id === ref.tierId);
+          return i >= 0 ? { tier: posTiers[i], label: `${ref.pos} · Tier ${i + 1}` } : null;
+        }).filter(Boolean)
+      : board.pos[pos].tiers.map((t, i) => ({ tier: t, label: `Tier ${i + 1}` }));
     let cursor = 0; // rank index consumed so far
     const sections = []; // for drag rebuild
-    tiers.forEach((t, ti) => {
+    blocks.forEach(({ tier: t, label }, ti) => {
       const n = t.players.length;
       // full-width tier bar
       grid.append(LAB.el('div', { class: 'tier-head' + (ti === 0 ? ' t1' : ''), style: 'cursor:default;margin-top:10px' },
-        `Tier ${ti + 1}`, LAB.el('span', { class: 'count' }, `${n}`)));
+        label, LAB.el('span', { class: 'count' }, `${n}`)));
       const row = LAB.el('div', { style: 'display:flex;gap:12px;align-items:flex-start' });
       const mineCol = LAB.el('div', { class: 'cmp-tier', 'data-tier': t.id, style: colStyle });
       t.players.forEach(pid => { const c = myCell(pid); if (c) mineCol.append(c); });
@@ -456,7 +468,7 @@
         const col = LAB.el('div', { style: colStyle });
         for (let i = cursor; i < cursor + n; i++) {
           const p = srcLists[key][i];
-          col.append(analystCell(p, p ? p.crs[key] : null));
+          col.append(analystCell(p, p ? ranksOf(p)[key] : null));
         }
         row.append(col);
       }
@@ -465,7 +477,9 @@
     });
     root.append(outer);
 
-    // my column editable: drag within and across tier sections
+    // my column editable: drag within and across tier sections (positional
+    // tabs only — the overall board is edited by moving whole tier blocks)
+    if (isOvr) return;
     sections.forEach(sec => {
       new Sortable(sec, {
         group: 'cmp-' + pos, animation: 120, draggable: '.cmp-mine',

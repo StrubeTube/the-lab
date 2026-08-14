@@ -492,9 +492,10 @@
   {
    "name": "Jahmyr Gibbs",
    "avg": 1.0,
-   "n": 3,
+   "n": 4,
    "ranks": {
     "joel": 1,
+    "fp": 1,
     "flock": 1,
     "fb": 1
    }
@@ -502,9 +503,10 @@
   {
    "name": "Bijan Robinson",
    "avg": 2.0,
-   "n": 3,
+   "n": 4,
    "ranks": {
     "joel": 2,
+    "fp": 2,
     "flock": 2,
     "fb": 2
    }
@@ -512,139 +514,153 @@
   {
    "name": "Christian McCaffrey",
    "avg": 3.0,
-   "n": 3,
+   "n": 4,
    "ranks": {
     "joel": 3,
+    "fp": 3,
     "flock": 3,
     "fb": 3
    }
   },
   {
    "name": "Jonathan Taylor",
-   "avg": 4.33,
-   "n": 3,
+   "avg": 4.25,
+   "n": 4,
    "ranks": {
     "joel": 4,
+    "fp": 4,
     "flock": 4,
     "fb": 5
    }
   },
   {
    "name": "James Cook III",
-   "avg": 4.67,
-   "n": 3,
+   "avg": 4.75,
+   "n": 4,
    "ranks": {
     "joel": 5,
+    "fp": 5,
     "flock": 5,
     "fb": 4
    }
   },
   {
    "name": "Ashton Jeanty",
-   "avg": 7.0,
-   "n": 3,
+   "avg": 6.75,
+   "n": 4,
    "ranks": {
     "joel": 7,
+    "fp": 6,
     "flock": 6,
     "fb": 8
    }
   },
   {
+   "name": "Chase Brown",
+   "avg": 8.25,
+   "n": 4,
+   "ranks": {
+    "joel": 9,
+    "fp": 7,
+    "flock": 7,
+    "fb": 10
+   }
+  },
+  {
    "name": "Omarion Hampton",
-   "avg": 8.33,
-   "n": 3,
+   "avg": 8.75,
+   "n": 4,
    "ranks": {
     "joel": 6,
+    "fp": 10,
     "flock": 8,
     "fb": 11
    }
   },
   {
    "name": "Kenneth Walker III",
-   "avg": 8.67,
-   "n": 3,
+   "avg": 8.75,
+   "n": 4,
    "ranks": {
     "joel": 8,
+    "fp": 9,
     "flock": 11,
     "fb": 7
    }
   },
   {
-   "name": "Chase Brown",
-   "avg": 8.67,
-   "n": 3,
-   "ranks": {
-    "joel": 9,
-    "flock": 7,
-    "fb": 10
-   }
-  },
-  {
    "name": "De'Von Achane",
-   "avg": 9.0,
-   "n": 3,
+   "avg": 9.5,
+   "n": 4,
    "ranks": {
     "joel": 12,
+    "fp": 11,
     "flock": 9,
     "fb": 6
    }
   },
   {
    "name": "Saquon Barkley",
-   "avg": 10.67,
-   "n": 3,
+   "avg": 10.0,
+   "n": 4,
    "ranks": {
     "joel": 10,
+    "fp": 8,
     "flock": 10,
     "fb": 12
    }
   },
   {
    "name": "Derrick Henry",
-   "avg": 10.67,
-   "n": 3,
+   "avg": 11.0,
+   "n": 4,
    "ranks": {
     "joel": 11,
+    "fp": 12,
     "flock": 12,
     "fb": 9
    }
   },
   {
    "name": "Jeremiyah Love",
-   "avg": 13.33,
-   "n": 3,
+   "avg": 13.25,
+   "n": 4,
    "ranks": {
     "joel": 13,
+    "fp": 13,
     "flock": 13,
     "fb": 14
    }
   },
   {
-   "name": "Josh Jacobs",
-   "avg": 14.67,
-   "n": 3,
-   "ranks": {
-    "joel": 14,
-    "flock": 17,
-    "fb": 13
-   }
-  },
-  {
    "name": "Kyren Williams",
-   "avg": 15.0,
-   "n": 3,
+   "avg": 14.75,
+   "n": 4,
    "ranks": {
     "joel": 15,
+    "fp": 14,
     "flock": 15,
     "fb": 15
    }
   },
   {
+   "name": "Josh Jacobs",
+   "avg": 15.0,
+   "n": 4,
+   "ranks": {
+    "joel": 14,
+    "fp": 16,
+    "flock": 17,
+    "fb": 13
+   }
+  },
+  {
    "name": "Breece Hall",
-   "avg": 15.67,
-   "n": 3,
+   "avg": 15.5,
+   "n": 4,
    "ranks": {
     "joel": 16,
+    "fp": 15,
     "flock": 14,
     "fb": 17
    }
@@ -652,89 +668,98 @@
   {
    "name": "Javonte Williams",
    "avg": 17.0,
-   "n": 3,
+   "n": 4,
    "ranks": {
     "joel": 17,
+    "fp": 17,
     "flock": 16,
     "fb": 18
    }
   },
   {
    "name": "Cam Skattebo",
-   "avg": 17.33,
-   "n": 3,
+   "avg": 17.75,
+   "n": 4,
    "ranks": {
     "joel": 18,
+    "fp": 19,
     "flock": 18,
     "fb": 16
    }
   },
   {
-   "name": "Bucky Irving",
-   "avg": 19.33,
-   "n": 3,
-   "ranks": {
-    "joel": 19,
-    "flock": 20,
-    "fb": 19
-   }
-  },
-  {
    "name": "Travis Etienne Jr.",
-   "avg": 20.67,
-   "n": 3,
+   "avg": 20.0,
+   "n": 4,
    "ranks": {
     "joel": 21,
+    "fp": 18,
     "flock": 19,
     "fb": 22
    }
   },
   {
-   "name": "Bhayshul Tuten",
-   "avg": 21.33,
-   "n": 3,
+   "name": "Bucky Irving",
+   "avg": 20.25,
+   "n": 4,
    "ranks": {
-    "joel": 22,
-    "flock": 21,
-    "fb": 21
-   }
-  },
-  {
-   "name": "D'Andre Swift",
-   "avg": 22.0,
-   "n": 3,
-   "ranks": {
-    "joel": 23,
-    "flock": 23,
-    "fb": 20
+    "joel": 19,
+    "fp": 23,
+    "flock": 20,
+    "fb": 19
    }
   },
   {
    "name": "David Montgomery",
-   "avg": 22.33,
-   "n": 3,
+   "avg": 21.75,
+   "n": 4,
    "ranks": {
     "joel": 20,
+    "fp": 20,
     "flock": 22,
     "fb": 25
    }
   },
   {
+   "name": "D'Andre Swift",
+   "avg": 21.75,
+   "n": 4,
+   "ranks": {
+    "joel": 23,
+    "fp": 21,
+    "flock": 23,
+    "fb": 20
+   }
+  },
+  {
+   "name": "Bhayshul Tuten",
+   "avg": 22.0,
+   "n": 4,
+   "ranks": {
+    "joel": 22,
+    "fp": 24,
+    "flock": 21,
+    "fb": 21
+   }
+  },
+  {
    "name": "Quinshon Judkins",
-   "avg": 24.0,
-   "n": 3,
+   "avg": 23.5,
+   "n": 4,
    "ranks": {
     "joel": 24,
+    "fp": 22,
     "flock": 24,
     "fb": 24
    }
   },
   {
    "name": "TreVeyon Henderson",
-   "avg": 24.33,
-   "n": 3,
+   "avg": 24.5,
+   "n": 4,
    "ranks": {
     "joel": 25,
+    "fp": 25,
     "flock": 25,
     "fb": 23
    }
@@ -742,650 +767,717 @@
   {
    "name": "Jadarian Price",
    "avg": 26.0,
-   "n": 3,
+   "n": 4,
    "ranks": {
     "joel": 26,
+    "fp": 26,
     "flock": 26,
     "fb": 26
    }
   },
   {
-   "name": "Rhamondre Stevenson",
-   "avg": 29.0,
-   "n": 3,
-   "ranks": {
-    "joel": 28,
-    "flock": 29,
-    "fb": 30
-   }
-  },
-  {
    "name": "Jaylen Warren",
-   "avg": 29.0,
-   "n": 3,
+   "avg": 28.5,
+   "n": 4,
    "ranks": {
     "joel": 29,
+    "fp": 27,
     "flock": 27,
     "fb": 31
    }
   },
   {
-   "name": "Rico Dowdle",
-   "avg": 31.0,
-   "n": 3,
+   "name": "Rhamondre Stevenson",
+   "avg": 28.75,
+   "n": 4,
    "ranks": {
-    "joel": 30,
-    "flock": 34,
-    "fb": 29
+    "joel": 28,
+    "fp": 28,
+    "flock": 29,
+    "fb": 30
    }
   },
   {
    "name": "Tony Pollard",
-   "avg": 31.0,
-   "n": 3,
+   "avg": 30.5,
+   "n": 4,
    "ranks": {
     "joel": 32,
+    "fp": 29,
     "flock": 28,
     "fb": 33
    }
   },
   {
-   "name": "Chuba Hubbard",
-   "avg": 32.0,
-   "n": 3,
+   "name": "Rico Dowdle",
+   "avg": 31.25,
+   "n": 4,
    "ranks": {
-    "joel": 33,
-    "flock": 35,
-    "fb": 28
+    "joel": 30,
+    "fp": 32,
+    "flock": 34,
+    "fb": 29
    }
   },
   {
    "name": "Jonathon Brooks",
-   "avg": 33.0,
-   "n": 3,
+   "avg": 32.25,
+   "n": 4,
    "ranks": {
     "joel": 27,
+    "fp": 30,
     "flock": 30,
     "fb": 42
    }
   },
   {
-   "name": "RJ Harvey",
-   "avg": 33.33,
-   "n": 3,
+   "name": "Chuba Hubbard",
+   "avg": 32.25,
+   "n": 4,
    "ranks": {
-    "joel": 31,
-    "flock": 31,
-    "fb": 38
+    "joel": 33,
+    "fp": 33,
+    "flock": 35,
+    "fb": 28
    }
   },
   {
    "name": "J.K. Dobbins",
-   "avg": 33.67,
-   "n": 3,
+   "avg": 33.0,
+   "n": 4,
    "ranks": {
     "joel": 37,
+    "fp": 31,
     "flock": 32,
     "fb": 32
    }
   },
   {
-   "name": "Jacory Croskey-Merritt",
-   "avg": 35.0,
-   "n": 3,
+   "name": "RJ Harvey",
+   "avg": 33.75,
+   "n": 4,
    "ranks": {
-    "joel": 38,
-    "flock": 40,
-    "fb": 27
+    "joel": 31,
+    "fp": 35,
+    "flock": 31,
+    "fb": 38
    }
   },
   {
    "name": "Blake Corum",
-   "avg": 35.67,
-   "n": 3,
+   "avg": 35.25,
+   "n": 4,
    "ranks": {
     "joel": 34,
+    "fp": 34,
     "flock": 36,
     "fb": 37
    }
   },
   {
+   "name": "Jacory Croskey-Merritt",
+   "avg": 35.75,
+   "n": 4,
+   "ranks": {
+    "joel": 38,
+    "fp": 38,
+    "flock": 40,
+    "fb": 27
+   }
+  },
+  {
    "name": "Kyle Monangai",
-   "avg": 35.67,
-   "n": 3,
+   "avg": 36.0,
+   "n": 4,
    "ranks": {
     "joel": 35,
+    "fp": 37,
     "flock": 37,
     "fb": 35
    }
   },
   {
    "name": "Jordan Mason",
-   "avg": 36.67,
-   "n": 3,
+   "avg": 36.5,
+   "n": 4,
    "ranks": {
     "joel": 36,
+    "fp": 36,
     "flock": 38,
     "fb": 36
    }
   },
   {
    "name": "Rachaad White",
-   "avg": 37.0,
-   "n": 3,
+   "avg": 37.75,
+   "n": 4,
    "ranks": {
     "joel": 39,
+    "fp": 40,
     "flock": 33,
     "fb": 39
    }
   },
   {
    "name": "Kenny Gainwell",
-   "avg": 37.67,
-   "n": 3,
+   "avg": 38.0,
+   "n": 4,
    "ranks": {
     "joel": 40,
+    "fp": 39,
     "flock": 39,
     "fb": 34
    }
   },
   {
    "name": "Aaron Jones Sr.",
-   "avg": 41.67,
-   "n": 3,
+   "avg": 41.5,
+   "n": 4,
    "ranks": {
     "joel": 43,
+    "fp": 41,
     "flock": 41,
     "fb": 41
    }
   },
   {
    "name": "Chris Rodriguez Jr.",
-   "avg": 43.0,
-   "n": 3,
+   "avg": 42.75,
+   "n": 4,
    "ranks": {
     "joel": 42,
+    "fp": 42,
     "flock": 42,
     "fb": 45
    }
   },
   {
    "name": "Tyrone Tracy Jr.",
-   "avg": 44.0,
-   "n": 3,
+   "avg": 43.75,
+   "n": 4,
    "ranks": {
     "joel": 49,
+    "fp": 43,
     "flock": 43,
     "fb": 40
    }
   },
   {
    "name": "Keaton Mitchell",
-   "avg": 46.0,
-   "n": 3,
+   "avg": 45.5,
+   "n": 4,
    "ranks": {
     "joel": 44,
+    "fp": 44,
     "flock": 46,
     "fb": 48
    }
   },
   {
-   "name": "Isiah Pacheco",
-   "avg": 46.33,
-   "n": 3,
-   "ranks": {
-    "joel": 46,
-    "flock": 47,
-    "fb": 46
-   }
-  },
-  {
-   "name": "Woody Marks",
-   "avg": 46.33,
-   "n": 3,
-   "ranks": {
-    "joel": 51,
-    "flock": 44,
-    "fb": 44
-   }
-  },
-  {
    "name": "Zach Charbonnet",
-   "avg": 46.67,
-   "n": 3,
+   "avg": 46.25,
+   "n": 4,
    "ranks": {
     "joel": 41,
+    "fp": 45,
     "flock": 52,
     "fb": 47
    }
   },
   {
+   "name": "Woody Marks",
+   "avg": 46.25,
+   "n": 4,
+   "ranks": {
+    "joel": 51,
+    "fp": 46,
+    "flock": 44,
+    "fb": 44
+   }
+  },
+  {
+   "name": "Isiah Pacheco",
+   "avg": 47.75,
+   "n": 4,
+   "ranks": {
+    "joel": 46,
+    "fp": 52,
+    "flock": 47,
+    "fb": 46
+   }
+  },
+  {
    "name": "Tank Bigsby",
-   "avg": 48.0,
-   "n": 3,
+   "avg": 48.25,
+   "n": 4,
    "ranks": {
     "joel": 45,
+    "fp": 49,
     "flock": 49,
     "fb": 50
    }
   },
   {
-   "name": "Jonah Coleman",
-   "avg": 49.33,
-   "n": 3,
-   "ranks": {
-    "joel": 52,
-    "flock": 45,
-    "fb": 51
-   }
-  },
-  {
    "name": "Tyler Allgeier",
-   "avg": 49.67,
-   "n": 3,
+   "avg": 49.0,
+   "n": 4,
    "ranks": {
     "joel": 47,
+    "fp": 47,
     "flock": 48,
     "fb": 54
    }
   },
   {
    "name": "Tyjae Spears",
-   "avg": 50.0,
-   "n": 3,
+   "avg": 49.5,
+   "n": 4,
    "ranks": {
     "joel": 54,
+    "fp": 48,
     "flock": 53,
     "fb": 43
    }
   },
   {
+   "name": "Jonah Coleman",
+   "avg": 49.75,
+   "n": 4,
+   "ranks": {
+    "joel": 52,
+    "fp": 51,
+    "flock": 45,
+    "fb": 51
+   }
+  },
+  {
    "name": "Alvin Kamara",
-   "avg": 50.67,
-   "n": 3,
+   "avg": 50.5,
+   "n": 4,
    "ranks": {
     "joel": 50,
+    "fp": 50,
     "flock": 50,
     "fb": 52
    }
   },
   {
-   "name": "Brian Robinson Jr.",
-   "avg": 53.33,
-   "n": 3,
-   "ranks": {
-    "joel": 53,
-    "flock": 54,
-    "fb": 53
-   }
-  },
-  {
    "name": "Dylan Sampson",
-   "avg": 53.33,
-   "n": 3,
+   "avg": 53.25,
+   "n": 4,
    "ranks": {
     "joel": 60,
+    "fp": 53,
     "flock": 51,
     "fb": 49
    }
   },
   {
+   "name": "Brian Robinson Jr.",
+   "avg": 53.5,
+   "n": 4,
+   "ranks": {
+    "joel": 53,
+    "fp": 54,
+    "flock": 54,
+    "fb": 53
+   }
+  },
+  {
    "name": "Emmett Johnson",
-   "avg": 57.33,
-   "n": 3,
+   "avg": 58.0,
+   "n": 4,
    "ranks": {
     "joel": 56,
+    "fp": 60,
     "flock": 58,
     "fb": 58
    }
   },
   {
    "name": "Mike Washington Jr.",
-   "avg": 59.0,
-   "n": 3,
+   "avg": 58.5,
+   "n": 4,
    "ranks": {
     "joel": 57,
+    "fp": 57,
     "flock": 60,
     "fb": 60
    }
   },
   {
-   "name": "Nicholas Singleton",
-   "avg": 59.67,
-   "n": 3,
-   "ranks": {
-    "joel": 61,
-    "flock": 57,
-    "fb": 61
-   }
-  },
-  {
    "name": "Ray Davis",
-   "avg": 60.0,
-   "n": 3,
+   "avg": 59.0,
+   "n": 4,
    "ranks": {
     "joel": 48,
+    "fp": 56,
     "flock": 61,
     "fb": 71
    }
   },
   {
    "name": "MarShawn Lloyd",
-   "avg": 61.0,
-   "n": 2,
+   "avg": 60.0,
+   "n": 3,
    "ranks": {
+    "fp": 58,
     "flock": 59,
     "fb": 63
    }
   },
   {
-   "name": "Kimani Vidal",
-   "avg": 62.5,
-   "n": 2,
+   "name": "Nicholas Singleton",
+   "avg": 60.25,
+   "n": 4,
    "ranks": {
-    "flock": 70,
-    "fb": 55
+    "joel": 61,
+    "fp": 62,
+    "flock": 57,
+    "fb": 61
    }
   },
   {
    "name": "Sean Tucker",
-   "avg": 63.5,
-   "n": 2,
+   "avg": 62.0,
+   "n": 3,
    "ranks": {
+    "fp": 59,
     "flock": 55,
     "fb": 72
    }
   },
   {
-   "name": "Chris Brooks",
-   "avg": 64.5,
-   "n": 2,
+   "name": "Kimani Vidal",
+   "avg": 62.0,
+   "n": 3,
    "ranks": {
-    "flock": 63,
-    "fb": 66
-   }
-  },
-  {
-   "name": "Jordan James",
-   "avg": 64.5,
-   "n": 2,
-   "ranks": {
-    "flock": 73,
-    "fb": 56
+    "fp": 61,
+    "flock": 70,
+    "fb": 55
    }
   },
   {
    "name": "Braelon Allen",
-   "avg": 66.0,
-   "n": 2,
+   "avg": 65.0,
+   "n": 3,
    "ranks": {
+    "fp": 63,
     "flock": 67,
     "fb": 65
    }
   },
   {
+   "name": "Jaydon Blue",
+   "avg": 65.5,
+   "n": 4,
+   "ranks": {
+    "joel": 58,
+    "fp": 55,
+    "flock": 69,
+    "fb": 80
+   }
+  },
+  {
    "name": "James Conner",
-   "avg": 67.67,
-   "n": 3,
+   "avg": 67.0,
+   "n": 4,
    "ranks": {
     "joel": 62,
+    "fp": 65,
     "flock": 77,
     "fb": 64
    }
   },
   {
-   "name": "Isaiah Davis",
+   "name": "Kaytron Allen",
+   "avg": 67.67,
+   "n": 3,
+   "ranks": {
+    "fp": 66,
+    "flock": 56,
+    "fb": 81
+   }
+  },
+  {
+   "name": "Jordan James",
+   "avg": 67.67,
+   "n": 3,
+   "ranks": {
+    "fp": 74,
+    "flock": 73,
+    "fb": 56
+   }
+  },
+  {
+   "name": "George Holani",
    "avg": 68.0,
    "n": 3,
    "ranks": {
+    "fp": 64,
+    "flock": 65,
+    "fb": 75
+   }
+  },
+  {
+   "name": "Chris Brooks",
+   "avg": 68.67,
+   "n": 3,
+   "ranks": {
+    "fp": 77,
+    "flock": 63,
+    "fb": 66
+   }
+  },
+  {
+   "name": "Isaiah Davis",
+   "avg": 69.25,
+   "n": 4,
+   "ranks": {
     "joel": 55,
+    "fp": 73,
     "flock": 81,
     "fb": 68
    }
   },
   {
    "name": "Justice Hill",
-   "avg": 68.0,
-   "n": 2,
+   "avg": 69.33,
+   "n": 3,
    "ranks": {
+    "fp": 72,
     "flock": 79,
     "fb": 57
    }
   },
   {
-   "name": "Kaytron Allen",
-   "avg": 68.5,
-   "n": 2,
-   "ranks": {
-    "flock": 56,
-    "fb": 81
-   }
-  },
-  {
-   "name": "Samaje Perine",
-   "avg": 68.5,
-   "n": 2,
-   "ranks": {
-    "flock": 78,
-    "fb": 59
-   }
-  },
-  {
-   "name": "Jaydon Blue",
-   "avg": 69.0,
-   "n": 3,
-   "ranks": {
-    "joel": 58,
-    "flock": 69,
-    "fb": 80
-   }
-  },
-  {
-   "name": "Ty Johnson",
-   "avg": 69.0,
-   "n": 2,
-   "ranks": {
-    "flock": 76,
-    "fb": 62
-   }
-  },
-  {
-   "name": "George Holani",
-   "avg": 70.0,
-   "n": 2,
-   "ranks": {
-    "flock": 65,
-    "fb": 75
-   }
-  },
-  {
-   "name": "Jerome Ford",
-   "avg": 70.0,
-   "n": 1,
-   "ranks": {
-    "fb": 70
-   }
-  },
-  {
-   "name": "Kaelon Black",
-   "avg": 70.5,
-   "n": 2,
-   "ranks": {
-    "flock": 72,
-    "fb": 69
-   }
-  },
-  {
    "name": "Ollie Gordon II",
-   "avg": 70.67,
-   "n": 3,
+   "avg": 69.75,
+   "n": 4,
    "ranks": {
     "joel": 59,
+    "fp": 67,
     "flock": 68,
     "fb": 85
    }
   },
   {
-   "name": "Devin Singletary",
-   "avg": 71.0,
-   "n": 2,
+   "name": "Kaelon Black",
+   "avg": 70.0,
+   "n": 3,
    "ranks": {
-    "flock": 64,
-    "fb": 78
-   }
-  },
-  {
-   "name": "Najee Harris",
-   "avg": 71.0,
-   "n": 1,
-   "ranks": {
-    "flock": 71
-   }
-  },
-  {
-   "name": "Brashard Smith",
-   "avg": 71.5,
-   "n": 2,
-   "ranks": {
-    "flock": 66,
-    "fb": 77
+    "fp": 69,
+    "flock": 72,
+    "fb": 69
    }
   },
   {
    "name": "Demond Claiborne",
-   "avg": 72.0,
-   "n": 2,
+   "avg": 71.33,
+   "n": 3,
    "ranks": {
+    "fp": 70,
     "flock": 62,
     "fb": 82
    }
   },
   {
-   "name": "DJ Giddens",
-   "avg": 73.5,
-   "n": 2,
+   "name": "Ty Johnson",
+   "avg": 72.0,
+   "n": 3,
    "ranks": {
-    "flock": 80,
-    "fb": 67
+    "fp": 78,
+    "flock": 76,
+    "fb": 62
+   }
+  },
+  {
+   "name": "Samaje Perine",
+   "avg": 72.33,
+   "n": 3,
+   "ranks": {
+    "fp": 80,
+    "flock": 78,
+    "fb": 59
    }
   },
   {
    "name": "Emanuel Wilson",
-   "avg": 77.0,
-   "n": 2,
+   "avg": 74.0,
+   "n": 3,
    "ranks": {
+    "fp": 68,
     "flock": 75,
     "fb": 79
    }
   },
   {
-   "name": "Jaylen Wright",
-   "avg": 80.0,
+   "name": "DJ Giddens",
+   "avg": 74.33,
+   "n": 3,
+   "ranks": {
+    "fp": 76,
+    "flock": 80,
+    "fb": 67
+   }
+  },
+  {
+   "name": "Najee Harris",
+   "avg": 76.5,
    "n": 2,
    "ranks": {
+    "fp": 82,
+    "flock": 71
+   }
+  },
+  {
+   "name": "Jaylen Wright",
+   "avg": 77.0,
+   "n": 3,
+   "ranks": {
+    "fp": 71,
     "flock": 87,
     "fb": 73
    }
   },
   {
-   "name": "Adam Randall",
-   "avg": 81.0,
-   "n": 2,
+   "name": "Devin Singletary",
+   "avg": 77.0,
+   "n": 3,
    "ranks": {
-    "flock": 74,
-    "fb": 88
+    "fp": 89,
+    "flock": 64,
+    "fb": 78
    }
   },
   {
-   "name": "Devin Neal",
-   "avg": 81.0,
-   "n": 2,
+   "name": "Brashard Smith",
+   "avg": 78.67,
+   "n": 3,
    "ranks": {
-    "flock": 88,
-    "fb": 74
-   }
-  },
-  {
-   "name": "Kendre Miller",
-   "avg": 82.0,
-   "n": 1,
-   "ranks": {
-    "flock": 82
+    "fp": 93,
+    "flock": 66,
+    "fb": 77
    }
   },
   {
    "name": "LeQuint Allen Jr.",
-   "avg": 82.5,
-   "n": 2,
+   "avg": 80.0,
+   "n": 3,
    "ranks": {
+    "fp": 75,
     "flock": 89,
     "fb": 76
    }
   },
   {
-   "name": "Isaac Guerendo",
-   "avg": 83.0,
-   "n": 1,
-   "ranks": {
-    "flock": 83
-   }
-  },
-  {
-   "name": "Seth McGowan",
-   "avg": 84.0,
-   "n": 1,
-   "ranks": {
-    "flock": 84
-   }
-  },
-  {
    "name": "Emari Demercado",
-   "avg": 84.0,
-   "n": 1,
+   "avg": 81.5,
+   "n": 2,
    "ranks": {
+    "fp": 79,
     "fb": 84
    }
   },
   {
-   "name": "Kaleb Johnson",
-   "avg": 85.5,
+   "name": "Devin Neal",
+   "avg": 81.67,
+   "n": 3,
+   "ranks": {
+    "fp": 83,
+    "flock": 88,
+    "fb": 74
+   }
+  },
+  {
+   "name": "Jerome Ford",
+   "avg": 82.0,
    "n": 2,
    "ranks": {
+    "fp": 94,
+    "fb": 70
+   }
+  },
+  {
+   "name": "Seth McGowan",
+   "avg": 82.5,
+   "n": 2,
+   "ranks": {
+    "fp": 81,
+    "flock": 84
+   }
+  },
+  {
+   "name": "Adam Randall",
+   "avg": 82.67,
+   "n": 3,
+   "ranks": {
+    "fp": 86,
+    "flock": 74,
+    "fb": 88
+   }
+  },
+  {
+   "name": "Kendre Miller",
+   "avg": 83.5,
+   "n": 2,
+   "ranks": {
+    "fp": 85,
+    "flock": 82
+   }
+  },
+  {
+   "name": "Trey Benson",
+   "avg": 85.0,
+   "n": 2,
+   "ranks": {
+    "fp": 84,
+    "flock": 86
+   }
+  },
+  {
+   "name": "Kaleb Johnson",
+   "avg": 86.0,
+   "n": 3,
+   "ranks": {
+    "fp": 87,
     "flock": 85,
     "fb": 86
    }
   },
   {
-   "name": "Trey Benson",
-   "avg": 86.0,
+   "name": "Isaac Guerendo",
+   "avg": 87.5,
+   "n": 2,
+   "ranks": {
+    "fp": 92,
+    "flock": 83
+   }
+  },
+  {
+   "name": "Phil Mafah",
+   "avg": 88.0,
    "n": 1,
    "ranks": {
-    "flock": 86
+    "fp": 88
    }
   },
   {
    "name": "Trevor Etienne",
-   "avg": 86.5,
-   "n": 2,
+   "avg": 89.67,
+   "n": 3,
    "ranks": {
+    "fp": 96,
     "flock": 90,
     "fb": 83
    }
   },
   {
-   "name": "Will Shipley",
-   "avg": 87.0,
+   "name": "Jarquez Hunter",
+   "avg": 90.0,
    "n": 1,
    "ranks": {
-    "fb": 87
-   }
-  },
-  {
-   "name": "Tahj Brooks",
-   "avg": 89.0,
-   "n": 1,
-   "ranks": {
-    "fb": 89
+    "fp": 90
    }
   },
   {
@@ -1399,17 +1491,85 @@
   {
    "name": "Malik Davis",
    "avg": 91.0,
-   "n": 1,
+   "n": 2,
    "ranks": {
+    "fp": 91,
     "flock": 91
    }
   },
   {
+   "name": "Tahj Brooks",
+   "avg": 92.0,
+   "n": 2,
+   "ranks": {
+    "fp": 95,
+    "fb": 89
+   }
+  },
+  {
+   "name": "Will Shipley",
+   "avg": 95.5,
+   "n": 2,
+   "ranks": {
+    "fp": 104,
+    "fb": 87
+   }
+  },
+  {
    "name": "Audric Estime",
-   "avg": 91.0,
+   "avg": 96.0,
+   "n": 2,
+   "ranks": {
+    "fp": 101,
+    "fb": 91
+   }
+  },
+  {
+   "name": "Jaleel McLaughlin",
+   "avg": 97.0,
    "n": 1,
    "ranks": {
-    "fb": 91
+    "fp": 97
+   }
+  },
+  {
+   "name": "Damien Martinez",
+   "avg": 98.0,
+   "n": 1,
+   "ranks": {
+    "fp": 98
+   }
+  },
+  {
+   "name": "Eli Heidenreich",
+   "avg": 99.0,
+   "n": 1,
+   "ranks": {
+    "fp": 99
+   }
+  },
+  {
+   "name": "Jam Miller",
+   "avg": 100.0,
+   "n": 1,
+   "ranks": {
+    "fp": 100
+   }
+  },
+  {
+   "name": "Sione Vaki",
+   "avg": 102.0,
+   "n": 1,
+   "ranks": {
+    "fp": 102
+   }
+  },
+  {
+   "name": "Kareem Hunt",
+   "avg": 103.0,
+   "n": 1,
+   "ranks": {
+    "fp": 103
    }
   }
  ],
@@ -3175,6 +3335,2482 @@
    "n": 1,
    "ranks": {
     "flock": 53
+   }
+  }
+ ],
+ "OVR": [
+  {
+   "name": "Jahmyr Gibbs",
+   "avg": 1.0,
+   "n": 3,
+   "ranks": {
+    "joel": 1,
+    "fp": 1,
+    "flock": 1
+   }
+  },
+  {
+   "name": "Bijan Robinson",
+   "avg": 2.0,
+   "n": 3,
+   "ranks": {
+    "joel": 2,
+    "fp": 2,
+    "flock": 2
+   }
+  },
+  {
+   "name": "Ja'Marr Chase",
+   "avg": 3.0,
+   "n": 3,
+   "ranks": {
+    "joel": 3,
+    "fp": 3,
+    "flock": 3
+   }
+  },
+  {
+   "name": "Puka Nacua",
+   "avg": 4.0,
+   "n": 3,
+   "ranks": {
+    "joel": 4,
+    "fp": 4,
+    "flock": 4
+   }
+  },
+  {
+   "name": "Christian McCaffrey",
+   "avg": 5.33,
+   "n": 3,
+   "ranks": {
+    "joel": 5,
+    "fp": 5,
+    "flock": 6
+   }
+  },
+  {
+   "name": "Jaxon Smith-Njigba",
+   "avg": 6.33,
+   "n": 3,
+   "ranks": {
+    "joel": 8,
+    "fp": 6,
+    "flock": 5
+   }
+  },
+  {
+   "name": "Amon-Ra St. Brown",
+   "avg": 7.0,
+   "n": 3,
+   "ranks": {
+    "joel": 7,
+    "fp": 7,
+    "flock": 7
+   }
+  },
+  {
+   "name": "Jonathan Taylor",
+   "avg": 7.33,
+   "n": 3,
+   "ranks": {
+    "joel": 6,
+    "fp": 8,
+    "flock": 8
+   }
+  },
+  {
+   "name": "James Cook III",
+   "avg": 9.67,
+   "n": 3,
+   "ranks": {
+    "joel": 9,
+    "fp": 9,
+    "flock": 11
+   }
+  },
+  {
+   "name": "CeeDee Lamb",
+   "avg": 10.33,
+   "n": 3,
+   "ranks": {
+    "joel": 12,
+    "fp": 10,
+    "flock": 9
+   }
+  },
+  {
+   "name": "Justin Jefferson",
+   "avg": 11.33,
+   "n": 3,
+   "ranks": {
+    "joel": 13,
+    "fp": 11,
+    "flock": 10
+   }
+  },
+  {
+   "name": "Ashton Jeanty",
+   "avg": 11.67,
+   "n": 3,
+   "ranks": {
+    "joel": 11,
+    "fp": 12,
+    "flock": 12
+   }
+  },
+  {
+   "name": "Omarion Hampton",
+   "avg": 13.33,
+   "n": 3,
+   "ranks": {
+    "joel": 10,
+    "fp": 16,
+    "flock": 14
+   }
+  },
+  {
+   "name": "Chase Brown",
+   "avg": 14.0,
+   "n": 3,
+   "ranks": {
+    "joel": 15,
+    "fp": 14,
+    "flock": 13
+   }
+  },
+  {
+   "name": "Saquon Barkley",
+   "avg": 15.0,
+   "n": 3,
+   "ranks": {
+    "joel": 16,
+    "fp": 13,
+    "flock": 16
+   }
+  },
+  {
+   "name": "Kenneth Walker III",
+   "avg": 15.33,
+   "n": 3,
+   "ranks": {
+    "joel": 14,
+    "fp": 15,
+    "flock": 17
+   }
+  },
+  {
+   "name": "Brock Bowers",
+   "avg": 17.67,
+   "n": 3,
+   "ranks": {
+    "joel": 17,
+    "fp": 17,
+    "flock": 19
+   }
+  },
+  {
+   "name": "De'Von Achane",
+   "avg": 17.67,
+   "n": 3,
+   "ranks": {
+    "joel": 20,
+    "fp": 18,
+    "flock": 15
+   }
+  },
+  {
+   "name": "Drake London",
+   "avg": 18.33,
+   "n": 3,
+   "ranks": {
+    "joel": 18,
+    "fp": 19,
+    "flock": 18
+   }
+  },
+  {
+   "name": "Derrick Henry",
+   "avg": 20.0,
+   "n": 3,
+   "ranks": {
+    "joel": 19,
+    "fp": 21,
+    "flock": 20
+   }
+  },
+  {
+   "name": "A.J. Brown",
+   "avg": 20.67,
+   "n": 3,
+   "ranks": {
+    "joel": 21,
+    "fp": 20,
+    "flock": 21
+   }
+  },
+  {
+   "name": "Nico Collins",
+   "avg": 23.0,
+   "n": 3,
+   "ranks": {
+    "joel": 23,
+    "fp": 23,
+    "flock": 23
+   }
+  },
+  {
+   "name": "George Pickens",
+   "avg": 23.33,
+   "n": 3,
+   "ranks": {
+    "joel": 22,
+    "fp": 22,
+    "flock": 26
+   }
+  },
+  {
+   "name": "Malik Nabers",
+   "avg": 23.33,
+   "n": 3,
+   "ranks": {
+    "joel": 24,
+    "fp": 24,
+    "flock": 22
+   }
+  },
+  {
+   "name": "Trey McBride",
+   "avg": 26.67,
+   "n": 3,
+   "ranks": {
+    "joel": 28,
+    "fp": 25,
+    "flock": 27
+   }
+  },
+  {
+   "name": "Jeremiyah Love",
+   "avg": 27.33,
+   "n": 3,
+   "ranks": {
+    "joel": 27,
+    "fp": 31,
+    "flock": 24
+   }
+  },
+  {
+   "name": "Rashee Rice",
+   "avg": 28.0,
+   "n": 3,
+   "ranks": {
+    "joel": 29,
+    "fp": 30,
+    "flock": 25
+   }
+  },
+  {
+   "name": "Josh Allen",
+   "avg": 29.0,
+   "n": 3,
+   "ranks": {
+    "joel": 26,
+    "fp": 26,
+    "flock": 35
+   }
+  },
+  {
+   "name": "DeVonta Smith",
+   "avg": 29.0,
+   "n": 3,
+   "ranks": {
+    "joel": 30,
+    "fp": 28,
+    "flock": 29
+   }
+  },
+  {
+   "name": "Chris Olave",
+   "avg": 29.67,
+   "n": 3,
+   "ranks": {
+    "joel": 32,
+    "fp": 27,
+    "flock": 30
+   }
+  },
+  {
+   "name": "Tee Higgins",
+   "avg": 32.33,
+   "n": 3,
+   "ranks": {
+    "joel": 31,
+    "fp": 32,
+    "flock": 34
+   }
+  },
+  {
+   "name": "Kyren Williams",
+   "avg": 32.33,
+   "n": 3,
+   "ranks": {
+    "joel": 33,
+    "fp": 33,
+    "flock": 31
+   }
+  },
+  {
+   "name": "Breece Hall",
+   "avg": 32.33,
+   "n": 3,
+   "ranks": {
+    "joel": 34,
+    "fp": 35,
+    "flock": 28
+   }
+  },
+  {
+   "name": "Josh Jacobs",
+   "avg": 33.0,
+   "n": 3,
+   "ranks": {
+    "joel": 25,
+    "fp": 38,
+    "flock": 36
+   }
+  },
+  {
+   "name": "Zay Flowers",
+   "avg": 33.67,
+   "n": 3,
+   "ranks": {
+    "joel": 39,
+    "fp": 29,
+    "flock": 33
+   }
+  },
+  {
+   "name": "Jaylen Waddle",
+   "avg": 36.33,
+   "n": 3,
+   "ranks": {
+    "joel": 36,
+    "fp": 36,
+    "flock": 37
+   }
+  },
+  {
+   "name": "Javonte Williams",
+   "avg": 36.67,
+   "n": 3,
+   "ranks": {
+    "joel": 35,
+    "fp": 43,
+    "flock": 32
+   }
+  },
+  {
+   "name": "Emeka Egbuka",
+   "avg": 36.67,
+   "n": 3,
+   "ranks": {
+    "joel": 38,
+    "fp": 34,
+    "flock": 38
+   }
+  },
+  {
+   "name": "Colston Loveland",
+   "avg": 39.0,
+   "n": 3,
+   "ranks": {
+    "joel": 40,
+    "fp": 37,
+    "flock": 40
+   }
+  },
+  {
+   "name": "Tetairoa McMillan",
+   "avg": 39.67,
+   "n": 3,
+   "ranks": {
+    "joel": 37,
+    "fp": 39,
+    "flock": 43
+   }
+  },
+  {
+   "name": "Ladd McConkey",
+   "avg": 41.0,
+   "n": 3,
+   "ranks": {
+    "joel": 44,
+    "fp": 40,
+    "flock": 39
+   }
+  },
+  {
+   "name": "Garrett Wilson",
+   "avg": 42.0,
+   "n": 3,
+   "ranks": {
+    "joel": 42,
+    "fp": 42,
+    "flock": 42
+   }
+  },
+  {
+   "name": "Cam Skattebo",
+   "avg": 42.67,
+   "n": 3,
+   "ranks": {
+    "joel": 41,
+    "fp": 46,
+    "flock": 41
+   }
+  },
+  {
+   "name": "Travis Etienne Jr.",
+   "avg": 46.0,
+   "n": 3,
+   "ranks": {
+    "joel": 47,
+    "fp": 47,
+    "flock": 44
+   }
+  },
+  {
+   "name": "Luther Burden III",
+   "avg": 47.0,
+   "n": 3,
+   "ranks": {
+    "joel": 43,
+    "fp": 45,
+    "flock": 53
+   }
+  },
+  {
+   "name": "David Montgomery",
+   "avg": 47.67,
+   "n": 3,
+   "ranks": {
+    "joel": 46,
+    "fp": 49,
+    "flock": 48
+   }
+  },
+  {
+   "name": "Terry McLaurin",
+   "avg": 48.33,
+   "n": 3,
+   "ranks": {
+    "joel": 52,
+    "fp": 44,
+    "flock": 49
+   }
+  },
+  {
+   "name": "Lamar Jackson",
+   "avg": 49.33,
+   "n": 3,
+   "ranks": {
+    "joel": 51,
+    "fp": 41,
+    "flock": 56
+   }
+  },
+  {
+   "name": "Bucky Irving",
+   "avg": 50.0,
+   "n": 3,
+   "ranks": {
+    "joel": 45,
+    "fp": 60,
+    "flock": 45
+   }
+  },
+  {
+   "name": "Davante Adams",
+   "avg": 51.33,
+   "n": 3,
+   "ranks": {
+    "joel": 53,
+    "fp": 55,
+    "flock": 46
+   }
+  },
+  {
+   "name": "Rome Odunze",
+   "avg": 53.0,
+   "n": 3,
+   "ranks": {
+    "joel": 50,
+    "fp": 50,
+    "flock": 59
+   }
+  },
+  {
+   "name": "D'Andre Swift",
+   "avg": 53.67,
+   "n": 3,
+   "ranks": {
+    "joel": 57,
+    "fp": 54,
+    "flock": 50
+   }
+  },
+  {
+   "name": "Bhayshul Tuten",
+   "avg": 54.0,
+   "n": 3,
+   "ranks": {
+    "joel": 54,
+    "fp": 61,
+    "flock": 47
+   }
+  },
+  {
+   "name": "Quinshon Judkins",
+   "avg": 55.0,
+   "n": 3,
+   "ranks": {
+    "joel": 55,
+    "fp": 58,
+    "flock": 52
+   }
+  },
+  {
+   "name": "Tyler Warren",
+   "avg": 55.33,
+   "n": 3,
+   "ranks": {
+    "joel": 49,
+    "fp": 56,
+    "flock": 61
+   }
+  },
+  {
+   "name": "Jameson Williams",
+   "avg": 55.33,
+   "n": 3,
+   "ranks": {
+    "joel": 63,
+    "fp": 52,
+    "flock": 51
+   }
+  },
+  {
+   "name": "DJ Moore",
+   "avg": 56.33,
+   "n": 3,
+   "ranks": {
+    "joel": 48,
+    "fp": 59,
+    "flock": 62
+   }
+  },
+  {
+   "name": "Mike Evans",
+   "avg": 56.67,
+   "n": 3,
+   "ranks": {
+    "joel": 62,
+    "fp": 53,
+    "flock": 55
+   }
+  },
+  {
+   "name": "Christian Watson",
+   "avg": 57.0,
+   "n": 3,
+   "ranks": {
+    "joel": 60,
+    "fp": 48,
+    "flock": 63
+   }
+  },
+  {
+   "name": "TreVeyon Henderson",
+   "avg": 57.67,
+   "n": 3,
+   "ranks": {
+    "joel": 56,
+    "fp": 63,
+    "flock": 54
+   }
+  },
+  {
+   "name": "Drake Maye",
+   "avg": 58.33,
+   "n": 3,
+   "ranks": {
+    "joel": 58,
+    "fp": 51,
+    "flock": 66
+   }
+  },
+  {
+   "name": "Jayden Daniels",
+   "avg": 61.0,
+   "n": 3,
+   "ranks": {
+    "joel": 59,
+    "fp": 57,
+    "flock": 67
+   }
+  },
+  {
+   "name": "Jadarian Price",
+   "avg": 62.67,
+   "n": 3,
+   "ranks": {
+    "joel": 65,
+    "fp": 65,
+    "flock": 58
+   }
+  },
+  {
+   "name": "Joe Burrow",
+   "avg": 63.67,
+   "n": 3,
+   "ranks": {
+    "joel": 61,
+    "fp": 62,
+    "flock": 68
+   }
+  },
+  {
+   "name": "Carnell Tate",
+   "avg": 64.0,
+   "n": 3,
+   "ranks": {
+    "joel": 69,
+    "fp": 66,
+    "flock": 57
+   }
+  },
+  {
+   "name": "Parker Washington",
+   "avg": 66.0,
+   "n": 3,
+   "ranks": {
+    "joel": 64,
+    "fp": 64,
+    "flock": 70
+   }
+  },
+  {
+   "name": "Brian Thomas Jr.",
+   "avg": 67.0,
+   "n": 3,
+   "ranks": {
+    "joel": 68,
+    "fp": 73,
+    "flock": 60
+   }
+  },
+  {
+   "name": "Marvin Harrison Jr.",
+   "avg": 68.0,
+   "n": 3,
+   "ranks": {
+    "joel": 72,
+    "fp": 68,
+    "flock": 64
+   }
+  },
+  {
+   "name": "Jalen Hurts",
+   "avg": 68.67,
+   "n": 3,
+   "ranks": {
+    "joel": 67,
+    "fp": 67,
+    "flock": 72
+   }
+  },
+  {
+   "name": "Tucker Kraft",
+   "avg": 71.67,
+   "n": 3,
+   "ranks": {
+    "joel": 73,
+    "fp": 69,
+    "flock": 73
+   }
+  },
+  {
+   "name": "Jaylen Warren",
+   "avg": 72.0,
+   "n": 3,
+   "ranks": {
+    "joel": 77,
+    "fp": 70,
+    "flock": 69
+   }
+  },
+  {
+   "name": "Caleb Williams",
+   "avg": 72.33,
+   "n": 3,
+   "ranks": {
+    "joel": 74,
+    "fp": 72,
+    "flock": 71
+   }
+  },
+  {
+   "name": "Jordyn Tyson",
+   "avg": 73.67,
+   "n": 3,
+   "ranks": {
+    "joel": 81,
+    "fp": 75,
+    "flock": 65
+   }
+  },
+  {
+   "name": "Jonathon Brooks",
+   "avg": 74.33,
+   "n": 3,
+   "ranks": {
+    "joel": 66,
+    "fp": 81,
+    "flock": 76
+   }
+  },
+  {
+   "name": "Rhamondre Stevenson",
+   "avg": 75.67,
+   "n": 3,
+   "ranks": {
+    "joel": 76,
+    "fp": 74,
+    "flock": 77
+   }
+  },
+  {
+   "name": "Sam LaPorta",
+   "avg": 76.33,
+   "n": 3,
+   "ranks": {
+    "joel": 70,
+    "fp": 80,
+    "flock": 79
+   }
+  },
+  {
+   "name": "Justin Herbert",
+   "avg": 77.67,
+   "n": 3,
+   "ranks": {
+    "joel": 75,
+    "fp": 71,
+    "flock": 87
+   }
+  },
+  {
+   "name": "Trevor Lawrence",
+   "avg": 79.33,
+   "n": 3,
+   "ranks": {
+    "joel": 79,
+    "fp": 79,
+    "flock": 80
+   }
+  },
+  {
+   "name": "Harold Fannin Jr.",
+   "avg": 80.67,
+   "n": 3,
+   "ranks": {
+    "joel": 71,
+    "fp": 76,
+    "flock": 95
+   }
+  },
+  {
+   "name": "Tony Pollard",
+   "avg": 81.0,
+   "n": 3,
+   "ranks": {
+    "joel": 90,
+    "fp": 78,
+    "flock": 75
+   }
+  },
+  {
+   "name": "DK Metcalf",
+   "avg": 83.33,
+   "n": 3,
+   "ranks": {
+    "joel": 89,
+    "fp": 77,
+    "flock": 84
+   }
+  },
+  {
+   "name": "Alec Pierce",
+   "avg": 84.0,
+   "n": 3,
+   "ranks": {
+    "joel": 83,
+    "fp": 86,
+    "flock": 83
+   }
+  },
+  {
+   "name": "Chris Godwin Jr.",
+   "avg": 85.33,
+   "n": 3,
+   "ranks": {
+    "joel": 88,
+    "fp": 83,
+    "flock": 85
+   }
+  },
+  {
+   "name": "Rico Dowdle",
+   "avg": 86.67,
+   "n": 3,
+   "ranks": {
+    "joel": 78,
+    "fp": 90,
+    "flock": 92
+   }
+  },
+  {
+   "name": "Dak Prescott",
+   "avg": 87.0,
+   "n": 3,
+   "ranks": {
+    "joel": 86,
+    "fp": 82,
+    "flock": 93
+   }
+  },
+  {
+   "name": "RJ Harvey",
+   "avg": 88.67,
+   "n": 3,
+   "ranks": {
+    "joel": 82,
+    "fp": 98,
+    "flock": 86
+   }
+  },
+  {
+   "name": "Quentin Johnston",
+   "avg": 89.33,
+   "n": 3,
+   "ranks": {
+    "joel": 101,
+    "fp": 89,
+    "flock": 78
+   }
+  },
+  {
+   "name": "Michael Wilson",
+   "avg": 89.67,
+   "n": 3,
+   "ranks": {
+    "joel": 84,
+    "fp": 91,
+    "flock": 94
+   }
+  },
+  {
+   "name": "Kyle Pitts Sr.",
+   "avg": 89.67,
+   "n": 3,
+   "ranks": {
+    "joel": 87,
+    "fp": 84,
+    "flock": 98
+   }
+  },
+  {
+   "name": "Courtland Sutton",
+   "avg": 90.0,
+   "n": 3,
+   "ranks": {
+    "joel": 94,
+    "fp": 87,
+    "flock": 89
+   }
+  },
+  {
+   "name": "J.K. Dobbins",
+   "avg": 91.67,
+   "n": 3,
+   "ranks": {
+    "joel": 99,
+    "fp": 88,
+    "flock": 88
+   }
+  },
+  {
+   "name": "Chuba Hubbard",
+   "avg": 93.0,
+   "n": 3,
+   "ranks": {
+    "joel": 91,
+    "fp": 92,
+    "flock": 96
+   }
+  },
+  {
+   "name": "Jaxson Dart",
+   "avg": 93.67,
+   "n": 3,
+   "ranks": {
+    "joel": 80,
+    "fp": 99,
+    "flock": 102
+   }
+  },
+  {
+   "name": "Brock Purdy",
+   "avg": 93.67,
+   "n": 3,
+   "ranks": {
+    "joel": 85,
+    "fp": 93,
+    "flock": 103
+   }
+  },
+  {
+   "name": "Josh Downs",
+   "avg": 94.67,
+   "n": 3,
+   "ranks": {
+    "joel": 102,
+    "fp": 85,
+    "flock": 97
+   }
+  },
+  {
+   "name": "Blake Corum",
+   "avg": 95.67,
+   "n": 3,
+   "ranks": {
+    "joel": 92,
+    "fp": 96,
+    "flock": 99
+   }
+  },
+  {
+   "name": "Makai Lemon",
+   "avg": 95.67,
+   "n": 3,
+   "ranks": {
+    "joel": 116,
+    "fp": 97,
+    "flock": 74
+   }
+  },
+  {
+   "name": "Kyle Monangai",
+   "avg": 96.33,
+   "n": 3,
+   "ranks": {
+    "joel": 93,
+    "fp": 95,
+    "flock": 101
+   }
+  },
+  {
+   "name": "Jordan Mason",
+   "avg": 97.33,
+   "n": 3,
+   "ranks": {
+    "joel": 98,
+    "fp": 94,
+    "flock": 100
+   }
+  },
+  {
+   "name": "Michael Pittman Jr.",
+   "avg": 98.33,
+   "n": 3,
+   "ranks": {
+    "joel": 113,
+    "fp": 100,
+    "flock": 82
+   }
+  },
+  {
+   "name": "Jordan Addison",
+   "avg": 99.0,
+   "n": 3,
+   "ranks": {
+    "joel": 114,
+    "fp": 102,
+    "flock": 81
+   }
+  },
+  {
+   "name": "Stefon Diggs",
+   "avg": 99.67,
+   "n": 3,
+   "ranks": {
+    "joel": 103,
+    "fp": 105,
+    "flock": 91
+   }
+  },
+  {
+   "name": "Bo Nix",
+   "avg": 101.0,
+   "n": 3,
+   "ranks": {
+    "joel": 96,
+    "fp": 101,
+    "flock": 106
+   }
+  },
+  {
+   "name": "George Kittle",
+   "avg": 103.67,
+   "n": 3,
+   "ranks": {
+    "joel": 95,
+    "fp": 104,
+    "flock": 112
+   }
+  },
+  {
+   "name": "Rachaad White",
+   "avg": 103.67,
+   "n": 3,
+   "ranks": {
+    "joel": 111,
+    "fp": 110,
+    "flock": 90
+   }
+  },
+  {
+   "name": "Patrick Mahomes II",
+   "avg": 106.33,
+   "n": 3,
+   "ranks": {
+    "joel": 97,
+    "fp": 114,
+    "flock": 108
+   }
+  },
+  {
+   "name": "Jacory Croskey-Merritt",
+   "avg": 107.0,
+   "n": 3,
+   "ranks": {
+    "joel": 108,
+    "fp": 103,
+    "flock": 110
+   }
+  },
+  {
+   "name": "Kyler Murray",
+   "avg": 110.0,
+   "n": 3,
+   "ranks": {
+    "joel": 105,
+    "fp": 109,
+    "flock": 116
+   }
+  },
+  {
+   "name": "Kenny Gainwell",
+   "avg": 110.0,
+   "n": 3,
+   "ranks": {
+    "joel": 112,
+    "fp": 107,
+    "flock": 111
+   }
+  },
+  {
+   "name": "Jayden Reed",
+   "avg": 110.0,
+   "n": 3,
+   "ranks": {
+    "joel": 115,
+    "fp": 108,
+    "flock": 107
+   }
+  },
+  {
+   "name": "Matthew Stafford",
+   "avg": 110.67,
+   "n": 3,
+   "ranks": {
+    "joel": 104,
+    "fp": 115,
+    "flock": 113
+   }
+  },
+  {
+   "name": "Jared Goff",
+   "avg": 111.0,
+   "n": 3,
+   "ranks": {
+    "joel": 106,
+    "fp": 113,
+    "flock": 114
+   }
+  },
+  {
+   "name": "Deebo Samuel Sr.",
+   "avg": 115.0,
+   "n": 3,
+   "ranks": {
+    "joel": 100,
+    "fp": 130,
+    "flock": 115
+   }
+  },
+  {
+   "name": "Dalton Kincaid",
+   "avg": 115.0,
+   "n": 3,
+   "ranks": {
+    "joel": 107,
+    "fp": 106,
+    "flock": 132
+   }
+  },
+  {
+   "name": "Jakobi Meyers",
+   "avg": 117.67,
+   "n": 3,
+   "ranks": {
+    "joel": 118,
+    "fp": 117,
+    "flock": 118
+   }
+  },
+  {
+   "name": "Romeo Doubs",
+   "avg": 120.33,
+   "n": 3,
+   "ranks": {
+    "joel": 119,
+    "fp": 120,
+    "flock": 122
+   }
+  },
+  {
+   "name": "Matthew Golden",
+   "avg": 120.33,
+   "n": 3,
+   "ranks": {
+    "joel": 124,
+    "fp": 118,
+    "flock": 119
+   }
+  },
+  {
+   "name": "Dallas Goedert",
+   "avg": 121.33,
+   "n": 3,
+   "ranks": {
+    "joel": 110,
+    "fp": 112,
+    "flock": 142
+   }
+  },
+  {
+   "name": "Xavier Worthy",
+   "avg": 122.0,
+   "n": 3,
+   "ranks": {
+    "joel": 136,
+    "fp": 121,
+    "flock": 109
+   }
+  },
+  {
+   "name": "Isaiah Likely",
+   "avg": 122.33,
+   "n": 3,
+   "ranks": {
+    "joel": 123,
+    "fp": 116,
+    "flock": 128
+   }
+  },
+  {
+   "name": "Mark Andrews",
+   "avg": 122.67,
+   "n": 3,
+   "ranks": {
+    "joel": 117,
+    "fp": 122,
+    "flock": 129
+   }
+  },
+  {
+   "name": "Travis Kelce",
+   "avg": 122.67,
+   "n": 3,
+   "ranks": {
+    "joel": 132,
+    "fp": 119,
+    "flock": 117
+   }
+  },
+  {
+   "name": "Aaron Jones Sr.",
+   "avg": 123.33,
+   "n": 3,
+   "ranks": {
+    "joel": 126,
+    "fp": 124,
+    "flock": 120
+   }
+  },
+  {
+   "name": "Chris Rodriguez Jr.",
+   "avg": 125.33,
+   "n": 3,
+   "ranks": {
+    "joel": 122,
+    "fp": 127,
+    "flock": 127
+   }
+  },
+  {
+   "name": "Wan'Dale Robinson",
+   "avg": 125.67,
+   "n": 3,
+   "ranks": {
+    "joel": 162,
+    "fp": 111,
+    "flock": 104
+   }
+  },
+  {
+   "name": "Tyler Shough",
+   "avg": 126.0,
+   "n": 3,
+   "ranks": {
+    "joel": 120,
+    "fp": 128,
+    "flock": 130
+   }
+  },
+  {
+   "name": "KC Concepcion",
+   "avg": 126.0,
+   "n": 3,
+   "ranks": {
+    "joel": 138,
+    "fp": 135,
+    "flock": 105
+   }
+  },
+  {
+   "name": "Malik Willis",
+   "avg": 127.0,
+   "n": 3,
+   "ranks": {
+    "joel": 109,
+    "fp": 133,
+    "flock": 139
+   }
+  },
+  {
+   "name": "Baker Mayfield",
+   "avg": 127.67,
+   "n": 3,
+   "ranks": {
+    "joel": 125,
+    "fp": 132,
+    "flock": 126
+   }
+  },
+  {
+   "name": "Jordan Love",
+   "avg": 130.0,
+   "n": 3,
+   "ranks": {
+    "joel": 129,
+    "fp": 125,
+    "flock": 136
+   }
+  },
+  {
+   "name": "Jake Ferguson",
+   "avg": 130.0,
+   "n": 3,
+   "ranks": {
+    "joel": 131,
+    "fp": 134,
+    "flock": 125
+   }
+  },
+  {
+   "name": "Jalen Coker",
+   "avg": 130.67,
+   "n": 3,
+   "ranks": {
+    "joel": 146,
+    "fp": 123,
+    "flock": 123
+   }
+  },
+  {
+   "name": "Jayden Higgins",
+   "avg": 131.33,
+   "n": 3,
+   "ranks": {
+    "joel": 144,
+    "fp": 126,
+    "flock": 124
+   }
+  },
+  {
+   "name": "Keaton Mitchell",
+   "avg": 132.0,
+   "n": 3,
+   "ranks": {
+    "joel": 127,
+    "fp": 129,
+    "flock": 140
+   }
+  },
+  {
+   "name": "Tyrone Tracy Jr.",
+   "avg": 134.33,
+   "n": 3,
+   "ranks": {
+    "joel": 141,
+    "fp": 131,
+    "flock": 131
+   }
+  },
+  {
+   "name": "De'Zhaun Stribling",
+   "avg": 136.0,
+   "n": 3,
+   "ranks": {
+    "joel": 128,
+    "fp": 137,
+    "flock": 143
+   }
+  },
+  {
+   "name": "Zach Charbonnet",
+   "avg": 139.0,
+   "n": 3,
+   "ranks": {
+    "joel": 121,
+    "fp": 136,
+    "flock": 160
+   }
+  },
+  {
+   "name": "Woody Marks",
+   "avg": 140.67,
+   "n": 3,
+   "ranks": {
+    "joel": 147,
+    "fp": 140,
+    "flock": 135
+   }
+  },
+  {
+   "name": "Tank Bigsby",
+   "avg": 141.33,
+   "n": 3,
+   "ranks": {
+    "joel": 133,
+    "fp": 145,
+    "flock": 146
+   }
+  },
+  {
+   "name": "Tyler Allgeier",
+   "avg": 141.33,
+   "n": 3,
+   "ranks": {
+    "joel": 135,
+    "fp": 138,
+    "flock": 151
+   }
+  },
+  {
+   "name": "Isiah Pacheco",
+   "avg": 143.33,
+   "n": 3,
+   "ranks": {
+    "joel": 134,
+    "fp": 151,
+    "flock": 145
+   }
+  },
+  {
+   "name": "Jonah Coleman",
+   "avg": 144.0,
+   "n": 3,
+   "ranks": {
+    "joel": 148,
+    "fp": 147,
+    "flock": 137
+   }
+  },
+  {
+   "name": "Rashid Shaheed",
+   "avg": 144.67,
+   "n": 3,
+   "ranks": {
+    "joel": 161,
+    "fp": 139,
+    "flock": 134
+   }
+  },
+  {
+   "name": "Chig Okonkwo",
+   "avg": 145.0,
+   "n": 3,
+   "ranks": {
+    "joel": 139,
+    "fp": 149,
+    "flock": 147
+   }
+  },
+  {
+   "name": "Travis Hunter",
+   "avg": 146.0,
+   "n": 3,
+   "ranks": {
+    "joel": 149,
+    "fp": 168,
+    "flock": 121
+   }
+  },
+  {
+   "name": "Khalil Shakir",
+   "avg": 146.67,
+   "n": 3,
+   "ranks": {
+    "joel": 166,
+    "fp": 141,
+    "flock": 133
+   }
+  },
+  {
+   "name": "Alvin Kamara",
+   "avg": 147.67,
+   "n": 3,
+   "ranks": {
+    "joel": 142,
+    "fp": 144,
+    "flock": 157
+   }
+  },
+  {
+   "name": "Sam Darnold",
+   "avg": 148.67,
+   "n": 3,
+   "ranks": {
+    "joel": 143,
+    "fp": 150,
+    "flock": 153
+   }
+  },
+  {
+   "name": "Cam Ward",
+   "avg": 149.33,
+   "n": 3,
+   "ranks": {
+    "joel": 130,
+    "fp": 164,
+    "flock": 154
+   }
+  },
+  {
+   "name": "Oronde Gadsden II",
+   "avg": 151.0,
+   "n": 3,
+   "ranks": {
+    "joel": 137,
+    "fp": 167,
+    "flock": 149
+   }
+  },
+  {
+   "name": "Tyjae Spears",
+   "avg": 151.33,
+   "n": 3,
+   "ranks": {
+    "joel": 150,
+    "fp": 142,
+    "flock": 162
+   }
+  },
+  {
+   "name": "Tre Tucker",
+   "avg": 152.0,
+   "n": 3,
+   "ranks": {
+    "joel": 145,
+    "fp": 163,
+    "flock": 148
+   }
+  },
+  {
+   "name": "Brian Robinson Jr.",
+   "avg": 157.0,
+   "n": 3,
+   "ranks": {
+    "joel": 154,
+    "fp": 152,
+    "flock": 165
+   }
+  },
+  {
+   "name": "Omar Cooper Jr.",
+   "avg": 157.0,
+   "n": 2,
+   "ranks": {
+    "fp": 173,
+    "flock": 141
+   }
+  },
+  {
+   "name": "Daniel Jones",
+   "avg": 159.0,
+   "n": 3,
+   "ranks": {
+    "joel": 156,
+    "fp": 165,
+    "flock": 156
+   }
+  },
+  {
+   "name": "Jalen McMillan",
+   "avg": 159.33,
+   "n": 3,
+   "ranks": {
+    "joel": 175,
+    "fp": 159,
+    "flock": 144
+   }
+  },
+  {
+   "name": "Dylan Sampson",
+   "avg": 159.67,
+   "n": 3,
+   "ranks": {
+    "joel": 172,
+    "fp": 148,
+    "flock": 159
+   }
+  },
+  {
+   "name": "C.J. Stroud",
+   "avg": 161.67,
+   "n": 3,
+   "ranks": {
+    "joel": 180,
+    "fp": 153,
+    "flock": 152
+   }
+  },
+  {
+   "name": "Ray Davis",
+   "avg": 164.0,
+   "n": 3,
+   "ranks": {
+    "joel": 140,
+    "fp": 166,
+    "flock": 186
+   }
+  },
+  {
+   "name": "Bryce Young",
+   "avg": 164.33,
+   "n": 3,
+   "ranks": {
+    "joel": 152,
+    "fp": 180,
+    "flock": 161
+   }
+  },
+  {
+   "name": "Jalen Nailor",
+   "avg": 165.0,
+   "n": 3,
+   "ranks": {
+    "joel": 173,
+    "fp": 158,
+    "flock": 164
+   }
+  },
+  {
+   "name": "Denzel Boston",
+   "avg": 166.67,
+   "n": 3,
+   "ranks": {
+    "joel": 219,
+    "fp": 143,
+    "flock": 138
+   }
+  },
+  {
+   "name": "T.J. Hockenson",
+   "avg": 168.0,
+   "n": 3,
+   "ranks": {
+    "joel": 153,
+    "fp": 188,
+    "flock": 163
+   }
+  },
+  {
+   "name": "Mike Washington Jr.",
+   "avg": 168.0,
+   "n": 3,
+   "ranks": {
+    "joel": 160,
+    "fp": 161,
+    "flock": 183
+   }
+  },
+  {
+   "name": "Juwan Johnson",
+   "avg": 170.0,
+   "n": 3,
+   "ranks": {
+    "joel": 190,
+    "fp": 154,
+    "flock": 166
+   }
+  },
+  {
+   "name": "Antonio Williams",
+   "avg": 171.0,
+   "n": 1,
+   "ranks": {
+    "flock": 171
+   }
+  },
+  {
+   "name": "Ryan Flournoy",
+   "avg": 172.5,
+   "n": 2,
+   "ranks": {
+    "fp": 170,
+    "flock": 175
+   }
+  },
+  {
+   "name": "Kenyon Sadiq",
+   "avg": 172.67,
+   "n": 3,
+   "ranks": {
+    "joel": 155,
+    "fp": 205,
+    "flock": 158
+   }
+  },
+  {
+   "name": "MarShawn Lloyd",
+   "avg": 174.5,
+   "n": 2,
+   "ranks": {
+    "fp": 176,
+    "flock": 173
+   }
+  },
+  {
+   "name": "Jauan Jennings",
+   "avg": 175.0,
+   "n": 3,
+   "ranks": {
+    "joel": 170,
+    "fp": 171,
+    "flock": 184
+   }
+  },
+  {
+   "name": "Sean Tucker",
+   "avg": 175.0,
+   "n": 2,
+   "ranks": {
+    "fp": 181,
+    "flock": 169
+   }
+  },
+  {
+   "name": "Brenton Strange",
+   "avg": 175.33,
+   "n": 3,
+   "ranks": {
+    "joel": 221,
+    "fp": 155,
+    "flock": 150
+   }
+  },
+  {
+   "name": "Emmett Johnson",
+   "avg": 176.0,
+   "n": 3,
+   "ranks": {
+    "joel": 159,
+    "fp": 191,
+    "flock": 178
+   }
+  },
+  {
+   "name": "Jaydon Blue",
+   "avg": 176.0,
+   "n": 3,
+   "ranks": {
+    "joel": 165,
+    "fp": 162,
+    "flock": 201
+   }
+  },
+  {
+   "name": "Malik Washington",
+   "avg": 176.5,
+   "n": 2,
+   "ranks": {
+    "fp": 174,
+    "flock": 179
+   }
+  },
+  {
+   "name": "Tre' Harris",
+   "avg": 177.0,
+   "n": 2,
+   "ranks": {
+    "fp": 184,
+    "flock": 170
+   }
+  },
+  {
+   "name": "Jerry Jeudy",
+   "avg": 179.5,
+   "n": 2,
+   "ranks": {
+    "fp": 178,
+    "flock": 181
+   }
+  },
+  {
+   "name": "Terrance Ferguson",
+   "avg": 180.33,
+   "n": 3,
+   "ranks": {
+    "joel": 169,
+    "fp": 179,
+    "flock": 193
+   }
+  },
+  {
+   "name": "Hunter Henry",
+   "avg": 181.33,
+   "n": 3,
+   "ranks": {
+    "joel": 220,
+    "fp": 169,
+    "flock": 155
+   }
+  },
+  {
+   "name": "Nicholas Singleton",
+   "avg": 182.0,
+   "n": 3,
+   "ranks": {
+    "joel": 177,
+    "fp": 192,
+    "flock": 177
+   }
+  },
+  {
+   "name": "Adonai Mitchell",
+   "avg": 182.67,
+   "n": 3,
+   "ranks": {
+    "joel": 164,
+    "fp": 175,
+    "flock": 209
+   }
+  },
+  {
+   "name": "Chris Brooks",
+   "avg": 189.0,
+   "n": 1,
+   "ranks": {
+    "flock": 189
+   }
+  },
+  {
+   "name": "Devin Singletary",
+   "avg": 190.0,
+   "n": 1,
+   "ranks": {
+    "flock": 190
+   }
+  },
+  {
+   "name": "Kayshon Boutte",
+   "avg": 190.67,
+   "n": 3,
+   "ranks": {
+    "joel": 179,
+    "fp": 196,
+    "flock": 197
+   }
+  },
+  {
+   "name": "Brashard Smith",
+   "avg": 191.0,
+   "n": 1,
+   "ranks": {
+    "flock": 191
+   }
+  },
+  {
+   "name": "Greg Dulcich",
+   "avg": 192.0,
+   "n": 3,
+   "ranks": {
+    "joel": 176,
+    "fp": 193,
+    "flock": 207
+   }
+  },
+  {
+   "name": "Germie Bernard",
+   "avg": 192.0,
+   "n": 1,
+   "ranks": {
+    "flock": 192
+   }
+  },
+  {
+   "name": "Kaytron Allen",
+   "avg": 193.0,
+   "n": 2,
+   "ranks": {
+    "fp": 214,
+    "flock": 172
+   }
+  },
+  {
+   "name": "Darnell Mooney",
+   "avg": 193.5,
+   "n": 2,
+   "ranks": {
+    "fp": 213,
+    "flock": 174
+   }
+  },
+  {
+   "name": "Elijah Sarratt",
+   "avg": 194.0,
+   "n": 1,
+   "ranks": {
+    "flock": 194
+   }
+  },
+  {
+   "name": "David Njoku",
+   "avg": 195.0,
+   "n": 1,
+   "ranks": {
+    "flock": 195
+   }
+  },
+  {
+   "name": "Ollie Gordon II",
+   "avg": 195.33,
+   "n": 3,
+   "ranks": {
+    "joel": 171,
+    "fp": 211,
+    "flock": 204
+   }
+  },
+  {
+   "name": "Isaac TeSlaa",
+   "avg": 195.5,
+   "n": 2,
+   "ranks": {
+    "fp": 206,
+    "flock": 185
+   }
+  },
+  {
+   "name": "AJ Barner",
+   "avg": 195.67,
+   "n": 3,
+   "ranks": {
+    "joel": 222,
+    "fp": 198,
+    "flock": 167
+   }
+  },
+  {
+   "name": "Kimani Vidal",
+   "avg": 197.5,
+   "n": 2,
+   "ranks": {
+    "fp": 189,
+    "flock": 206
+   }
+  },
+  {
+   "name": "Dalton Schultz",
+   "avg": 198.33,
+   "n": 3,
+   "ranks": {
+    "joel": 224,
+    "fp": 203,
+    "flock": 168
+   }
+  },
+  {
+   "name": "Calvin Ridley",
+   "avg": 198.5,
+   "n": 2,
+   "ranks": {
+    "fp": 221,
+    "flock": 176
+   }
+  },
+  {
+   "name": "Tank Dell",
+   "avg": 199.0,
+   "n": 2,
+   "ranks": {
+    "fp": 218,
+    "flock": 180
+   }
+  },
+  {
+   "name": "Dontayvion Wicks",
+   "avg": 200.0,
+   "n": 2,
+   "ranks": {
+    "fp": 182,
+    "flock": 218
+   }
+  },
+  {
+   "name": "Braelon Allen",
+   "avg": 202.0,
+   "n": 2,
+   "ranks": {
+    "fp": 204,
+    "flock": 200
+   }
+  },
+  {
+   "name": "Chris Bell",
+   "avg": 202.0,
+   "n": 1,
+   "ranks": {
+    "flock": 202
+   }
+  },
+  {
+   "name": "Zachariah Branch",
+   "avg": 203.5,
+   "n": 2,
+   "ranks": {
+    "fp": 225,
+    "flock": 182
+   }
+  },
+  {
+   "name": "Jacoby Brissett",
+   "avg": 204.67,
+   "n": 3,
+   "ranks": {
+    "joel": 205,
+    "fp": 210,
+    "flock": 199
+   }
+  },
+  {
+   "name": "Fernando Mendoza",
+   "avg": 205.67,
+   "n": 3,
+   "ranks": {
+    "joel": 174,
+    "fp": 224,
+    "flock": 219
+   }
+  },
+  {
+   "name": "Michael Penix Jr.",
+   "avg": 210.0,
+   "n": 1,
+   "ranks": {
+    "joel": 210
+   }
+  },
+  {
+   "name": "Najee Harris",
+   "avg": 210.0,
+   "n": 1,
+   "ranks": {
+    "flock": 210
+   }
+  },
+  {
+   "name": "Gunnar Helm",
+   "avg": 210.33,
+   "n": 3,
+   "ranks": {
+    "joel": 228,
+    "fp": 215,
+    "flock": 188
+   }
+  },
+  {
+   "name": "Troy Franklin",
+   "avg": 211.0,
+   "n": 2,
+   "ranks": {
+    "fp": 217,
+    "flock": 205
+   }
+  },
+  {
+   "name": "Ted Hurst III",
+   "avg": 213.0,
+   "n": 1,
+   "ranks": {
+    "flock": 213
+   }
+  },
+  {
+   "name": "Aaron Rodgers",
+   "avg": 213.33,
+   "n": 3,
+   "ranks": {
+    "joel": 211,
+    "fp": 233,
+    "flock": 196
+   }
+  },
+  {
+   "name": "Demond Claiborne",
+   "avg": 213.5,
+   "n": 2,
+   "ranks": {
+    "fp": 240,
+    "flock": 187
+   }
+  },
+  {
+   "name": "George Holani",
+   "avg": 214.0,
+   "n": 2,
+   "ranks": {
+    "fp": 212,
+    "flock": 216
+   }
+  },
+  {
+   "name": "Elic Ayomanor",
+   "avg": 214.0,
+   "n": 1,
+   "ranks": {
+    "flock": 214
+   }
+  },
+  {
+   "name": "Isaiah Davis",
+   "avg": 215.0,
+   "n": 3,
+   "ranks": {
+    "joel": 157,
+    "fp": 247,
+    "flock": 241
+   }
+  },
+  {
+   "name": "Shedeur Sanders",
+   "avg": 216.0,
+   "n": 1,
+   "ranks": {
+    "joel": 216
+   }
+  },
+  {
+   "name": "Geno Smith",
+   "avg": 217.33,
+   "n": 3,
+   "ranks": {
+    "joel": 215,
+    "fp": 222,
+    "flock": 215
+   }
+  },
+  {
+   "name": "Ja'Kobi Lane",
+   "avg": 218.0,
+   "n": 2,
+   "ranks": {
+    "fp": 238,
+    "flock": 198
+   }
+  },
+  {
+   "name": "Eli Stowers",
+   "avg": 218.5,
+   "n": 2,
+   "ranks": {
+    "joel": 226,
+    "flock": 211
+   }
+  },
+  {
+   "name": "Pat Freiermuth",
+   "avg": 218.67,
+   "n": 3,
+   "ranks": {
+    "joel": 227,
+    "fp": 226,
+    "flock": 203
+   }
+  },
+  {
+   "name": "Adam Randall",
+   "avg": 220.0,
+   "n": 1,
+   "ranks": {
+    "flock": 220
+   }
+  },
+  {
+   "name": "Pat Bryant",
+   "avg": 220.5,
+   "n": 2,
+   "ranks": {
+    "fp": 197,
+    "flock": 244
+   }
+  },
+  {
+   "name": "Calvin Austin III",
+   "avg": 221.0,
+   "n": 1,
+   "ranks": {
+    "flock": 221
+   }
+  },
+  {
+   "name": "Darius Slayton",
+   "avg": 222.0,
+   "n": 1,
+   "ranks": {
+    "flock": 222
+   }
+  },
+  {
+   "name": "Cade Otton",
+   "avg": 222.33,
+   "n": 3,
+   "ranks": {
+    "joel": 225,
+    "fp": 234,
+    "flock": 208
+   }
+  },
+  {
+   "name": "Caleb Douglas",
+   "avg": 223.0,
+   "n": 1,
+   "ranks": {
+    "flock": 223
+   }
+  },
+  {
+   "name": "Malachi Fields",
+   "avg": 224.0,
+   "n": 1,
+   "ranks": {
+    "flock": 224
+   }
+  },
+  {
+   "name": "Luke McCaffrey",
+   "avg": 226.0,
+   "n": 1,
+   "ranks": {
+    "flock": 226
+   }
+  },
+  {
+   "name": "James Conner",
+   "avg": 226.5,
+   "n": 2,
+   "ranks": {
+    "fp": 228,
+    "flock": 225
+   }
+  },
+  {
+   "name": "Emanuel Wilson",
+   "avg": 227.0,
+   "n": 1,
+   "ranks": {
+    "fp": 227
+   }
+  },
+  {
+   "name": "Samaje Perine",
+   "avg": 228.0,
+   "n": 1,
+   "ranks": {
+    "flock": 228
+   }
+  },
+  {
+   "name": "Tyler Higbee",
+   "avg": 229.0,
+   "n": 1,
+   "ranks": {
+    "joel": 229
+   }
+  },
+  {
+   "name": "Colby Parkinson",
+   "avg": 230.0,
+   "n": 2,
+   "ranks": {
+    "joel": 223,
+    "fp": 237
+   }
+  },
+  {
+   "name": "Darnell Washington",
+   "avg": 230.0,
+   "n": 1,
+   "ranks": {
+    "joel": 230
+   }
+  },
+  {
+   "name": "Jaylen Wright",
+   "avg": 230.0,
+   "n": 1,
+   "ranks": {
+    "fp": 230
+   }
+  },
+  {
+   "name": "Chimere Dike",
+   "avg": 230.0,
+   "n": 1,
+   "ranks": {
+    "flock": 230
+   }
+  },
+  {
+   "name": "Evan Engram",
+   "avg": 231.0,
+   "n": 1,
+   "ranks": {
+    "joel": 231
+   }
+  },
+  {
+   "name": "Ty Johnson",
+   "avg": 231.0,
+   "n": 1,
+   "ranks": {
+    "flock": 231
+   }
+  },
+  {
+   "name": "Jack Bech",
+   "avg": 232.0,
+   "n": 1,
+   "ranks": {
+    "flock": 232
+   }
+  },
+  {
+   "name": "Rashod Bateman",
+   "avg": 232.5,
+   "n": 2,
+   "ranks": {
+    "fp": 219,
+    "flock": 246
+   }
+  },
+  {
+   "name": "Justice Hill",
+   "avg": 232.5,
+   "n": 2,
+   "ranks": {
+    "fp": 231,
+    "flock": 234
+   }
+  },
+  {
+   "name": "Jordan James",
+   "avg": 232.5,
+   "n": 2,
+   "ranks": {
+    "fp": 248,
+    "flock": 217
+   }
+  },
+  {
+   "name": "Tory Horton",
+   "avg": 233.0,
+   "n": 1,
+   "ranks": {
+    "flock": 233
+   }
+  },
+  {
+   "name": "Christian Kirk",
+   "avg": 235.0,
+   "n": 1,
+   "ranks": {
+    "flock": 235
+   }
+  },
+  {
+   "name": "Kaelon Black",
+   "avg": 236.0,
+   "n": 1,
+   "ranks": {
+    "fp": 236
+   }
+  },
+  {
+   "name": "Tez Johnson",
+   "avg": 236.0,
+   "n": 1,
+   "ranks": {
+    "flock": 236
+   }
+  },
+  {
+   "name": "Bryce Lance",
+   "avg": 237.0,
+   "n": 1,
+   "ranks": {
+    "flock": 237
+   }
+  },
+  {
+   "name": "Keon Coleman",
+   "avg": 237.5,
+   "n": 2,
+   "ranks": {
+    "fp": 246,
+    "flock": 229
+   }
+  },
+  {
+   "name": "Cyrus Allen",
+   "avg": 238.0,
+   "n": 2,
+   "ranks": {
+    "fp": 249,
+    "flock": 227
+   }
+  },
+  {
+   "name": "Cooper Kupp",
+   "avg": 239.0,
+   "n": 1,
+   "ranks": {
+    "fp": 239
+   }
+  },
+  {
+   "name": "DJ Giddens",
+   "avg": 239.0,
+   "n": 1,
+   "ranks": {
+    "flock": 239
+   }
+  },
+  {
+   "name": "Tua Tagovailoa",
+   "avg": 240.0,
+   "n": 1,
+   "ranks": {
+    "flock": 240
+   }
+  },
+  {
+   "name": "Jaylin Noel",
+   "avg": 241.5,
+   "n": 2,
+   "ranks": {
+    "fp": 245,
+    "flock": 238
+   }
+  },
+  {
+   "name": "Kendre Miller",
+   "avg": 242.0,
+   "n": 1,
+   "ranks": {
+    "flock": 242
+   }
+  },
+  {
+   "name": "Tyquan Thornton",
+   "avg": 243.0,
+   "n": 1,
+   "ranks": {
+    "flock": 243
+   }
+  },
+  {
+   "name": "Skyler Bell",
+   "avg": 245.0,
+   "n": 1,
+   "ranks": {
+    "flock": 245
+   }
+  },
+  {
+   "name": "Cedric Tillman",
+   "avg": 247.0,
+   "n": 1,
+   "ranks": {
+    "flock": 247
+   }
+  },
+  {
+   "name": "Mike Gesicki",
+   "avg": 248.0,
+   "n": 1,
+   "ranks": {
+    "flock": 248
+   }
+  },
+  {
+   "name": "Chris Brazzell II",
+   "avg": 249.0,
+   "n": 1,
+   "ranks": {
+    "flock": 249
+   }
+  },
+  {
+   "name": "Devaughn Vele",
+   "avg": 250.0,
+   "n": 1,
+   "ranks": {
+    "flock": 250
    }
   }
  ]
