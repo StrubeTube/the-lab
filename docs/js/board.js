@@ -429,9 +429,31 @@
     const SPAN = isOvr ? 15 : 6;                      // full-color diff distance
     const tag = r => isOvr ? '#' + r : pos + r;
     const posPlayers = isOvr ? players : players.filter(p => p.pos === pos);
-    const srcs = SRC_META.filter(([key]) => posPlayers.some(p => ranksOf(p) && ranksOf(p)[key] != null));
-    if (!srcs.length) {
+    const avail = SRC_META.filter(([key]) => posPlayers.some(p => ranksOf(p) && ranksOf(p)[key] != null));
+    if (!avail.length) {
       root.append(LAB.el('div', { class: 'empty' }, 'No analyst lists loaded for ' + pos + '.'));
+      return;
+    }
+    const hidden = LAB.prefs.cmpHide || {};
+    const srcs = avail.filter(([key]) => !hidden[key]);
+
+    // per-analyst show/hide chips (persisted; view-only, averages unaffected)
+    root.append(LAB.el('div', { class: 'flex', style: 'gap:6px;flex-wrap:wrap;margin:2px 0 8px' },
+      LAB.el('span', { class: 'muted', style: 'font-size:12px' }, 'Analysts:'),
+      avail.map(([key, label]) => LAB.el('button', {
+        class: 'btn small',
+        title: hidden[key] ? `show ${label}'s column` : `hide ${label}'s column (the consensus average still includes them)`,
+        style: hidden[key] ? 'opacity:.45;text-decoration:line-through' : 'border-color:var(--accent);color:var(--accent)',
+        onclick: () => {
+          const h = LAB.prefs.cmpHide || {};
+          h[key] = !h[key];
+          LAB.prefs.cmpHide = h;
+          LAB.savePrefs();
+          render();
+        },
+      }, label))));
+    if (!srcs.length) {
+      root.append(LAB.el('div', { class: 'empty' }, 'All analysts hidden — toggle one back on above.'));
       return;
     }
     const srcLists = {};
@@ -517,17 +539,22 @@
         }, '⚖ Sort tiers to consensus')));
     }
 
-    const COLW = isOvr ? 235 : 210;
-    const grid = LAB.el('div', { style: 'min-width:' + (COLW * (srcs.length + 1) + 12 * srcs.length) + 'px' });
+    // fit-to-screen: columns shrink to share the visible width so the last
+    // (Vegas) column isn't stranded behind a bottom-of-page scrollbar; below
+    // MINW per column the grid overflows and scrolls instead
+    const GAP = 12, MINW = 170;
+    const ncols = srcs.length + 1;
+    const availW = root.clientWidth || 1200;
+    const totalW = Math.max(ncols * MINW + GAP * (ncols - 1), availW);
+    const colW = Math.floor((totalW - GAP * (ncols - 1)) / ncols);
+    const grid = LAB.el('div', { style: `width:${totalW}px` });
     const outer = LAB.el('div', { style: 'overflow-x:auto' }, grid);
-    const colStyle = 'flex:1;min-width:' + COLW + 'px';
+    const colStyle = `flex:none;width:${colW}px`;
     // header row
     grid.append(LAB.el('div', { style: 'display:flex;gap:12px' },
       [['', 'My board'], ...srcs].map(([, label], i) => LAB.el('div', {
         style: colStyle + ';font-family:var(--font-display);font-weight:700;text-transform:uppercase;letter-spacing:.05em;font-size:14px;color:var(--ink-2);padding:2px 7px',
       }, i === 0 ? 'My board' : label))));
-
-    const totalW = COLW * (srcs.length + 1) + 12 * srcs.length;
 
     if (isOvr) {
       // ---- OVR: whole tier blocks (the overall board arranges blocks) ----
@@ -574,7 +601,6 @@
 
     // ---- position tab: one flat my-column; tier bars are movable BREAKS —
     // drag a bar between players to re-split tiers, drag players to re-rank
-    grid.style.width = totalW + 'px'; // fixed widths keep the bars spanning exactly
     const tiers = board.pos[pos].tiers;
     const BAR_H = 36; // fixed bar height so analyst columns stay row-aligned
     const myCol = LAB.el('div', { style: colStyle });
