@@ -129,6 +129,42 @@ def fetch_borischen():
     save("borischen.json", out)
 
 
+def fetch_vegas():
+    """Season-long player prop totals (O/U lines) from BettingPros' public API.
+
+    Markets: 300 pass yds, 301 rush yds, 302 rec yds, 304 pass TDs,
+    305 rush TDs, 306 rec TDs, 330 receptions. The x-api-key is the public
+    one shipped in bettingpros.com's own front-end JS.
+    """
+    print("Vegas season props (BettingPros)")
+    headers = {**UA, "Accept": "application/json",
+               "x-api-key": "CHi8Hy5CEE4khd46XNYL23dCFX96oUdw6qOt1Dnh"}
+    markets = {300: "pass_yd", 301: "rush_yd", 302: "rec_yd",
+               304: "pass_td", 305: "rush_td", 306: "rec_td", 330: "rec"}
+    out = {}
+    for mid, stat in markets.items():
+        offers, page = [], 1
+        while True:
+            url = (f"https://api.bettingpros.com/v3/offers?sport=NFL"
+                   f"&market_id={mid}&season={SEASON}&limit=10&page={page}")  # API caps limit at 10
+            try:
+                req = urllib.request.Request(url, headers=headers)
+                with urllib.request.urlopen(req, timeout=60) as r:
+                    d = json.loads(r.read())
+            except (urllib.error.URLError, TimeoutError) as e:
+                print(f"  FAIL market {mid} p{page}: {e}")
+                break
+            offers.extend(d.get("offers") or [])
+            pg = d.get("_pagination") or {}
+            if page >= (pg.get("total_pages") or 1):
+                break
+            page += 1
+            time.sleep(0.3)
+        out[stat] = offers
+        print(f"  {stat} (market {mid}): {len(offers)} players")
+    save("vegas_offers.json", out)
+
+
 if __name__ == "__main__":
     t0 = time.time()
     fetch_sleeper_core()
@@ -136,4 +172,5 @@ if __name__ == "__main__":
         fetch_league(tag, lid)
     fetch_adp()
     fetch_borischen()
+    fetch_vegas()
     print(f"Done in {time.time()-t0:.0f}s")

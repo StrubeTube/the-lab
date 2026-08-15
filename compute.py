@@ -475,6 +475,95 @@ if consensus_path.exists():
         else:
             ounmatched += 1
     print(f"  overall consensus: {omatched} matched, {ounmatched} outside pool")
+
+# ---- Vegas "analyst": season prop O/U lines -> fantasy points -> ranks ----
+# Positional rank = points within position; overall rank = value over a
+# 10-team replacement baseline so QB raw-point inflation doesn't distort it.
+vegas_raw = {}
+try:
+    vegas_raw = load("vegas_offers.json") or {}
+except FileNotFoundError:
+    pass
+if vegas_raw:
+    def vegas_line(offer):
+        """Consensus O/U line: BettingPros book 0 main line, else opening."""
+        for sel in offer.get("selections") or []:
+            if (sel.get("selection") or "").lower() != "over":
+                continue
+            for bk in sel.get("books") or []:
+                if bk.get("id") == 0:
+                    for ln in bk.get("lines") or []:
+                        if ln.get("main") and ln.get("line") is not None:
+                            return ln["line"]
+            op = sel.get("opening_line") or {}
+            if op.get("line") is not None:
+                return op["line"]
+        return None
+
+    vlines = {}  # (norm name, pos) -> {stat: line}
+    for stat, offers in vegas_raw.items():
+        for off in offers:
+            parts = off.get("participants") or []
+            pl = (parts[0].get("player") or {}) if parts else {}
+            if pl.get("position") not in POS:
+                continue
+            line = vegas_line(off)
+            if line is not None:
+                vlines.setdefault((norm(parts[0].get("name") or ""), pl["position"]), {})[stat] = line
+
+    def vegas_pts(pos, st):
+        rec = st.get("rec")
+        if rec is None and st.get("rec_yd"):
+            # books didn't hang a receptions line — estimate off yards/catch
+            rec = st["rec_yd"] / (8.5 if pos == "RB" else 11.0)
+        return (st.get("pass_yd", 0) * scoring.get("pass_yd", 0.04)
+                + st.get("pass_td", 0) * scoring.get("pass_td", 4)
+                + st.get("rush_yd", 0) * scoring.get("rush_yd", 0.1)
+                + st.get("rush_td", 0) * scoring.get("rush_td", 6)
+                + st.get("rec_yd", 0) * scoring.get("rec_yd", 0.1)
+                + st.get("rec_td", 0) * scoring.get("rec_td", 6)
+                + (rec or 0) * scoring.get("rec", 0.5))
+
+    by_pos_name = {}
+    for e in players_out:
+        if e["pos"] in POS:
+            by_pos_name.setdefault((norm(e["name"] or ""), e["pos"]), e)
+    vmatched = vunmatched = 0
+    for key, st in vlines.items():
+        e = by_pos_name.get(key)
+        if e is None:
+            vunmatched += 1
+            continue
+        e["vpts"] = round(vegas_pts(key[1], st), 1)
+        vmatched += 1
+
+    for pos in POS:
+        ranked = sorted((e for e in players_out if e["pos"] == pos and e.get("vpts") is not None),
+                        key=lambda x: -x["vpts"])
+        for i, e in enumerate(ranked):
+            rr = dict(e.get("crs") or {})
+            rr["vegas"] = i + 1
+            e["crs"] = rr
+            e["cr"] = round(sum(rr.values()) / len(rr), 2)
+            e["cr_n"] = len(rr)
+
+    VBASE = {"QB": 12, "RB": 26, "WR": 28, "TE": 12}  # 10-team replacement slots
+    baseline = {}
+    for pos in POS:
+        pts = sorted((e["vpts"] for e in players_out if e["pos"] == pos and e.get("vpts") is not None),
+                     reverse=True)
+        if pts:
+            baseline[pos] = pts[min(VBASE[pos], len(pts)) - 1]
+    vorp = sorted((e for e in players_out if e.get("vpts") is not None),
+                  key=lambda e: -(e["vpts"] - baseline[e["pos"]]))
+    for i, e in enumerate(vorp):
+        rr = dict(e.get("ocrs") or {})
+        rr["vegas"] = i + 1
+        e["ocrs"] = rr
+        e["ocr"] = round(sum(rr.values()) / len(rr), 2)
+        e["ocr_n"] = len(rr)
+    print(f"  vegas: {vmatched} players priced ({vunmatched} outside pool), "
+          f"baselines {[f'{p}:{baseline.get(p)}' for p in POS]}")
     top_missing = [e["name"] for e in players_out
                    if e["pos"] in POS and e.get("adp") and e["adp"] <= 100 and "cr" not in e]
     if top_missing:
