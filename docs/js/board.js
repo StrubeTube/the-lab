@@ -3,6 +3,44 @@
   LAB.nav('The Board');
   const { players, leagues, meta } = await LAB.loadData(['players', 'leagues', 'meta']);
   const byId = LAB.playersById(players);
+
+  // ---------- analyst-rank edits (local corrections to the source lists) ----
+  // Stored as full ordered pid lists per "SCOPE:src" (scope = pos or OVR).
+  // Applied over the pipeline data each load: the scope's rank-number multiset
+  // is reassigned to the stored order, newcomers slot in at their fresh rank,
+  // and the consensus averages (cr/ocr) are recomputed to match.
+  const AEDITS_KEY = 'thelab-analyst-edits-v1';
+  const loadAEdits = () => { try { return JSON.parse(localStorage.getItem(AEDITS_KEY)) || {}; } catch { return {}; } };
+  const saveAEdits = ed => localStorage.setItem(AEDITS_KEY, JSON.stringify(ed));
+  function applyAEditScope(scopeKey, order) {
+    const [sc, src] = scopeKey.split(':');
+    const isOvr = sc === 'OVR';
+    const get = p => isOvr ? p.ocrs : p.crs;
+    const pool = players.filter(p => get(p) && get(p)[src] != null && (isOvr || p.pos === sc));
+    if (!pool.length) return;
+    const pById = Object.fromEntries(pool.map(p => [p.id, p]));
+    const fresh = pool.slice().sort((a, b) => get(a)[src] - get(b)[src]);
+    const rankVals = fresh.map(p => get(p)[src]); // keeps any K/DST numbering gaps
+    const list = order.filter(pid => pById[pid]);
+    const seen = new Set(list);
+    for (const p of fresh) {
+      if (seen.has(p.id)) continue;
+      const fr = get(p)[src];
+      let idx = list.findIndex(pid => get(pById[pid])[src] > fr);
+      if (idx < 0) idx = list.length;
+      list.splice(idx, 0, p.id);
+    }
+    list.forEach((pid, i) => { get(pById[pid])[src] = rankVals[i]; });
+    for (const p of pool) {
+      const vals = Object.values(get(p));
+      const avg = +(vals.reduce((s, v) => s + v, 0) / vals.length).toFixed(2);
+      if (isOvr) { p.ocr = avg; p.ocr_n = vals.length; }
+      else { p.cr = avg; p.cr_n = vals.length; }
+    }
+  }
+  const aEdits = loadAEdits();
+  for (const [k, order] of Object.entries(aEdits)) applyAEditScope(k, order);
+
   let board = LAB.getBoardOrSeed(players);
 
   const state = {
@@ -10,6 +48,7 @@
     view: 'list',                           // list | grid
     overlay: LAB.prefs.boardOverlay || '',  // '' | ggg | lob
     search: '',
+    editA: false,                           // analyst-edit mode, always starts OFF
   };
 
   // ---------- undo ----------
@@ -438,6 +477,8 @@
     const srcs = avail.filter(([key]) => !hidden[key]);
 
     // per-analyst show/hide chips (persisted; view-only, averages unaffected)
+    const scopeOf = key => `${isOvr ? 'OVR' : pos}:${key}`;
+    const editedHere = avail.filter(([key]) => aEdits[scopeOf(key)]);
     root.append(LAB.el('div', { class: 'flex', style: 'gap:6px;flex-wrap:wrap;margin:2px 0 8px' },
       LAB.el('span', { class: 'muted', style: 'font-size:12px' }, 'Analysts:'),
       avail.map(([key, label]) => LAB.el('button', {
@@ -451,7 +492,31 @@
           LAB.savePrefs();
           render();
         },
-      }, label))));
+      }, label)),
+      LAB.el('span', { style: 'width:10px' }),
+      LAB.el('button', {
+        class: 'btn small',
+        title: 'Toggle analyst-edit mode: drag players inside an analyst\'s column to correct that list. Edits are saved locally, survive data refreshes, and update the consensus averages.',
+        style: state.editA ? 'border-color:var(--warn);color:var(--warn)' : '',
+        onclick: () => { state.editA = !state.editA; render(); },
+      }, state.editA ? '✎ Editing analysts — done' : '✎ Edit analysts'),
+      editedHere.length ? LAB.el('button', {
+        class: 'btn small danger',
+        title: `Discard your local corrections to ${editedHere.map(([, l]) => l).join(', ')} on this tab and go back to the published lists`,
+        onclick: () => {
+          if (!confirm(`Clear your edits to ${editedHere.map(([, l]) => l).join(', ')} on this tab?`)) return;
+          const ed = loadAEdits();
+          editedHere.forEach(([key]) => delete ed[scopeOf(key)]);
+          saveAEdits(ed);
+          location.reload(); // pristine ranks come back from the data files
+        },
+      }, `↺ clear edits (${editedHere.length})`) : ''));
+    if (state.editA) {
+      root.append(LAB.el('div', { class: 'card raised', style: 'margin:0 0 10px;padding:8px 12px;border-color:var(--warn)' },
+        LAB.el('b', { style: 'color:var(--warn)' }, 'Analyst edit mode'),
+        LAB.el('span', { class: 'dim', style: 'margin-left:8px;font-size:12.5px' },
+          'drag players up or down inside an analyst\'s column to correct that list — rank numbers reassign and the consensus average follows. An ✎ marks corrected columns.')));
+    }
     if (!srcs.length) {
       root.append(LAB.el('div', { class: 'empty' }, 'All analysts hidden — toggle one back on above.'));
       return;
@@ -502,10 +567,12 @@
       const col = diffColor(myRank, rank, SPAN);
       const bg = col ? `background:${col.replace('rgb', 'rgba').replace(')', ',0.28)')};box-shadow:inset 3px 0 0 ${col};` : 'background:var(--surface);border:1px solid var(--border);';
       return LAB.el('div', {
-        style: CELL_BASE + bg + 'cursor:pointer',
-        title: `${p.name} — you: ${myRank != null ? tag(myRank) : '—'} · them: ${tag(rank)}` +
+        class: 'acell', 'data-pid': p.id,
+        style: CELL_BASE + bg + (state.editA ? 'cursor:grab;outline:1px dashed var(--warn)' : 'cursor:pointer'),
+        title: state.editA ? `${p.name} — drag to correct this analyst's ranking`
+          : `${p.name} — you: ${myRank != null ? tag(myRank) : '—'} · them: ${tag(rank)}` +
           (diff == null ? ' (not on your board)' : diff === 0 ? ' (same)' : diff > 0 ? ` — you're ${diff} higher` : ` — they're ${-diff} higher`),
-        onclick: () => LAB.playerCard(p.id),
+        ...(state.editA ? {} : { onclick: () => LAB.playerCard(p.id) }),
       },
         LAB.el('span', { class: 'mono', style: 'width:22px;text-align:right;flex:none;color:' + (col || 'var(--ink-3)') }, rank),
         LAB.headshot(p.id, 'sm'),
@@ -550,11 +617,34 @@
     const grid = LAB.el('div', { style: `width:${totalW}px` });
     const outer = LAB.el('div', { style: 'overflow-x:auto' }, grid);
     const colStyle = `flex:none;width:${colW}px`;
-    // header row
+    // header row (✎ marks a column you have corrected locally)
     grid.append(LAB.el('div', { style: 'display:flex;gap:12px' },
-      [['', 'My board'], ...srcs].map(([, label], i) => LAB.el('div', {
+      [['', 'My board'], ...srcs].map(([key, label], i) => LAB.el('div', {
         style: colStyle + ';font-family:var(--font-display);font-weight:700;text-transform:uppercase;letter-spacing:.05em;font-size:14px;color:var(--ink-2);padding:2px 7px',
-      }, i === 0 ? 'My board' : label))));
+      }, i === 0 ? 'My board' : label + (aEdits[scopeOf(key)] ? ' ✎' : '')))));
+
+    // in edit mode every fragment of an analyst's column is one shared drag
+    // group, so a player can move anywhere within that analyst's list
+    function attachAnalystEditing() {
+      if (!state.editA) return;
+      grid.querySelectorAll('.acol').forEach(colEl => {
+        new Sortable(colEl, {
+          group: 'aedit-' + colEl.dataset.src, animation: 120, draggable: '.acell',
+          onEnd: evt => {
+            const src = evt.to.dataset.src || evt.from.dataset.src;
+            const k = scopeOf(src);
+            const order = Array.from(grid.querySelectorAll(`.acol[data-src="${src}"] .acell`)).map(c => c.dataset.pid);
+            const ed = loadAEdits();
+            ed[k] = order;
+            saveAEdits(ed);
+            aEdits[k] = order;
+            applyAEditScope(k, order);
+            render();
+            LAB.toast('Analyst ranking corrected — consensus average updated', 'good');
+          },
+        });
+      });
+    }
 
     if (isOvr) {
       // ---- OVR: whole tier blocks (the overall board arranges blocks) ----
@@ -575,7 +665,7 @@
         t.players.forEach(pid => { const c = myCell(pid); if (c) mineCol.append(c); });
         row.append(mineCol);
         for (const [key] of srcs) {
-          const col = LAB.el('div', { style: colStyle });
+          const col = LAB.el('div', { class: 'acol', 'data-src': key, style: colStyle });
           for (let i = cursor; i < cursor + n; i++) {
             const p = srcLists[key][i];
             col.append(analystCell(p, p ? ranksOf(p)[key] : null));
@@ -596,6 +686,7 @@
           commit();
         },
       });
+      attachAnalystEditing();
       return;
     }
 
@@ -617,7 +708,7 @@
     const row = LAB.el('div', { style: 'display:flex;gap:12px;align-items:flex-start' });
     row.append(myCol);
     for (const [key] of srcs) {
-      const col = LAB.el('div', { style: colStyle });
+      const col = LAB.el('div', { class: 'acol', 'data-src': key, style: colStyle });
       let i = 0;
       tiers.forEach(t => {
         col.append(LAB.el('div', { style: `height:${BAR_H}px;margin-top:10px` })); // aligns with the bar
@@ -630,6 +721,7 @@
     }
     grid.append(row);
     root.append(outer);
+    attachAnalystEditing();
 
     new Sortable(myCol, {
       animation: 120, draggable: '.cmp-mine, .tier-head', filter: '.qa-btn',
