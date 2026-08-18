@@ -20,9 +20,10 @@
     const officialKeepers = new Set(roster.keepers || []);
     return (roster.players || [])
       .map(pid => byId[pid])
-      .filter(p => p && p.pos !== 'DEF')
+      // undrafted/waiver pickups are NOT keeper-eligible — drafted last year only
+      .filter(p => p && p.pos !== 'DEF' && L.lastDraftRound[p.id])
       .map(p => {
-        const lastRd = L.lastDraftRound[p.id] || null;
+        const lastRd = L.lastDraftRound[p.id];
         const wasKept = kept.has(p.id);
         const costRd = LAB.keeperCostRound(L, lastRd, wasKept);
         const cost = midPick(costRd);

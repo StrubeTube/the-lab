@@ -254,9 +254,10 @@
       const official = (roster.keepers || []).filter(pid => byId[pid]);
       const cands = (roster.players || [])
         .map(pid => byId[pid])
-        .filter(p => p && p.pos !== 'DEF')
+        // only players DRAFTED last year are keeper-eligible (no FA pickups)
+        .filter(p => p && p.pos !== 'DEF' && L.lastDraftRound[p.id])
         .map(p => {
-          const costRd = LAB.keeperCostRound(L, L.lastDraftRound[p.id] || null, kept.has(p.id));
+          const costRd = LAB.keeperCostRound(L, L.lastDraftRound[p.id], kept.has(p.id));
           const worth = oRanks[p.id] ?? p.adp ?? 300;
           return { pid: p.id, costRd, surplus: midPick(costRd) - worth };
         })
