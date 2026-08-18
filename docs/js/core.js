@@ -271,8 +271,11 @@
   };
 
   // simulate the keeper draft: keepers consume slots in their cost rounds,
-  // everyone else fills the open picks in ADP order -> pid -> projected round
-  LAB.keeperRounds = function (players, L, board) {
+  // everyone else fills the open picks in ADP order.
+  // Returns { rounds: pid -> round, keptSet, wouldBe(p) } — wouldBe gives the
+  // hypothetical round for a player who is predicted kept (or undrafted): the
+  // slot he'd fall to if he entered this draft at his ADP.
+  LAB.keeperSim = function (players, L, board) {
     const byId = LAB.playersById(players);
     const oRanks = board ? LAB.overallRanks(board) : {};
     const { keeps, keptSet } = LAB.predictKeepers(L, byId, oRanks);
@@ -284,16 +287,22 @@
       while (r <= ROUNDS && used[r] >= 10) r++;
       if (r <= ROUNDS) used[r]++;
     }
-    const pool = players
-      .filter(p => !keptSet.has(p.id))
-      .sort((a, b) => (a.adp ?? 500 - (a.proj || 0) / 1000) - (b.adp ?? 500 - (b.proj || 0) / 1000));
-    const out = {};
-    let i = 0;
-    for (let r = 1; r <= ROUNDS && i < pool.length; r++) {
-      for (let s = used[r]; s < 10 && i < pool.length; s++) out[pool[i++].id] = r;
-    }
-    return out;
+    const sortKey = p => p.adp ?? 500 - (p.proj || 0) / 1000;
+    const pool = players.filter(p => !keptSet.has(p.id)).sort((a, b) => sortKey(a) - sortKey(b));
+    const openSlotRounds = [];
+    for (let r = 1; r <= ROUNDS; r++) for (let s = used[r]; s < 10; s++) openSlotRounds.push(r);
+    const rounds = {};
+    pool.forEach((p, i) => { if (i < openSlotRounds.length) rounds[p.id] = openSlotRounds[i]; });
+    const wouldBe = p => {
+      if (rounds[p.id]) return rounds[p.id];
+      const a = sortKey(p);
+      let idx = pool.findIndex(q => sortKey(q) > a);
+      if (idx < 0) idx = pool.length;
+      return openSlotRounds[Math.min(idx, openSlotRounds.length - 1)] ?? ROUNDS;
+    };
+    return { rounds, keptSet, wouldBe };
   };
+  LAB.keeperRounds = (players, L, board) => LAB.keeperSim(players, L, board).rounds;
 
   // ---------- toast ----------
   LAB.toast = function (msg, cls) {
@@ -355,15 +364,16 @@
         }
       }
       const mine = holder === 'Strubes';
-      const kr = board ? LAB.keeperRounds(players, L, board)[pid] : null;
+      const sim = board ? LAB.keeperSim(players, L, board) : null;
+      const kTxt = !sim ? '' : sim.rounds[pid] ? 'keeper draft: R' + sim.rounds[pid]
+        : sim.keptSet.has(pid) ? 'projected KEPT' : 'likely undrafted';
       leagueRows.push(el('div', { class: 'flex', style: 'margin-top:4px' },
         el('span', { class: 'muted', style: 'width:44px;text-transform:uppercase;font-weight:700;font-size:11px' }, tag),
         holder
           ? el('span', {}, mine ? el('span', { class: 'badge mine' }, 'ON MY ROSTER') : `rostered by ${holder}`,
               isKeeper ? el('span', { class: 'badge keeper', style: 'margin-left:6px' }, 'KEEPER') : '')
           : el('span', { class: 'good' }, 'available'),
-        el('span', { class: 'muted', style: 'margin-left:auto;font-size:12px', title: 'projected round in this league\'s keeper draft' },
-          kr ? 'keeper draft: R' + kr : (board ? 'projected KEPT' : ''))));
+        el('span', { class: 'muted', style: 'margin-left:auto;font-size:12px', title: 'projected round in this league\'s keeper draft' }, kTxt)));
     }
 
     const note = (board?.notes || {})[pid] || '';

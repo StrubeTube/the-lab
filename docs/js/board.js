@@ -213,8 +213,8 @@
           LAB.el('span', { class: 'adp-dot', style: 'background:' + LAB.adpColor(rankNo, opts.adpPosMode ? p.adp_pos : p.adp) }),
           (opts.adpPosMode ? (p.adp_pos ?? '–') : (p.adp != null ? p.adp.toFixed(1) : '–'))),
         LAB.el('span', { class: 'stat w40', title: 'ADP as a 10-team round.pick' }, LAB.adpRound(p.adp) || '–'),
-        kRounds ? LAB.el('span', { class: 'stat w40', title: 'projected round in the ' + (ovl ? ovl.name : '') + ' KEEPER draft — predicted keepers consume their cost-round slots, everyone else falls to the open picks' },
-          kRounds[pid] ? 'R' + kRounds[pid] : 'kept') : '',
+        kSim ? LAB.el('span', { class: 'stat w40', title: 'projected round in the ' + (ovl ? ovl.name : '') + ' KEEPER draft — predicted keepers consume their cost-round slots, everyone else falls to the open picks' },
+          kSim.rounds[pid] ? 'R' + kSim.rounds[pid] : kSim.keptSet.has(pid) ? 'kept' : '–') : '',
         LAB.el('span', { class: 'stat hide-m', title: "2026 projection (your scoring)" }, LAB.fmt0(p.proj)),
         LAB.el('span', { class: 'stat hide-m', title: "2025 finish" }, p.fin25 ? p.pos + p.fin25 : '–'),
         LAB.el('span', { class: 'stat hide-m', title: "2025 PPG (your scoring)" }, LAB.fmt1(p.ppg25)),
@@ -234,7 +234,7 @@
         LAB.el('span', { class: 'stat w40' }, 'Bye'),
         LAB.el('span', { class: 'stat' }, opts.adpPosMode ? 'PosADP' : 'ADP'),
         LAB.el('span', { class: 'stat w40' }, 'Rd'),
-        kRounds ? LAB.el('span', { class: 'stat w40', title: 'keeper-draft round' }, 'K Rd') : '',
+        kSim ? LAB.el('span', { class: 'stat w40', title: 'keeper-draft round' }, 'K Rd') : '',
         LAB.el('span', { class: 'stat hide-m' }, "'26 Proj"),
         LAB.el('span', { class: 'stat hide-m' }, "'25 Fin"),
         LAB.el('span', { class: 'stat hide-m' }, "'25 PPG"),
@@ -830,11 +830,11 @@
 
   // ---------- render ----------
   const root = LAB.$('#boardRoot');
-  let kRounds = null; // pid -> projected keeper-draft round for the overlay league
+  let kSim = null; // keeper-draft simulation for the overlay league
   function render() {
     root.innerHTML = '';
     const ovl = overlayInfo();
-    kRounds = ovl ? LAB.keeperRounds(players, leagues[ovl.tag], board) : null;
+    kSim = ovl ? LAB.keeperSim(players, leagues[ovl.tag], board) : null;
     const dynActive = state.dynW > 0 && state.view === 'list';
     LAB.$('#addTierBtn').style.display =
       (state.tab === 'OVR' || state.view !== 'list' || dynActive) ? 'none' : '';
