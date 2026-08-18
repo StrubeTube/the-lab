@@ -1,500 +1,39 @@
 #!/usr/bin/env python3
 """THE LAB - analyst consensus builder.
 
-Averages positional ranks from Alex's preferred analysts into
-data/consensus_ranks.json, which compute.py merges into players.json (`cr`).
-Sources (pasted 2026-08-13, FP RB + overall lists added 2026-08-14):
-Joel Smyth, FantasyPros ECR, Flock Fantasy, The Fantasy Footballers.
+Reads the analyst lists from data/analyst_lists.json and averages them into
+data/consensus_ranks.json, which compute.py merges into players.json
+(positional -> `cr`/`crs`, overall "OVR" -> `ocr`/`ocrs`).
 
-Also builds OVERALL consensus ("OVR" key) from Joel/FP/Flock overall lists
-(Footballers had no overall list). K and DST rows are skipped but keep their
-original rank numbers so each analyst's draft-depth scale stays honest.
-Joel's overall list uses abbreviated first names; they are resolved to full
-names here using the position/team printed beside them.
+Sources: Joel Smyth (Yahoo), FantasyPros ECR (half-PPR), Flock Fantasy
+(Corey Buschlen), The Fantasy Footballers. A fifth "vegas" source is computed
+live in compute.py from BettingPros prop lines and never appears here.
 
-Edit the lists below and rerun to update: python build_consensus.py
+To update the lists, run the `update-analysts` skill (fetches FantasyPros and
+Flock automatically; Joel and the Footballers are read from their pages), or
+edit data/analyst_lists.json by hand, then rerun:
+    python build_consensus.py && python compute.py
+
+analyst_lists.json shape:
+  positional: {QB|RB|WR|TE: {src: [name, ...]}}          # dense 1..N order
+  overall:    {src: [[rank, name], ...]}                 # explicit ranks; K/DST
+              rows are skipped upstream but keep their original rank numbers
 """
 import json
 from pathlib import Path
 
-JOEL_QB = ["Josh Allen", "Lamar Jackson", "Drake Maye", "Jayden Daniels", "Joe Burrow",
-"Jalen Hurts", "Caleb Williams", "Justin Herbert", "Trevor Lawrence", "Jaxson Dart",
-"Brock Purdy", "Dak Prescott", "Bo Nix", "Patrick Mahomes II", "Matthew Stafford",
-"Kyler Murray", "Jared Goff", "Malik Willis", "Tyler Shough", "Baker Mayfield",
-"Jordan Love", "Cam Ward", "Sam Darnold", "Bryce Young", "Daniel Jones",
-"Fernando Mendoza", "C.J. Stroud", "Jacoby Brissett", "Michael Penix Jr.",
-"Aaron Rodgers", "Geno Smith", "Shedeur Sanders"]
-
-JOEL_RB = ["Jahmyr Gibbs", "Bijan Robinson", "Christian McCaffrey", "Jonathan Taylor",
-"James Cook III", "Omarion Hampton", "Ashton Jeanty", "Kenneth Walker III", "Chase Brown",
-"Saquon Barkley", "Derrick Henry", "De'Von Achane", "Jeremiyah Love", "Josh Jacobs",
-"Kyren Williams", "Breece Hall", "Javonte Williams", "Cam Skattebo", "Bucky Irving",
-"David Montgomery", "Travis Etienne Jr.", "Bhayshul Tuten", "D'Andre Swift",
-"Quinshon Judkins", "TreVeyon Henderson", "Jadarian Price", "Jonathon Brooks",
-"Rhamondre Stevenson", "Jaylen Warren", "Rico Dowdle", "RJ Harvey", "Tony Pollard",
-"Chuba Hubbard", "Blake Corum", "Kyle Monangai", "Jordan Mason", "J.K. Dobbins",
-"Jacory Croskey-Merritt", "Rachaad White", "Kenny Gainwell", "Zach Charbonnet",
-"Chris Rodriguez Jr.", "Aaron Jones Sr.", "Keaton Mitchell", "Tank Bigsby",
-"Isiah Pacheco", "Tyler Allgeier", "Ray Davis", "Tyrone Tracy Jr.", "Alvin Kamara",
-"Woody Marks", "Jonah Coleman", "Brian Robinson Jr.", "Tyjae Spears", "Isaiah Davis",
-"Emmett Johnson", "Mike Washington Jr.", "Jaydon Blue", "Ollie Gordon II",
-"Dylan Sampson", "Nicholas Singleton", "James Conner"]
-
-JOEL_WR = ["Ja'Marr Chase", "Puka Nacua", "Amon-Ra St. Brown", "Jaxon Smith-Njigba",
-"CeeDee Lamb", "Justin Jefferson", "Drake London", "A.J. Brown", "George Pickens",
-"Nico Collins", "Rashee Rice", "DeVonta Smith", "Malik Nabers", "Tee Higgins",
-"Chris Olave", "Jaylen Waddle", "Tetairoa McMillan", "Emeka Egbuka", "Zay Flowers",
-"Garrett Wilson", "Luther Burden III", "Ladd McConkey", "DJ Moore", "Rome Odunze",
-"Terry McLaurin", "Davante Adams", "Christian Watson", "Mike Evans", "Jameson Williams",
-"Parker Washington", "Brian Thomas Jr.", "Carnell Tate", "Marvin Harrison Jr.",
-"Jordyn Tyson", "Alec Pierce", "Michael Wilson", "Chris Godwin Jr.", "DK Metcalf",
-"Courtland Sutton", "Deebo Samuel Sr.", "Makai Lemon", "Quentin Johnston", "Josh Downs",
-"Stefon Diggs", "Michael Pittman Jr.", "Jordan Addison", "Jayden Reed", "Jakobi Meyers",
-"Romeo Doubs", "Matthew Golden", "De'Zhaun Stribling", "Xavier Worthy", "KC Concepcion",
-"Jayden Higgins", "Travis Hunter", "Tre Tucker", "Wan'Dale Robinson", "Rashid Shaheed",
-"Jalen Coker", "Adonai Mitchell", "Khalil Shakir", "Jalen Nailor", "Jauan Jennings",
-"Denzel Boston", "Jalen McMillan", "Kayshon Boutte", "Tre' Harris", "Rashod Bateman",
-"Calvin Ridley", "Omar Cooper Jr.", "Ryan Flournoy", "Tyreek Hill", "Jerry Jeudy"]
-
-JOEL_TE = ["Brock Bowers", "Trey McBride", "Colston Loveland", "Tyler Warren",
-"Sam LaPorta", "Harold Fannin Jr.", "Tucker Kraft", "Kyle Pitts Sr.", "George Kittle",
-"Dalton Kincaid", "Dallas Goedert", "Mark Andrews", "Isaiah Likely", "Jake Ferguson",
-"Travis Kelce", "Oronde Gadsden II", "Chig Okonkwo", "T.J. Hockenson", "Kenyon Sadiq",
-"Terrance Ferguson", "Greg Dulcich", "Juwan Johnson", "Hunter Henry", "Brenton Strange",
-"AJ Barner", "Colby Parkinson", "Dalton Schultz", "Cade Otton", "Eli Stowers",
-"Pat Freiermuth", "Gunnar Helm", "Tyler Higbee", "Darnell Washington", "Evan Engram",
-"David Njoku", "Jake Tonges"]
-
-FP_QB = ["Josh Allen", "Lamar Jackson", "Drake Maye", "Jayden Daniels", "Joe Burrow",
-"Jalen Hurts", "Caleb Williams", "Justin Herbert", "Trevor Lawrence", "Dak Prescott",
-"Brock Purdy", "Jaxson Dart", "Bo Nix", "Patrick Mahomes II", "Kyler Murray",
-"Jared Goff", "Matthew Stafford", "Tyler Shough", "Jordan Love", "Malik Willis",
-"Baker Mayfield", "Sam Darnold", "Daniel Jones", "C.J. Stroud", "Cam Ward",
-"Bryce Young", "Jacoby Brissett", "Fernando Mendoza", "Aaron Rodgers", "Geno Smith",
-"Michael Penix Jr.", "Shedeur Sanders", "Tua Tagovailoa", "Deshaun Watson",
-"Kirk Cousins", "Carson Beck", "Justin Fields", "J.J. McCarthy", "Mac Jones",
-"Joe Flacco", "Ty Simpson", "Marcus Mariota", "Cade Klubnik", "Jameis Winston",
-"Quinn Ewers"]
-
-FP_WR = ["Ja'Marr Chase", "Puka Nacua", "Amon-Ra St. Brown", "Jaxon Smith-Njigba",
-"CeeDee Lamb", "Justin Jefferson", "Drake London", "A.J. Brown", "Nico Collins",
-"George Pickens", "Malik Nabers", "DeVonta Smith", "Rashee Rice", "Chris Olave",
-"Tee Higgins", "Zay Flowers", "Jaylen Waddle", "Emeka Egbuka", "Tetairoa McMillan",
-"Garrett Wilson", "Ladd McConkey", "Luther Burden III", "Terry McLaurin",
-"Jameson Williams", "Davante Adams", "Mike Evans", "Christian Watson", "Rome Odunze",
-"DJ Moore", "Parker Washington", "Carnell Tate", "Marvin Harrison Jr.", "Jordyn Tyson",
-"Brian Thomas Jr.", "DK Metcalf", "Alec Pierce", "Chris Godwin Jr.", "Quentin Johnston",
-"Courtland Sutton", "Makai Lemon", "Michael Wilson", "Josh Downs", "Stefon Diggs",
-"Jayden Reed", "Michael Pittman Jr.", "Jordan Addison", "Jakobi Meyers",
-"Wan'Dale Robinson", "Matthew Golden", "Deebo Samuel Sr.", "Jalen Coker",
-"Xavier Worthy", "KC Concepcion", "Jayden Higgins", "Romeo Doubs",
-"De'Zhaun Stribling", "Khalil Shakir", "Rashid Shaheed", "Denzel Boston", "Tre Tucker",
-"Jalen McMillan", "Travis Hunter", "Adonai Mitchell", "Ryan Flournoy", "Jalen Nailor",
-"Omar Cooper Jr.", "Jauan Jennings", "Jerry Jeudy", "Tre' Harris", "Kayshon Boutte",
-"Calvin Ridley", "Rashod Bateman", "Malik Washington", "Pat Bryant",
-"Dontayvion Wicks", "Isaac TeSlaa", "Cyrus Allen", "Darnell Mooney", "Tank Dell",
-"Ja'Kobi Lane", "Troy Franklin", "Antonio Williams", "Zachariah Branch", "Jaylin Noel",
-"Malachi Fields", "Germie Bernard", "Tory Horton", "Caleb Douglas", "Keon Coleman",
-"Cooper Kupp", "Tyquan Thornton", "Chris Bell", "Elijah Sarratt", "Elic Ayomanor",
-"Darius Slayton", "Ted Hurst III", "Jack Bech", "Keenan Allen", "Tyreek Hill",
-"Chimere Dike"]
-
-FP_TE = ["Brock Bowers", "Trey McBride", "Colston Loveland", "Tyler Warren",
-"Tucker Kraft", "Harold Fannin Jr.", "Sam LaPorta", "Kyle Pitts Sr.", "George Kittle",
-"Dalton Kincaid", "Dallas Goedert", "Travis Kelce", "Isaiah Likely", "Mark Andrews",
-"Jake Ferguson", "Chig Okonkwo", "Juwan Johnson", "Hunter Henry", "Brenton Strange",
-"Oronde Gadsden II", "T.J. Hockenson", "Terrance Ferguson", "AJ Barner", "Kenyon Sadiq",
-"Greg Dulcich", "Dalton Schultz", "Gunnar Helm", "Pat Freiermuth", "Cade Otton",
-"Colby Parkinson", "David Njoku", "Evan Engram", "Eli Stowers", "Jake Tonges",
-"Mike Gesicki", "Darnell Washington", "Theo Johnson", "Tyler Higbee", "Oscar Delp",
-"Michael Mayer", "Mason Taylor", "Elijah Arroyo", "Eli Raridon", "Cole Kmet",
-"Erick All Jr.", "Darren Waller", "Dawson Knox", "Justin Joly", "Noah Gray",
-"Max Klare", "Charlie Kolar", "Mitchell Evans"]
-
-FLOCK_QB = ["Josh Allen", "Lamar Jackson", "Drake Maye", "Jayden Daniels", "Joe Burrow",
-"Caleb Williams", "Jalen Hurts", "Trevor Lawrence", "Justin Herbert", "Dak Prescott",
-"Jaxson Dart", "Brock Purdy", "Bo Nix", "Patrick Mahomes II", "Matthew Stafford",
-"Jared Goff", "Kyler Murray", "Baker Mayfield", "Tyler Shough", "Jordan Love",
-"Malik Willis", "C.J. Stroud", "Sam Darnold", "Cam Ward", "Daniel Jones",
-"Bryce Young", "Aaron Rodgers", "Jacoby Brissett", "Geno Smith", "Fernando Mendoza",
-"Tua Tagovailoa", "Shedeur Sanders", "Deshaun Watson", "Michael Penix Jr.",
-"Kirk Cousins", "Carson Beck", "Drew Allar", "Anthony Richardson Sr.",
-"Jameis Winston", "Marcus Mariota", "Cade Klubnik", "J.J. McCarthy", "Mac Jones",
-"Justin Fields", "Ty Simpson"]
-
-FLOCK_RB = ["Jahmyr Gibbs", "Bijan Robinson", "Christian McCaffrey", "Jonathan Taylor",
-"James Cook III", "Ashton Jeanty", "Chase Brown", "Omarion Hampton", "De'Von Achane",
-"Saquon Barkley", "Kenneth Walker III", "Derrick Henry", "Jeremiyah Love",
-"Breece Hall", "Kyren Williams", "Javonte Williams", "Josh Jacobs", "Cam Skattebo",
-"Travis Etienne Jr.", "Bucky Irving", "Bhayshul Tuten", "David Montgomery",
-"D'Andre Swift", "Quinshon Judkins", "TreVeyon Henderson", "Jadarian Price",
-"Jaylen Warren", "Tony Pollard", "Rhamondre Stevenson", "Jonathon Brooks", "RJ Harvey",
-"J.K. Dobbins", "Rachaad White", "Rico Dowdle", "Chuba Hubbard", "Blake Corum",
-"Kyle Monangai", "Jordan Mason", "Kenny Gainwell", "Jacory Croskey-Merritt",
-"Aaron Jones Sr.", "Chris Rodriguez Jr.", "Tyrone Tracy Jr.", "Woody Marks",
-"Jonah Coleman", "Keaton Mitchell", "Isiah Pacheco", "Tyler Allgeier", "Tank Bigsby",
-"Alvin Kamara", "Dylan Sampson", "Zach Charbonnet", "Tyjae Spears",
-"Brian Robinson Jr.", "Sean Tucker", "Kaytron Allen", "Nicholas Singleton",
-"Emmett Johnson", "MarShawn Lloyd", "Mike Washington Jr.", "Ray Davis",
-"Demond Claiborne", "Chris Brooks", "Devin Singletary", "George Holani",
-"Brashard Smith", "Braelon Allen", "Ollie Gordon II", "Jaydon Blue", "Kimani Vidal",
-"Najee Harris", "Kaelon Black", "Jordan James", "Adam Randall", "Emanuel Wilson",
-"Ty Johnson", "James Conner", "Samaje Perine", "Justice Hill", "DJ Giddens",
-"Isaiah Davis", "Kendre Miller", "Isaac Guerendo", "Seth McGowan", "Kaleb Johnson",
-"Trey Benson", "Jaylen Wright", "Devin Neal", "LeQuint Allen Jr.", "Trevor Etienne",
-"Malik Davis"]
-
-FLOCK_WR = ["Ja'Marr Chase", "Puka Nacua", "Jaxon Smith-Njigba", "Amon-Ra St. Brown",
-"CeeDee Lamb", "Justin Jefferson", "Drake London", "A.J. Brown", "Nico Collins",
-"Malik Nabers", "Rashee Rice", "George Pickens", "DeVonta Smith", "Chris Olave",
-"Zay Flowers", "Tee Higgins", "Jaylen Waddle", "Emeka Egbuka", "Ladd McConkey",
-"Tetairoa McMillan", "Garrett Wilson", "Davante Adams", "Terry McLaurin",
-"Jameson Williams", "Luther Burden III", "Mike Evans", "Carnell Tate", "Rome Odunze",
-"Brian Thomas Jr.", "DJ Moore", "Christian Watson", "Marvin Harrison Jr.",
-"Jordyn Tyson", "Parker Washington", "Makai Lemon", "Quentin Johnston", "Alec Pierce",
-"Jordan Addison", "DK Metcalf", "Michael Pittman Jr.", "Chris Godwin Jr.",
-"Courtland Sutton", "Michael Wilson", "Josh Downs", "Stefon Diggs",
-"Wan'Dale Robinson", "KC Concepcion", "Jayden Reed", "Xavier Worthy",
-"Deebo Samuel Sr.", "Jakobi Meyers", "Matthew Golden", "Travis Hunter", "Romeo Doubs",
-"Jalen Coker", "Jayden Higgins", "Khalil Shakir", "Rashid Shaheed", "Omar Cooper Jr.",
-"Denzel Boston", "Jalen McMillan", "De'Zhaun Stribling", "Tre Tucker",
-"Jauan Jennings", "Jalen Nailor", "Tre' Harris", "Antonio Williams", "Darnell Mooney",
-"Adonai Mitchell", "Calvin Ridley", "Ryan Flournoy", "Malik Washington", "Tank Dell",
-"Jerry Jeudy", "Dontayvion Wicks", "Zachariah Branch", "Isaac TeSlaa",
-"Germie Bernard", "Elijah Sarratt", "Kayshon Boutte", "Chris Bell", "Brandon Aiyuk",
-"Jaylin Noel", "Troy Franklin", "Cooper Kupp", "Pat Bryant", "Ja'Kobi Lane",
-"Ted Hurst III", "Elic Ayomanor", "Keenan Allen", "Darius Slayton",
-"Calvin Austin III", "Malachi Fields", "Luke McCaffrey", "Chimere Dike",
-"Keon Coleman", "Cyrus Allen", "Jack Bech", "Tory Horton", "Kendrick Bourne",
-"Christian Kirk", "Tez Johnson", "Bryce Lance", "Tyreek Hill"]
-
-FLOCK_TE = ["Brock Bowers", "Trey McBride", "Colston Loveland", "Tyler Warren",
-"Tucker Kraft", "Sam LaPorta", "Harold Fannin Jr.", "Kyle Pitts Sr.", "George Kittle",
-"Travis Kelce", "Jake Ferguson", "Isaiah Likely", "Mark Andrews", "Dalton Kincaid",
-"Dallas Goedert", "Oronde Gadsden II", "Chig Okonkwo", "Brenton Strange",
-"Hunter Henry", "Kenyon Sadiq", "T.J. Hockenson", "AJ Barner", "Juwan Johnson",
-"Dalton Schultz", "Greg Dulcich", "Dawson Knox", "Gunnar Helm", "Mason Taylor",
-"Terrance Ferguson", "David Njoku", "Elijah Arroyo", "Pat Freiermuth", "Cole Kmet",
-"Mike Gesicki", "Cade Otton", "Eli Stowers", "Ja'Tavion Sanders", "Darnell Washington",
-"Evan Engram", "Colby Parkinson", "Justin Joly", "Max Klare", "Michael Mayer",
-"Noah Gray", "Eli Raridon", "Jake Tonges", "Erick All Jr.", "Charlie Kolar",
-"Noah Fant", "Luke Musgrave", "Theo Johnson", "Oscar Delp", "Luke Schoonmaker"]
-
-FB_QB = ["Josh Allen", "Lamar Jackson", "Jalen Hurts", "Jayden Daniels", "Joe Burrow",
-"Drake Maye", "Jaxson Dart", "Trevor Lawrence", "Caleb Williams", "Dak Prescott",
-"Justin Herbert", "Bo Nix", "Brock Purdy", "Tyler Shough", "Jared Goff",
-"Matthew Stafford", "Baker Mayfield", "Patrick Mahomes II", "Kyler Murray",
-"Malik Willis", "Jordan Love", "Cam Ward", "C.J. Stroud", "Sam Darnold",
-"Daniel Jones", "Bryce Young", "Aaron Rodgers", "Jacoby Brissett", "Geno Smith",
-"Shedeur Sanders", "Tua Tagovailoa", "Kirk Cousins", "Fernando Mendoza",
-"Michael Penix Jr.", "Carson Beck", "Deshaun Watson"]
-
-FB_RB = ["Jahmyr Gibbs", "Bijan Robinson", "Christian McCaffrey", "James Cook III",
-"Jonathan Taylor", "De'Von Achane", "Kenneth Walker III", "Ashton Jeanty",
-"Derrick Henry", "Chase Brown", "Omarion Hampton", "Saquon Barkley", "Josh Jacobs",
-"Jeremiyah Love", "Kyren Williams", "Cam Skattebo", "Breece Hall", "Javonte Williams",
-"Bucky Irving", "D'Andre Swift", "Bhayshul Tuten", "Travis Etienne Jr.",
-"TreVeyon Henderson", "Quinshon Judkins", "David Montgomery", "Jadarian Price",
-"Jacory Croskey-Merritt", "Chuba Hubbard", "Rico Dowdle", "Rhamondre Stevenson",
-"Jaylen Warren", "J.K. Dobbins", "Tony Pollard", "Kenny Gainwell", "Kyle Monangai",
-"Jordan Mason", "Blake Corum", "RJ Harvey", "Rachaad White", "Tyrone Tracy Jr.",
-"Aaron Jones Sr.", "Jonathon Brooks", "Tyjae Spears", "Woody Marks",
-"Chris Rodriguez Jr.", "Isiah Pacheco", "Zach Charbonnet", "Keaton Mitchell",
-"Dylan Sampson", "Tank Bigsby", "Jonah Coleman", "Alvin Kamara", "Brian Robinson Jr.",
-"Tyler Allgeier", "Kimani Vidal", "Jordan James", "Justice Hill", "Emmett Johnson",
-"Samaje Perine", "Mike Washington Jr.", "Nicholas Singleton", "Ty Johnson",
-"MarShawn Lloyd", "James Conner", "Braelon Allen", "Chris Brooks", "DJ Giddens",
-"Isaiah Davis", "Kaelon Black", "Jerome Ford", "Ray Davis", "Sean Tucker",
-"Jaylen Wright", "Devin Neal", "George Holani", "LeQuint Allen Jr.", "Brashard Smith",
-"Devin Singletary", "Emanuel Wilson", "Jaydon Blue", "Kaytron Allen",
-"Demond Claiborne", "Trevor Etienne", "Emari Demercado", "Ollie Gordon II",
-"Kaleb Johnson", "Will Shipley", "Adam Randall", "Tahj Brooks", "AJ Dillon",
-"Audric Estime"]
-
-FB_WR = ["Ja'Marr Chase", "Puka Nacua", "Jaxon Smith-Njigba", "Amon-Ra St. Brown",
-"CeeDee Lamb", "Drake London", "Justin Jefferson", "A.J. Brown", "Chris Olave",
-"George Pickens", "Nico Collins", "Malik Nabers", "Garrett Wilson", "Rashee Rice",
-"Emeka Egbuka", "Zay Flowers", "Jaylen Waddle", "DeVonta Smith",
-"Tetairoa McMillan", "Tee Higgins", "Ladd McConkey", "Christian Watson",
-"Carnell Tate", "Jameson Williams", "Luther Burden III", "Alec Pierce", "DJ Moore",
-"Davante Adams", "Mike Evans", "Terry McLaurin", "Parker Washington", "Rome Odunze",
-"DK Metcalf", "Brian Thomas Jr.", "Marvin Harrison Jr.", "Quentin Johnston",
-"Jordyn Tyson", "Michael Pittman Jr.", "Chris Godwin Jr.", "Jordan Addison",
-"Michael Wilson", "Courtland Sutton", "Josh Downs", "Stefon Diggs",
-"Wan'Dale Robinson", "Jayden Reed", "Makai Lemon", "Jayden Higgins", "Xavier Worthy",
-"Deebo Samuel Sr.", "Romeo Doubs", "Jakobi Meyers", "Jalen Coker", "Rashid Shaheed",
-"Khalil Shakir", "Matthew Golden", "KC Concepcion", "Malik Washington", "Tre Tucker",
-"Omar Cooper Jr.", "De'Zhaun Stribling", "Jalen Nailor", "Jerry Jeudy",
-"Denzel Boston", "Travis Hunter", "Cooper Kupp", "Adonai Mitchell", "Calvin Ridley",
-"Germie Bernard", "Ja'Kobi Lane", "Keon Coleman", "DeMario Douglas",
-"Dontayvion Wicks", "Ryan Flournoy", "Tre' Harris", "Jalen McMillan",
-"Kayshon Boutte", "Zachariah Branch", "Caleb Douglas", "Darius Slayton", "Tank Dell",
-"Isaac TeSlaa", "Jauan Jennings", "Cyrus Allen", "Rashod Bateman", "Tory Horton",
-"Pat Bryant", "Ted Hurst III", "Antonio Williams", "Jalen Tolbert", "Jack Bech",
-"Troy Franklin", "Devaughn Vele", "Darnell Mooney", "Chris Bell", "Malachi Fields",
-"Andrei Iosivas", "Elic Ayomanor", "Tyquan Thornton", "Chimere Dike"]
-
-FB_TE = ["Brock Bowers", "Trey McBride", "Colston Loveland", "Tyler Warren",
-"Harold Fannin Jr.", "Tucker Kraft", "George Kittle", "Sam LaPorta", "Kyle Pitts Sr.",
-"Dalton Kincaid", "Travis Kelce", "Dallas Goedert", "Brenton Strange",
-"Isaiah Likely", "Jake Ferguson", "Hunter Henry", "Mark Andrews", "Dalton Schultz",
-"Chig Okonkwo", "Juwan Johnson", "Greg Dulcich", "Kenyon Sadiq", "T.J. Hockenson",
-"Pat Freiermuth", "Oronde Gadsden II", "Cade Otton", "AJ Barner", "Colby Parkinson",
-"David Njoku", "Mike Gesicki", "Cole Kmet", "Evan Engram", "Gunnar Helm",
-"Terrance Ferguson", "Dawson Knox", "Mason Taylor", "Eli Stowers", "Michael Mayer",
-"Ja'Tavion Sanders", "Luke Musgrave", "Charlie Kolar", "Theo Johnson",
-"Elijah Arroyo", "Noah Gray", "Tommy Tremble", "Darnell Washington", "Ben Sinnott",
-"Max Klare", "Jake Tonges", "Justin Joly", "Noah Fant", "Nate Boerkircher",
-"Oscar Delp"]
-
-FP_RB = ["Jahmyr Gibbs", "Bijan Robinson", "Christian McCaffrey", "Jonathan Taylor",
-"James Cook III", "Ashton Jeanty", "Chase Brown", "Saquon Barkley",
-"Kenneth Walker III", "Omarion Hampton", "De'Von Achane", "Derrick Henry",
-"Jeremiyah Love", "Kyren Williams", "Breece Hall", "Josh Jacobs", "Javonte Williams",
-"Travis Etienne Jr.", "Cam Skattebo", "David Montgomery", "D'Andre Swift",
-"Quinshon Judkins", "Bucky Irving", "Bhayshul Tuten", "TreVeyon Henderson",
-"Jadarian Price", "Jaylen Warren", "Rhamondre Stevenson", "Tony Pollard",
-"Jonathon Brooks", "J.K. Dobbins", "Rico Dowdle", "Chuba Hubbard", "Blake Corum",
-"RJ Harvey", "Jordan Mason", "Kyle Monangai", "Jacory Croskey-Merritt",
-"Kenny Gainwell", "Rachaad White", "Aaron Jones Sr.", "Chris Rodriguez Jr.",
-"Tyrone Tracy Jr.", "Keaton Mitchell", "Zach Charbonnet", "Woody Marks",
-"Tyler Allgeier", "Tyjae Spears", "Tank Bigsby", "Alvin Kamara", "Jonah Coleman",
-"Isiah Pacheco", "Dylan Sampson", "Brian Robinson Jr.", "Jaydon Blue", "Ray Davis",
-"Mike Washington Jr.", "MarShawn Lloyd", "Sean Tucker", "Emmett Johnson",
-"Kimani Vidal", "Nicholas Singleton", "Braelon Allen", "George Holani",
-"James Conner", "Kaytron Allen", "Ollie Gordon II", "Emanuel Wilson", "Kaelon Black",
-"Demond Claiborne", "Jaylen Wright", "Justice Hill", "Isaiah Davis", "Jordan James",
-"LeQuint Allen Jr.", "DJ Giddens", "Chris Brooks", "Ty Johnson", "Emari Demercado",
-"Samaje Perine", "Seth McGowan", "Najee Harris", "Devin Neal", "Trey Benson",
-"Kendre Miller", "Adam Randall", "Kaleb Johnson", "Phil Mafah", "Devin Singletary",
-"Jarquez Hunter", "Malik Davis", "Isaac Guerendo", "Brashard Smith", "Jerome Ford",
-"Tahj Brooks", "Trevor Etienne", "Jaleel McLaughlin", "Damien Martinez",
-"Eli Heidenreich", "Jam Miller", "Audric Estime", "Sione Vaki", "Kareem Hunt",
-"Will Shipley"]
-
-# ---- OVERALL lists (2026-08-14). K/DST rows skipped, original ranks kept. ----
-
-JOEL_OVR = [(1, "Jahmyr Gibbs"), (2, "Bijan Robinson"), (3, "Ja'Marr Chase"),
-(4, "Puka Nacua"), (5, "Christian McCaffrey"), (6, "Jonathan Taylor"),
-(7, "Amon-Ra St. Brown"), (8, "Jaxon Smith-Njigba"), (9, "James Cook III"),
-(10, "Omarion Hampton"), (11, "Ashton Jeanty"), (12, "CeeDee Lamb"),
-(13, "Justin Jefferson"), (14, "Kenneth Walker III"), (15, "Chase Brown"),
-(16, "Saquon Barkley"), (17, "Brock Bowers"), (18, "Drake London"),
-(19, "Derrick Henry"), (20, "De'Von Achane"), (21, "A.J. Brown"),
-(22, "George Pickens"), (23, "Nico Collins"), (24, "Malik Nabers"),
-(25, "Josh Jacobs"), (26, "Josh Allen"), (27, "Jeremiyah Love"),
-(28, "Trey McBride"), (29, "Rashee Rice"), (30, "DeVonta Smith"),
-(31, "Tee Higgins"), (32, "Chris Olave"), (33, "Kyren Williams"),
-(34, "Breece Hall"), (35, "Javonte Williams"), (36, "Jaylen Waddle"),
-(37, "Tetairoa McMillan"), (38, "Emeka Egbuka"), (39, "Zay Flowers"),
-(40, "Colston Loveland"), (41, "Cam Skattebo"), (42, "Garrett Wilson"),
-(43, "Luther Burden III"), (44, "Ladd McConkey"), (45, "Bucky Irving"),
-(46, "David Montgomery"), (47, "Travis Etienne Jr."), (48, "DJ Moore"),
-(49, "Tyler Warren"), (50, "Rome Odunze"), (51, "Lamar Jackson"),
-(52, "Terry McLaurin"), (53, "Davante Adams"), (54, "Bhayshul Tuten"),
-(55, "Quinshon Judkins"), (56, "TreVeyon Henderson"), (57, "D'Andre Swift"),
-(58, "Drake Maye"), (59, "Jayden Daniels"), (60, "Christian Watson"),
-(61, "Joe Burrow"), (62, "Mike Evans"), (63, "Jameson Williams"),
-(64, "Parker Washington"), (65, "Jadarian Price"), (66, "Jonathon Brooks"),
-(67, "Jalen Hurts"), (68, "Brian Thomas Jr."), (69, "Carnell Tate"),
-(70, "Sam LaPorta"), (71, "Harold Fannin Jr."), (72, "Marvin Harrison Jr."),
-(73, "Tucker Kraft"), (74, "Caleb Williams"), (75, "Justin Herbert"),
-(76, "Rhamondre Stevenson"), (77, "Jaylen Warren"), (78, "Rico Dowdle"),
-(79, "Trevor Lawrence"), (80, "Jaxson Dart"), (81, "Jordyn Tyson"),
-(82, "RJ Harvey"), (83, "Alec Pierce"), (84, "Michael Wilson"),
-(85, "Brock Purdy"), (86, "Dak Prescott"), (87, "Kyle Pitts Sr."),
-(88, "Chris Godwin Jr."), (89, "DK Metcalf"), (90, "Tony Pollard"),
-(91, "Chuba Hubbard"), (92, "Blake Corum"), (93, "Kyle Monangai"),
-(94, "Courtland Sutton"), (95, "George Kittle"), (96, "Bo Nix"),
-(97, "Patrick Mahomes II"), (98, "Jordan Mason"), (99, "J.K. Dobbins"),
-(100, "Deebo Samuel Sr."), (101, "Quentin Johnston"), (102, "Josh Downs"),
-(103, "Stefon Diggs"), (104, "Matthew Stafford"), (105, "Kyler Murray"),
-(106, "Jared Goff"), (107, "Dalton Kincaid"), (108, "Jacory Croskey-Merritt"),
-(109, "Malik Willis"), (110, "Dallas Goedert"), (111, "Rachaad White"),
-(112, "Kenny Gainwell"), (113, "Michael Pittman Jr."), (114, "Jordan Addison"),
-(115, "Jayden Reed"), (116, "Makai Lemon"), (117, "Mark Andrews"),
-(118, "Jakobi Meyers"), (119, "Romeo Doubs"), (120, "Tyler Shough"),
-(121, "Zach Charbonnet"), (122, "Chris Rodriguez Jr."), (123, "Isaiah Likely"),
-(124, "Matthew Golden"), (125, "Baker Mayfield"), (126, "Aaron Jones Sr."),
-(127, "Keaton Mitchell"), (128, "De'Zhaun Stribling"), (129, "Jordan Love"),
-(130, "Cam Ward"), (131, "Jake Ferguson"), (132, "Travis Kelce"),
-(133, "Tank Bigsby"), (134, "Isiah Pacheco"), (135, "Tyler Allgeier"),
-(136, "Xavier Worthy"), (137, "Oronde Gadsden II"), (138, "KC Concepcion"),
-(139, "Chig Okonkwo"), (140, "Ray Davis"), (141, "Tyrone Tracy Jr."),
-(142, "Alvin Kamara"), (143, "Sam Darnold"), (144, "Jayden Higgins"),
-(145, "Tre Tucker"), (146, "Jalen Coker"), (147, "Woody Marks"),
-(148, "Jonah Coleman"), (149, "Travis Hunter"), (150, "Tyjae Spears"),
-(152, "Bryce Young"), (153, "T.J. Hockenson"), (154, "Brian Robinson Jr."),
-(155, "Kenyon Sadiq"), (156, "Daniel Jones"), (157, "Isaiah Davis"),
-(159, "Emmett Johnson"), (160, "Mike Washington Jr."), (161, "Rashid Shaheed"),
-(162, "Wan'Dale Robinson"), (164, "Adonai Mitchell"), (165, "Jaydon Blue"),
-(166, "Khalil Shakir"), (169, "Terrance Ferguson"), (170, "Jauan Jennings"),
-(171, "Ollie Gordon II"), (172, "Dylan Sampson"), (173, "Jalen Nailor"),
-(174, "Fernando Mendoza"), (175, "Jalen McMillan"), (176, "Greg Dulcich"),
-(177, "Nicholas Singleton"), (179, "Kayshon Boutte"), (180, "C.J. Stroud"),
-(190, "Juwan Johnson"), (205, "Jacoby Brissett"), (210, "Michael Penix Jr."),
-(211, "Aaron Rodgers"), (215, "Geno Smith"), (216, "Shedeur Sanders"),
-(219, "Denzel Boston"), (220, "Hunter Henry"), (221, "Brenton Strange"),
-(222, "AJ Barner"), (223, "Colby Parkinson"), (224, "Dalton Schultz"),
-(225, "Cade Otton"), (226, "Eli Stowers"), (227, "Pat Freiermuth"),
-(228, "Gunnar Helm"), (229, "Tyler Higbee"), (230, "Darnell Washington"),
-(231, "Evan Engram")]
-
-FLOCK_OVR = ["Jahmyr Gibbs", "Bijan Robinson", "Ja'Marr Chase", "Puka Nacua",
-"Jaxon Smith-Njigba", "Christian McCaffrey", "Amon-Ra St. Brown", "Jonathan Taylor",
-"CeeDee Lamb", "Justin Jefferson", "James Cook III", "Ashton Jeanty", "Chase Brown",
-"Omarion Hampton", "De'Von Achane", "Saquon Barkley", "Kenneth Walker III",
-"Drake London", "Brock Bowers", "Derrick Henry", "A.J. Brown", "Malik Nabers",
-"Nico Collins", "Jeremiyah Love", "Rashee Rice", "George Pickens", "Trey McBride",
-"Breece Hall", "DeVonta Smith", "Chris Olave", "Kyren Williams", "Javonte Williams",
-"Zay Flowers", "Tee Higgins", "Josh Allen", "Josh Jacobs", "Jaylen Waddle",
-"Emeka Egbuka", "Ladd McConkey", "Colston Loveland", "Cam Skattebo",
-"Garrett Wilson", "Tetairoa McMillan", "Travis Etienne Jr.", "Bucky Irving",
-"Davante Adams", "Bhayshul Tuten", "David Montgomery", "Terry McLaurin",
-"D'Andre Swift", "Jameson Williams", "Quinshon Judkins", "Luther Burden III",
-"TreVeyon Henderson", "Mike Evans", "Lamar Jackson", "Carnell Tate",
-"Jadarian Price", "Rome Odunze", "Brian Thomas Jr.", "Tyler Warren", "DJ Moore",
-"Christian Watson", "Marvin Harrison Jr.", "Jordyn Tyson", "Drake Maye",
-"Jayden Daniels", "Joe Burrow", "Jaylen Warren", "Parker Washington",
-"Caleb Williams", "Jalen Hurts", "Tucker Kraft", "Makai Lemon", "Tony Pollard",
-"Jonathon Brooks", "Rhamondre Stevenson", "Quentin Johnston", "Sam LaPorta",
-"Trevor Lawrence", "Jordan Addison", "Michael Pittman Jr.", "Alec Pierce",
-"DK Metcalf", "Chris Godwin Jr.", "RJ Harvey", "Justin Herbert", "J.K. Dobbins",
-"Courtland Sutton", "Rachaad White", "Stefon Diggs", "Rico Dowdle", "Dak Prescott",
-"Michael Wilson", "Harold Fannin Jr.", "Chuba Hubbard", "Josh Downs",
-"Kyle Pitts Sr.", "Blake Corum", "Jordan Mason", "Kyle Monangai", "Jaxson Dart",
-"Brock Purdy", "Wan'Dale Robinson", "KC Concepcion", "Bo Nix", "Jayden Reed",
-"Patrick Mahomes II", "Xavier Worthy", "Jacory Croskey-Merritt", "Kenny Gainwell",
-"George Kittle", "Matthew Stafford", "Jared Goff", "Deebo Samuel Sr.",
-"Kyler Murray", "Travis Kelce", "Jakobi Meyers", "Matthew Golden",
-"Aaron Jones Sr.", "Travis Hunter", "Romeo Doubs", "Jalen Coker",
-"Jayden Higgins", "Jake Ferguson", "Baker Mayfield", "Chris Rodriguez Jr.",
-"Isaiah Likely", "Mark Andrews", "Tyler Shough", "Tyrone Tracy Jr.",
-"Dalton Kincaid", "Khalil Shakir", "Rashid Shaheed", "Woody Marks", "Jordan Love",
-"Jonah Coleman", "Denzel Boston", "Malik Willis", "Keaton Mitchell",
-"Omar Cooper Jr.", "Dallas Goedert", "De'Zhaun Stribling", "Jalen McMillan",
-"Isiah Pacheco", "Tank Bigsby", "Chig Okonkwo", "Tre Tucker",
-"Oronde Gadsden II", "Brenton Strange", "Tyler Allgeier", "C.J. Stroud",
-"Sam Darnold", "Cam Ward", "Hunter Henry", "Daniel Jones", "Alvin Kamara",
-"Kenyon Sadiq", "Dylan Sampson", "Zach Charbonnet", "Bryce Young",
-"Tyjae Spears", "T.J. Hockenson", "Jalen Nailor", "Brian Robinson Jr.",
-"Juwan Johnson", "AJ Barner", "Dalton Schultz", "Sean Tucker", "Tre' Harris",
-"Antonio Williams", "Kaytron Allen", "MarShawn Lloyd", "Darnell Mooney",
-"Ryan Flournoy", "Calvin Ridley", "Nicholas Singleton", "Emmett Johnson",
-"Malik Washington", "Tank Dell", "Jerry Jeudy", "Zachariah Branch",
-"Mike Washington Jr.", "Jauan Jennings", "Isaac TeSlaa", "Ray Davis",
-"Demond Claiborne", "Gunnar Helm", "Chris Brooks", "Devin Singletary",
-"Brashard Smith", "Germie Bernard", "Terrance Ferguson", "Elijah Sarratt",
-"David Njoku", "Aaron Rodgers", "Kayshon Boutte", "Ja'Kobi Lane",
-"Jacoby Brissett", "Braelon Allen", "Jaydon Blue", "Chris Bell",
-"Pat Freiermuth", "Ollie Gordon II", "Troy Franklin", "Kimani Vidal",
-"Greg Dulcich", "Cade Otton", "Adonai Mitchell", "Najee Harris", "Eli Stowers",
-"Eli Stowers", "Ted Hurst III", "Elic Ayomanor", "Geno Smith", "George Holani",
-"Jordan James", "Dontayvion Wicks", "Fernando Mendoza", "Adam Randall",
-"Calvin Austin III", "Darius Slayton", "Caleb Douglas", "Malachi Fields",
-"James Conner", "Luke McCaffrey", "Cyrus Allen", "Samaje Perine", "Keon Coleman",
-"Chimere Dike", "Ty Johnson", "Jack Bech", "Tory Horton", "Justice Hill",
-"Christian Kirk", "Tez Johnson", "Bryce Lance", "Jaylin Noel", "DJ Giddens",
-"Tua Tagovailoa", "Isaiah Davis", "Kendre Miller", "Tyquan Thornton",
-"Pat Bryant", "Skyler Bell", "Rashod Bateman", "Cedric Tillman", "Mike Gesicki",
-"Chris Brazzell II", "Devaughn Vele"]
-
-FP_OVR = [(1, "Jahmyr Gibbs"), (2, "Bijan Robinson"), (3, "Ja'Marr Chase"),
-(4, "Puka Nacua"), (5, "Christian McCaffrey"), (6, "Jaxon Smith-Njigba"),
-(7, "Amon-Ra St. Brown"), (8, "Jonathan Taylor"), (9, "James Cook III"),
-(10, "CeeDee Lamb"), (11, "Justin Jefferson"), (12, "Ashton Jeanty"),
-(13, "Saquon Barkley"), (14, "Chase Brown"), (15, "Kenneth Walker III"),
-(16, "Omarion Hampton"), (17, "Brock Bowers"), (18, "De'Von Achane"),
-(19, "Drake London"), (20, "A.J. Brown"), (21, "Derrick Henry"),
-(22, "George Pickens"), (23, "Nico Collins"), (24, "Malik Nabers"),
-(25, "Trey McBride"), (26, "Josh Allen"), (27, "Chris Olave"),
-(28, "DeVonta Smith"), (29, "Zay Flowers"), (30, "Rashee Rice"),
-(31, "Jeremiyah Love"), (32, "Tee Higgins"), (33, "Kyren Williams"),
-(34, "Emeka Egbuka"), (35, "Breece Hall"), (36, "Jaylen Waddle"),
-(37, "Colston Loveland"), (38, "Josh Jacobs"), (39, "Tetairoa McMillan"),
-(40, "Ladd McConkey"), (41, "Lamar Jackson"), (42, "Garrett Wilson"),
-(43, "Javonte Williams"), (44, "Terry McLaurin"), (45, "Luther Burden III"),
-(46, "Cam Skattebo"), (47, "Travis Etienne Jr."), (48, "Christian Watson"),
-(49, "David Montgomery"), (50, "Rome Odunze"), (51, "Drake Maye"),
-(52, "Jameson Williams"), (53, "Mike Evans"), (54, "D'Andre Swift"),
-(55, "Davante Adams"), (56, "Tyler Warren"), (57, "Jayden Daniels"),
-(58, "Quinshon Judkins"), (59, "DJ Moore"), (60, "Bucky Irving"),
-(61, "Bhayshul Tuten"), (62, "Joe Burrow"), (63, "TreVeyon Henderson"),
-(64, "Parker Washington"), (65, "Jadarian Price"), (66, "Carnell Tate"),
-(67, "Jalen Hurts"), (68, "Marvin Harrison Jr."), (69, "Tucker Kraft"),
-(70, "Jaylen Warren"), (71, "Justin Herbert"), (72, "Caleb Williams"),
-(73, "Brian Thomas Jr."), (74, "Rhamondre Stevenson"), (75, "Jordyn Tyson"),
-(76, "Harold Fannin Jr."), (77, "DK Metcalf"), (78, "Tony Pollard"),
-(79, "Trevor Lawrence"), (80, "Sam LaPorta"), (81, "Jonathon Brooks"),
-(82, "Dak Prescott"), (83, "Chris Godwin Jr."), (84, "Kyle Pitts Sr."),
-(85, "Josh Downs"), (86, "Alec Pierce"), (87, "Courtland Sutton"),
-(88, "J.K. Dobbins"), (89, "Quentin Johnston"), (90, "Rico Dowdle"),
-(91, "Michael Wilson"), (92, "Chuba Hubbard"), (93, "Brock Purdy"),
-(94, "Jordan Mason"), (95, "Kyle Monangai"), (96, "Blake Corum"),
-(97, "Makai Lemon"), (98, "RJ Harvey"), (99, "Jaxson Dart"),
-(100, "Michael Pittman Jr."), (101, "Bo Nix"), (102, "Jordan Addison"),
-(103, "Jacory Croskey-Merritt"), (104, "George Kittle"), (105, "Stefon Diggs"),
-(106, "Dalton Kincaid"), (107, "Kenny Gainwell"), (108, "Jayden Reed"),
-(109, "Kyler Murray"), (110, "Rachaad White"), (111, "Wan'Dale Robinson"),
-(112, "Dallas Goedert"), (113, "Jared Goff"), (114, "Patrick Mahomes II"),
-(115, "Matthew Stafford"), (116, "Isaiah Likely"), (117, "Jakobi Meyers"),
-(118, "Matthew Golden"), (119, "Travis Kelce"), (120, "Romeo Doubs"),
-(121, "Xavier Worthy"), (122, "Mark Andrews"), (123, "Jalen Coker"),
-(124, "Aaron Jones Sr."), (125, "Jordan Love"), (126, "Jayden Higgins"),
-(127, "Chris Rodriguez Jr."), (128, "Tyler Shough"), (129, "Keaton Mitchell"),
-(130, "Deebo Samuel Sr."), (131, "Tyrone Tracy Jr."), (132, "Baker Mayfield"),
-(133, "Malik Willis"), (134, "Jake Ferguson"), (135, "KC Concepcion"),
-(136, "Zach Charbonnet"), (137, "De'Zhaun Stribling"), (138, "Tyler Allgeier"),
-(139, "Rashid Shaheed"), (140, "Woody Marks"), (141, "Khalil Shakir"),
-(142, "Tyjae Spears"), (143, "Denzel Boston"), (144, "Alvin Kamara"),
-(145, "Tank Bigsby"), (147, "Jonah Coleman"), (148, "Dylan Sampson"),
-(149, "Chig Okonkwo"), (150, "Sam Darnold"), (151, "Isiah Pacheco"),
-(152, "Brian Robinson Jr."), (153, "C.J. Stroud"), (154, "Juwan Johnson"),
-(155, "Brenton Strange"), (158, "Jalen Nailor"), (159, "Jalen McMillan"),
-(161, "Mike Washington Jr."), (162, "Jaydon Blue"), (163, "Tre Tucker"),
-(164, "Cam Ward"), (165, "Daniel Jones"), (166, "Ray Davis"),
-(167, "Oronde Gadsden II"), (168, "Travis Hunter"), (169, "Hunter Henry"),
-(170, "Ryan Flournoy"), (171, "Jauan Jennings"), (173, "Omar Cooper Jr."),
-(174, "Malik Washington"), (175, "Adonai Mitchell"), (176, "MarShawn Lloyd"),
-(178, "Jerry Jeudy"), (179, "Terrance Ferguson"), (180, "Bryce Young"),
-(181, "Sean Tucker"), (182, "Dontayvion Wicks"), (184, "Tre' Harris"),
-(188, "T.J. Hockenson"), (189, "Kimani Vidal"), (191, "Emmett Johnson"),
-(192, "Nicholas Singleton"), (193, "Greg Dulcich"), (196, "Kayshon Boutte"),
-(197, "Pat Bryant"), (198, "AJ Barner"), (203, "Dalton Schultz"),
-(204, "Braelon Allen"), (205, "Kenyon Sadiq"), (206, "Isaac TeSlaa"),
-(210, "Jacoby Brissett"), (211, "Ollie Gordon II"), (212, "George Holani"),
-(213, "Darnell Mooney"), (214, "Kaytron Allen"), (215, "Gunnar Helm"),
-(217, "Troy Franklin"), (218, "Tank Dell"), (219, "Rashod Bateman"),
-(221, "Calvin Ridley"), (222, "Geno Smith"), (224, "Fernando Mendoza"),
-(225, "Zachariah Branch"), (226, "Pat Freiermuth"), (227, "Emanuel Wilson"),
-(228, "James Conner"), (230, "Jaylen Wright"), (231, "Justice Hill"),
-(233, "Aaron Rodgers"), (234, "Cade Otton"), (236, "Kaelon Black"),
-(237, "Colby Parkinson"), (238, "Ja'Kobi Lane"), (239, "Cooper Kupp"),
-(240, "Demond Claiborne"), (245, "Jaylin Noel"), (246, "Keon Coleman"),
-(247, "Isaiah Davis"), (248, "Jordan James"), (249, "Cyrus Allen")]
-
-SOURCES = {
-    "QB": {"joel": JOEL_QB, "fp": FP_QB, "flock": FLOCK_QB, "fb": FB_QB},
-    "RB": {"joel": JOEL_RB, "fp": FP_RB, "flock": FLOCK_RB, "fb": FB_RB},
-    "WR": {"joel": JOEL_WR, "fp": FP_WR, "flock": FLOCK_WR, "fb": FB_WR},
-    "TE": {"joel": JOEL_TE, "fp": FP_TE, "flock": FLOCK_TE, "fb": FB_TE},
-}
-
-OVR_SOURCES = {
-    "joel": JOEL_OVR,
-    "fp": FP_OVR,
-    "flock": [(i + 1, n) for i, n in enumerate(FLOCK_OVR)],
-}
+ROOT = Path(__file__).parent
+lists = json.loads((ROOT / "data" / "analyst_lists.json").read_text(encoding="utf-8"))
 
 out = {}
-for pos, srcs in SOURCES.items():
+for pos, srcs in lists["positional"].items():
     ranks = {}
     for src, names in srcs.items():
         seen = set()
         r = 0
         for name in names:
             if name in seen:
-                continue  # duplicate rows in a source (e.g. Flock's Eli Stowers)
+                continue  # duplicate rows in a source
             seen.add(name)
             r += 1
             ranks.setdefault(name, {})[src] = r
@@ -508,11 +47,11 @@ for pos, srcs in SOURCES.items():
           f"top 3: {[x['name'] for x in out[pos][:3]]}")
 
 ovr_ranks = {}
-for src, pairs in OVR_SOURCES.items():
+for src, pairs in lists["overall"].items():
     seen = set()
     for r, name in pairs:
         if name in seen:
-            continue  # duplicate rows in a source (e.g. Flock's Eli Stowers)
+            continue
         seen.add(name)
         ovr_ranks.setdefault(name, {})[src] = r
 out["OVR"] = [
@@ -521,10 +60,9 @@ out["OVR"] = [
     for name, rr in ovr_ranks.items()
 ]
 out["OVR"].sort(key=lambda x: x["avg"])
-print(f"OVR: {len(out['OVR'])} players from {len(OVR_SOURCES)} sources; "
+print(f"OVR: {len(out['OVR'])} players from {len(lists['overall'])} sources; "
       f"top 3: {[x['name'] for x in out['OVR'][:3]]}")
 
-dest = Path(__file__).parent / "data" / "consensus_ranks.json"
-dest.parent.mkdir(exist_ok=True)
+dest = ROOT / "data" / "consensus_ranks.json"
 dest.write_text(json.dumps(out, indent=1), encoding="utf-8")
 print(f"wrote {dest}")
