@@ -200,6 +200,13 @@ def dyn_adp(pid):
     v = st.get("adp_dynasty_half_ppr") or st.get("adp_dynasty")
     return round(v, 1) if v and v < 900 else None
 
+
+def sleeper_adp(pid):
+    """Redraft half-PPR ADP from Sleeper projections (999 = unranked)."""
+    st = proj.get(pid) or {}
+    v = st.get("adp_half_ppr")
+    return round(v, 1) if v and v < 900 else None
+
 players_out = []
 for pid, extra in pool_ids.items():
     p = players_db[pid]
@@ -218,10 +225,8 @@ for pid, extra in pool_ids.items():
         "status": p.get("injury_status") or "",
         "depth": p.get("depth_chart_order"),
         "bye": byes.get(p.get("team")),
-        "adp": extra.get("adp"),
-        "adp_fmt": extra.get("adp_fmt"),
-        "adp_hi": extra.get("adp_hi"),
-        "adp_lo": extra.get("adp_lo"),
+        # primary ADP = Sleeper half-PPR (updates daily); FFC fills gaps
+        "adp": sleeper_adp(pid) if sleeper_adp(pid) is not None else extra.get("adp"),
         "adp_pos": extra.get("adp_pos"),
         "dyn": dyn_adp(pid),
         "proj": round(proj_pts.get(pid, 0), 1) or None,
@@ -244,7 +249,7 @@ for t in all_teams:
     players_out.append({
         "id": t, "name": t, "team": t, "pos": "DEF",
         "bye": byes.get(t),
-        "adp": None, "adp_pos": None, "dyn": dyn_adp(t),
+        "adp": sleeper_adp(t), "adp_pos": None, "dyn": dyn_adp(t),
         "proj": round(def_proj.get(t, 0), 1) or None,
         "p25": season25.get(t, {}).get("pts"),
         "ppg25": season25.get(t, {}).get("ppg"),
@@ -253,6 +258,13 @@ for t in all_teams:
         "wk25": [wk.get(w, 0) for w in range(1, 19)] if wk else None,
         "bc": bc.get("DST", {}).get(norm(t)),
     })
+
+# positional ADP ranks recomputed on the Sleeper-primary numbers
+for pos in POS + ["DEF"]:
+    ranked = sorted((e for e in players_out if e["pos"] == pos and e.get("adp")),
+                    key=lambda x: x["adp"])
+    for i, e in enumerate(ranked):
+        e["adp_pos"] = i + 1
 
 skill_count = sum(1 for e in players_out if e["pos"] in POS)
 print(f"  pool: {skill_count} skill + {len(players_out)-skill_count} DEF")

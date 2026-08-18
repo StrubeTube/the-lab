@@ -15,15 +15,7 @@
   // expected overall pick for round R in a 10-team snake (mid-round)
   const midPick = r => (r - 0.5) * 10;
 
-  // Sleeper slots a kept player at the round the keep cost, so lastRd already carries
-  // any prior escalation; a repeat keep just steps one round earlier from that slot.
-  function costRound(L, lastRd, wasKept) {
-    if (!lastRd) return 10; // undrafted / FA pickup
-    if (L.keeperRule === 'round_minus_1') return Math.max(1, lastRd - 1);
-    return wasKept ? Math.max(1, lastRd - 1) : lastRd; // round_slot
-  }
-
-  function candidates(L, roster) {
+  function candidates(L, roster, kMap) {
     const kept = new Set(L.lastKept || []);
     const officialKeepers = new Set(roster.keepers || []);
     return (roster.players || [])
@@ -32,11 +24,12 @@
       .map(p => {
         const lastRd = L.lastDraftRound[p.id] || null;
         const wasKept = kept.has(p.id);
-        const costRd = costRound(L, lastRd, wasKept);
+        const costRd = LAB.keeperCostRound(L, lastRd, wasKept);
         const cost = midPick(costRd);
         const myRank = oRanks[p.id] || null;
         return {
           p, lastRd, wasKept, costRd, myRank,
+          kRd: kMap[p.id] ?? null, // null = he's a predicted keeper, never drafted
           sBoard: myRank != null ? cost - myRank : null,
           sAdp: p.adp != null ? cost - p.adp : null,
           official: officialKeepers.has(p.id),
@@ -48,7 +41,10 @@
     { key: 'name', label: 'Player', num: false, get: c => c.p.name },
     { key: 'lastRd', label: 'Last yr', num: true, get: c => c.lastRd },
     { key: 'costRd', label: 'Costs', num: true, get: c => c.costRd },
-    { key: 'adp', label: 'ADP', num: true, get: c => c.p.adp },
+    { key: 'adp', label: 'ADP', num: true, get: c => c.p.adp,
+      title: 'Sleeper half-PPR ADP (updates daily)' },
+    { key: 'kRd', label: 'K rd', num: true, get: c => c.kRd,
+      title: "projected round he'd go in THIS league's keeper draft (predicted keepers consume their cost rounds)" },
     { key: 'myRank', label: 'My rank', num: true, get: c => c.myRank },
     { key: 'sBoard', label: 'Surplus (board)', num: true, get: c => c.sBoard,
       title: 'expected pick value of the cost round minus your board rank — positive = bargain' },
@@ -56,7 +52,7 @@
       title: 'expected pick value of the cost round minus ADP — positive = bargain' },
   ];
   // per-column natural direction: value columns default to best-first
-  const DEFAULT_DIR = { name: 1, lastRd: 1, costRd: 1, adp: 1, myRank: 1, sBoard: -1, sAdp: -1 };
+  const DEFAULT_DIR = { name: 1, lastRd: 1, costRd: 1, adp: 1, kRd: 1, myRank: 1, sBoard: -1, sAdp: -1 };
 
   for (const [tag, L] of Object.entries(leagues)) {
     const myRoster = L.rosters.find(r => r.owner === L.myUserId);
@@ -66,6 +62,7 @@
       return (L.users[a.owner]?.name || '').localeCompare(L.users[b.owner]?.name || '');
     });
     const st = { rid: myRoster ? myRoster.rid : teams[0].rid, sortKey: 'sBoard', dir: -1 };
+    const kMap = LAB.keeperRounds(players, L, board); // this league's keeper-draft sim
 
     const chipRow = LAB.el('div', { class: 'flex', style: 'flex-wrap:wrap;gap:6px;margin-top:10px' });
     const tblWrap = LAB.el('div');
@@ -95,7 +92,7 @@
     function renderTable() {
       tblWrap.innerHTML = '';
       const roster = L.rosters.find(r => r.rid === st.rid);
-      const cands = candidates(L, roster);
+      const cands = candidates(L, roster, kMap);
 
       // TOP-N badge is pinned to the default metric so it doesn't move with the sort
       const topIds = new Set(cands.slice()
@@ -146,6 +143,9 @@
             : 'FA'),
           LAB.el('td', { class: 'num' }, 'R' + c.costRd),
           LAB.el('td', { class: 'num' }, c.p.adp != null ? c.p.adp.toFixed(1) : '–'),
+          LAB.el('td', { class: 'num' }, c.kRd
+            ? LAB.el('span', { title: 'would fall to round ' + c.kRd + ' of the keeper draft' }, 'R' + c.kRd)
+            : LAB.el('span', { class: 'muted', title: 'predicted to be KEPT — never hits the board' }, 'kept')),
           LAB.el('td', { class: 'num' }, c.myRank ? '#' + c.myRank : '–'),
           LAB.el('td', { class: 'num ' + (c.sBoard > 0 ? 'good' : c.sBoard < 0 ? 'bad' : 'muted') }, fmtS(c.sBoard)),
           LAB.el('td', { class: 'num muted' }, fmtS(c.sAdp)),

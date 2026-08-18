@@ -226,6 +226,74 @@
     return ranks;
   };
 
+  // ---------- ADP rounds + keeper-draft simulation ----------
+  // "22.5" -> "3.03": round + pick in a 10-team draft
+  LAB.adpRound = function (adp) {
+    if (adp == null) return null;
+    const pick = Math.max(1, Math.round(adp));
+    const r = Math.ceil(pick / 10);
+    return r + '.' + String(pick - (r - 1) * 10).padStart(2, '0');
+  };
+
+  // keeper cost round (same rules as the Keepers page): GGG round-slot with
+  // repeat-keep escalation, LOB slot minus 1; undrafted -> R10
+  LAB.keeperCostRound = function (L, lastRd, wasKept) {
+    if (!lastRd) return 10;
+    if (L.keeperRule === 'round_minus_1') return Math.max(1, lastRd - 1);
+    return wasKept ? Math.max(1, lastRd - 1) : lastRd;
+  };
+
+  // predicted keepers for every roster: official where declared, else the
+  // roster's top keeperMax by surplus (board rank first, ADP fallback) —
+  // mirrors the Keepers page's TOP-3 logic
+  LAB.predictKeepers = function (L, byId, oRanks) {
+    const kept = new Set(L.lastKept || []);
+    const midPick = r => (r - 0.5) * 10;
+    const keeps = [];
+    for (const roster of L.rosters) {
+      const official = (roster.keepers || []).filter(pid => byId[pid]);
+      const cands = (roster.players || [])
+        .map(pid => byId[pid])
+        .filter(p => p && p.pos !== 'DEF')
+        .map(p => {
+          const costRd = LAB.keeperCostRound(L, L.lastDraftRound[p.id] || null, kept.has(p.id));
+          const worth = oRanks[p.id] ?? p.adp ?? 300;
+          return { pid: p.id, costRd, surplus: midPick(costRd) - worth };
+        })
+        .sort((a, b) => b.surplus - a.surplus);
+      const chosen = official.length
+        ? cands.filter(c => official.includes(c.pid))
+        : cands.slice(0, L.keeperMax);
+      keeps.push(...chosen);
+    }
+    return { keeps, keptSet: new Set(keeps.map(k => k.pid)) };
+  };
+
+  // simulate the keeper draft: keepers consume slots in their cost rounds,
+  // everyone else fills the open picks in ADP order -> pid -> projected round
+  LAB.keeperRounds = function (players, L, board) {
+    const byId = LAB.playersById(players);
+    const oRanks = board ? LAB.overallRanks(board) : {};
+    const { keeps, keptSet } = LAB.predictKeepers(L, byId, oRanks);
+    const ROUNDS = Math.max(16, ...Object.values(L.lastDraftRound || {}));
+    // keeper slots per round (overflow beyond 10 spills to the next round)
+    const used = new Array(ROUNDS + 2).fill(0);
+    for (const k of keeps) {
+      let r = Math.min(k.costRd, ROUNDS);
+      while (r <= ROUNDS && used[r] >= 10) r++;
+      if (r <= ROUNDS) used[r]++;
+    }
+    const pool = players
+      .filter(p => !keptSet.has(p.id))
+      .sort((a, b) => (a.adp ?? 500 - (a.proj || 0) / 1000) - (b.adp ?? 500 - (b.proj || 0) / 1000));
+    const out = {};
+    let i = 0;
+    for (let r = 1; r <= ROUNDS && i < pool.length; r++) {
+      for (let s = used[r]; s < 10 && i < pool.length; s++) out[pool[i++].id] = r;
+    }
+    return out;
+  };
+
   // ---------- toast ----------
   LAB.toast = function (msg, cls) {
     let wrap = $('.toast-wrap');
@@ -286,12 +354,15 @@
         }
       }
       const mine = holder === 'Strubes';
+      const kr = board ? LAB.keeperRounds(players, L, board)[pid] : null;
       leagueRows.push(el('div', { class: 'flex', style: 'margin-top:4px' },
         el('span', { class: 'muted', style: 'width:44px;text-transform:uppercase;font-weight:700;font-size:11px' }, tag),
         holder
           ? el('span', {}, mine ? el('span', { class: 'badge mine' }, 'ON MY ROSTER') : `rostered by ${holder}`,
               isKeeper ? el('span', { class: 'badge keeper', style: 'margin-left:6px' }, 'KEEPER') : '')
-          : el('span', { class: 'good' }, 'available')));
+          : el('span', { class: 'good' }, 'available'),
+        el('span', { class: 'muted', style: 'margin-left:auto;font-size:12px', title: 'projected round in this league\'s keeper draft' },
+          kr ? 'keeper draft: R' + kr : (board ? 'projected KEPT' : ''))));
     }
 
     const note = (board?.notes || {})[pid] || '';
@@ -321,7 +392,7 @@
             p.bye ? ` · bye ${p.bye}` : ''),
           p.status ? el('div', { class: 'bad', style: 'margin-top:3px;font-size:12px;font-weight:700' }, p.status.toUpperCase()) : '')),
       el('div', { class: 'tiles', style: 'margin-top:14px;grid-template-columns:repeat(3,1fr)' },
-        stat('ADP', p.adp != null ? p.adp.toFixed(1) : '–'),
+        stat('Sleeper ADP', p.adp != null ? p.adp.toFixed(1) + ' · ' + LAB.adpRound(p.adp) : '–'),
         stat('My rank', oRanks[pid] ? '#' + oRanks[pid] : '–'),
         stat('My ' + p.pos, pRanks[pid] ? p.pos + pRanks[pid] : '–'),
         stat("'26 proj", LAB.fmt0(p.proj)),
