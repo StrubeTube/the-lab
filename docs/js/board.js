@@ -527,7 +527,10 @@
         .sort((a, b) => ranksOf(a)[key] - ranksOf(b)[key]);
     }
 
-    const CELL_BASE = 'display:flex;align-items:center;gap:6px;padding:4px 7px;border-radius:7px;margin-top:4px;font-size:12.5px;min-height:32px;';
+    // every cell is the exact same fixed-height box (border always present,
+    // transparent when unused) — otherwise bordered vs shadow-colored cells
+    // differ by 2px and the columns drift out of row alignment
+    const CELL_BASE = 'display:flex;align-items:center;gap:6px;padding:4px 7px;border-radius:7px;margin-top:4px;font-size:12.5px;box-sizing:border-box;height:40px;border:1px solid transparent;';
     const myCell = pid => {
       const p = byId[pid];
       if (!p) return null;
