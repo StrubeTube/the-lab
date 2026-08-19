@@ -665,7 +665,22 @@ def build_trades(tag):
         return {"name": f"{md.get('first_name', '')} {md.get('last_name', '')}".strip(),
                 "pos": md.get("position"), "keeper": bool(p.get("is_keeper"))}
 
+    # who was KEPT in each season's draft (pid, roster) -> keeper round; the
+    # current season's board keeps count too (placed keeper slots)
+    kept_at = {}
+    for h in hist:
+        for p in (h.get("drafts") or [{}])[0].get("picks") or []:
+            if p.get("is_keeper"):
+                kept_at[(str(h["season"]), p.get("player_id"), p.get("roster_id"))] = p["round"]
+    try:
+        for p in load(f"{tag}_draft_picks.json"):
+            if p.get("is_keeper"):
+                kept_at[(str(cur.get("season")), p.get("player_id"), p.get("roster_id"))] = p["round"]
+    except OSError:
+        pass
+
     trades = []
+    market = []  # preseason exchange rate: keeper cost round <-> pick rounds paid
     for season, rows in (raw.get("seasons") or {}).items():
         names = (ctx.get(str(season)) or {}).get("names") or {}
         for t in rows:
@@ -678,7 +693,8 @@ def build_trades(tag):
                         "id": pid,
                         "name": pl.get("full_name")
                         or f"{pl.get('first_name', '')} {pl.get('last_name', '')}".strip() or pid,
-                        "pos": pl.get("position") or "?"})
+                        "pos": pl.get("position") or "?",
+                        "keptAt": kept_at.get((str(season), pid, rid))})
             for dp in t.get("draft_picks") or []:
                 rid = dp.get("owner_id")
                 if rid in sides:
@@ -686,9 +702,26 @@ def build_trades(tag):
                         "season": dp.get("season"), "round": dp.get("round"),
                         "orig": names.get(dp.get("roster_id"), f"Team {dp.get('roster_id')}"),
                         "became": resolve_pick(dp.get("season"), dp.get("round"), dp.get("roster_id"))})
+            side_list = list(sides.values())
             trades.append({"season": season, "week": t.get("week"),
-                           "ts": t.get("created"), "sides": list(sides.values())})
+                           "ts": t.get("created"), "sides": side_list})
+            # market events: a preseason trade where a player was acquired AND
+            # kept that season, with picks going back the other way = the
+            # league's real price for a keeper at that cost round
+            if t.get("week") == 1 and len(side_list) == 2:
+                for i, side in enumerate(side_list):
+                    other = side_list[1 - i]
+                    paid = [pk["round"] for pk in other["picks"]]
+                    if not paid:
+                        continue
+                    outs = [max(0, int(pk["season"]) - int(season)) for pk in other["picks"]]
+                    for pl in side["players"]:
+                        if pl["keptAt"]:
+                            market.append({"season": season, "name": pl["name"], "pos": pl["pos"],
+                                           "cost": pl["keptAt"], "paid": sorted(paid),
+                                           "out": min(outs)})
     trades.sort(key=lambda x: -(x["ts"] or 0))
+    market.sort(key=lambda x: -int(x["season"]))
 
     # what each round has actually turned into, season by season (drafted
     # players only — keeper slots are excluded on the front-end when needed)
@@ -711,8 +744,9 @@ def build_trades(tag):
                     for d in raw.get("traded_picks") or []]
     n_res = sum(1 for t in trades for s in t["sides"] for pk in s["picks"] if pk["became"])
     print(f"  {tag}: {len(trades)} trades ({n_res} traded picks resolved), "
-          f"{len(traded_picks)} picks currently traded")
-    return {"trades": trades, "roundHist": round_hist, "tradedPicks": traded_picks}
+          f"{len(traded_picks)} picks currently traded, {len(market)} keeper-market events")
+    return {"trades": trades, "roundHist": round_hist, "tradedPicks": traded_picks,
+            "market": market}
 
 
 print("Building trade history...")
