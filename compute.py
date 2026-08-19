@@ -20,6 +20,12 @@ POOL_TARGET = {"QB": 40, "RB": 80, "WR": 95, "TE": 35}  # ~250 skill players
 POS = ["QB", "RB", "WR", "TE"]
 MY_NAME = "Strubes"
 
+# League-approved keeper swaps not yet fixed inside Sleeper (Alex's exception):
+# lynnkm23 traded for Jonathan Taylor and keeps HIM, not Chuba Hubbard, even
+# though Sleeper still shows Hubbard locked on the board. The stale board slot
+# is dropped; Taylor keeps at his own cost round via the normal rules.
+KEEPER_SWAPS = {"ggg": [("7594", "6813")]}  # (old pid Hubbard, new pid Taylor)
+
 
 def load(name):
     return json.loads((RAW / name).read_text(encoding="utf-8"))
@@ -356,6 +362,12 @@ def league_out(tag):
                     last_rounds[pk["player_id"]] = pk["round"]
                     if pk.get("is_keeper"):
                         last_kept.append(pk["player_id"])
+    draft_keepers = [{"pid": pk["player_id"], "round": pk["round"], "pick": pk.get("pick_no")}
+                     for pk in (L.get("draft_picks") or []) if pk.get("is_keeper")]
+    for old, new in KEEPER_SWAPS.get(tag, []):
+        for r in rosters:
+            r["keepers"] = [new if k == old else k for k in (r["keepers"] or [])]
+        draft_keepers = [dk for dk in draft_keepers if dk["pid"] != old]
     return {
         "id": L["league"]["league_id"],
         "name": L["league"]["name"].strip(),
@@ -369,8 +381,7 @@ def league_out(tag):
         "lastDraftRound": last_rounds,
         "lastKept": last_kept,
         # keepers already PLACED on this season's actual draft board
-        "draftKeepers": [{"pid": pk["player_id"], "round": pk["round"], "pick": pk.get("pick_no")}
-                         for pk in (L.get("draft_picks") or []) if pk.get("is_keeper")],
+        "draftKeepers": draft_keepers,
         # this season's draft shape (order/slots known once the league sets them)
         "draftDetail": (lambda dd: {
             "status": dd.get("status"), "type": dd.get("type"),

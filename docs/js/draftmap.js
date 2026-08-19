@@ -1,9 +1,13 @@
 /* THE LAB — Draft Map: pick-by-pick availability under keeper conditions.
    Model: placed keepers are certainties at their real board slots; predicted
-   keepers occupy their team's pick in the cost round; the rest of the pool
-   drains by Sleeper ADP. A player's draft position is treated as a bell curve
-   around his keeper-adjusted expected slot with spread growing by depth
-   (sigma = 2 + 0.13 x available-rank), giving P(available) at every pick. */
+   keepers occupy their team's pick in the cost round; every other pick is
+   simulated with positional need — teams draft best available by Sleeper ADP
+   but stop at ONE QB and ONE TE (keepers count), and defenses only go in
+   R15/R16 (forced early if a team's R16 pick is keeper-consumed). MY picks
+   are drafted off MY board instead of ADP, with the same 1 QB / 1 TE cap.
+   A player's landing spot is a bell curve around his simulated slot with
+   spread growing by depth (sigma = 2 + 0.13 x sim-rank), giving
+   P(available) at every pick. */
 (async function () {
   LAB.nav('Draft Map');
   const { players, leagues } = await LAB.loadData(['players', 'leagues']);
@@ -35,7 +39,6 @@
   const phi = z => 0.5 * (1 + erf(z / Math.SQRT2));
   const sigma = i => 2 + 0.13 * i;
   const pctColor = p => {
-    // red (gone) -> yellow -> green (safe)
     const t = Math.max(0, Math.min(1, p));
     const c = t < 0.5
       ? [255, Math.round(92 + (197 - 92) * (t / 0.5)), 66]
@@ -43,8 +46,10 @@
     return `rgb(${c.join(',')})`;
   };
   const fmtPct = p => Math.round(p * 100) + '%';
+  const POS_CAP = { QB: 1, TE: 1, DEF: 1 }; // per team, keepers included
+  const DEF_FROM_ROUND = 15;
 
-  // ---------- keeper-conditioned draft simulation ----------
+  // ---------- keeper-conditioned, need-aware draft simulation ----------
   function buildSim(L) {
     const dd = L.draftDetail || {};
     if (!dd.draftOrder) return null;
@@ -56,7 +61,14 @@
     Object.entries(dd.slotToRoster || {}).forEach(([slot, rid]) => (slotOfRoster[rid] = +slot));
     const rosterOfPid = {};
     L.rosters.forEach(r => (r.players || []).forEach(pid => (rosterOfPid[pid] = r.rid)));
+    const myRid = (L.rosters.find(r => r.owner === L.myUserId) || {}).rid;
     const pickNum = (round, slot) => (round - 1) * N + (round % 2 === 1 ? slot : N + 1 - slot);
+    const slotOfPick = pick => {
+      const r = Math.ceil(pick / N), within = pick - (r - 1) * N;
+      return r % 2 === 1 ? within : N + 1 - within;
+    };
+
+    // keepers onto the board
     const cells = {}; // pick -> {pid, official}
     for (const k of keeps) {
       let pick = officialPick[k.pid];
@@ -76,40 +88,88 @@
     }
     const openPicks = [], openIdx = {};
     for (let p = 1; p <= ROUNDS * N; p++) if (!cells[p]) { openIdx[p] = openPicks.length; openPicks.push(p); }
-    const sortKey = p => p.adp ?? 500 - (p.proj || 0) / 1000;
-    const pool = players.filter(p => !keptSet.has(p.id)).sort((a, b) => sortKey(a) - sortKey(b));
-    const seqOf = {};
-    pool.forEach((p, i) => (seqOf[p.id] = i));
-    const expected = {};
-    openPicks.forEach((p, i) => { if (pool[i]) expected[p] = pool[i].id; });
-    const probAvail = (pid, k) => { // k = open-sequence index of the pick
-      const i = seqOf[pid];
-      return i == null ? 0 : 1 - phi((k - i) / sigma(i));
+
+    // positional counts per roster from keepers only (walks copy this)
+    const keeperCounts = {};
+    L.rosters.forEach(r => (keeperCounts[r.rid] = { QB: 0, TE: 0, DEF: 0 }));
+    for (const k of keeps) {
+      const pos = byId[k.pid]?.pos, rid = rosterOfPid[k.pid];
+      if (pos in POS_CAP && keeperCounts[rid]) keeperCounts[rid][pos]++;
+    }
+    // each roster's last OPEN pick — a DEF-less team must grab one there even
+    // if keepers ate its R15/R16 picks
+    const lastOpen = {};
+    for (const pick of openPicks) lastOpen[(dd.slotToRoster || {})[String(slotOfPick(pick))]] = pick;
+
+    // draft order lists: everyone by ADP, me by MY board
+    const sortAdp = p => p.adp ?? 500 - (p.proj || 0) / 1000;
+    const adpOrder = players.filter(p => !keptSet.has(p.id)).sort((a, b) => sortAdp(a) - sortAdp(b));
+    const myOrder = adpOrder.slice().sort((a, b) =>
+      (oRanks[a.id] ?? 9000 + sortAdp(a)) - (oRanks[b.id] ?? 9000 + sortAdp(b)));
+
+    // deterministic constrained walk. includeMe=false ghosts my picks — that
+    // run measures when THE ROOM would take each player, which is what
+    // availability-at-my-pick should be judged against.
+    function runWalk(includeMe) {
+      const cnts = {};
+      L.rosters.forEach(r => (cnts[r.rid] = { ...keeperCounts[r.rid] }));
+      const exp = {}, idx = {}, taken = new Set();
+      openPicks.forEach((pick, k) => {
+        const r = Math.ceil(pick / N);
+        const rid = (dd.slotToRoster || {})[String(slotOfPick(pick))];
+        if (!includeMe && rid === myRid) return;
+        const cnt = cnts[rid] || { QB: 0, TE: 0, DEF: 0 };
+        const defWindow = r >= DEF_FROM_ROUND || pick === lastOpen[rid];
+        const forceDef = cnt.DEF < 1 && (r === ROUNDS || pick === lastOpen[rid]);
+        const list = includeMe && rid === myRid ? myOrder : adpOrder;
+        const p = list.find(x => {
+          if (taken.has(x.id)) return false;
+          if (forceDef) return x.pos === 'DEF';
+          if (x.pos === 'DEF') return defWindow && cnt.DEF < POS_CAP.DEF;
+          if (x.pos in POS_CAP && cnt[x.pos] >= POS_CAP[x.pos]) return false;
+          return true;
+        });
+        if (!p) return;
+        exp[pick] = p.id;
+        idx[p.id] = k;
+        taken.add(p.id);
+        if (p.pos in cnt) cnt[p.pos]++;
+      });
+      return { exp, idx };
+    }
+    const full = runWalk(true);    // display board incl. my board-driven picks
+    const others = runWalk(false); // the room without me -> availability odds
+    const expected = full.exp;
+
+    const probAvail = (pid, k) => {
+      if (keptSet.has(pid)) return 0;
+      const i = others.idx[pid];
+      if (i == null) return 1; // the room never takes him (e.g. QB13 in a 1-QB room)
+      return 1 - phi((k - i) / sigma(i));
     };
     const mySlot = dd.draftOrder[L.myUserId];
-    return { ROUNDS, N, cells, openPicks, openIdx, pool, seqOf, expected, probAvail, pickNum, mySlot, slotOfRoster, dd };
+    return { ROUNDS, N, cells, openPicks, openIdx, adpOrder, othersIdx: others.idx, expected, probAvail, pickNum, mySlot, myRid, dd, keptSet };
   }
 
-  // player chip with availability %
-  function probChip(p, prob, extra) {
+  function probChip(p, prob, hero) {
     const col = pctColor(prob);
     return LAB.el('div', {
-      class: 'flex', style: 'gap:7px;padding:3px 6px;border-radius:7px;background:var(--surface);border:1px solid var(--border);margin-top:3px;cursor:pointer;font-size:12.5px',
+      class: 'flex', style: 'gap:7px;padding:3px 6px;border-radius:7px;margin-top:3px;cursor:pointer;font-size:12.5px;' +
+        (hero ? 'background:rgba(255,106,43,.10);border:1px solid var(--accent)' : 'background:var(--surface);border:1px solid var(--border)'),
       onclick: () => LAB.playerCard(p.id),
-      title: `${p.name} — ${fmtPct(prob)} chance he's still available · ADP ${p.adp ?? '–'} · your rank ${oRanks[p.id] ? '#' + oRanks[p.id] : '–'}`,
+      title: `${p.name} — ${fmtPct(prob)} chance he's still available · ADP ${p.adp ?? '–'} · your rank ${oRanks[p.id] ? '#' + oRanks[p.id] : '–'}` + (hero ? ' · projected pick given your earlier picks' : ''),
     },
       LAB.headshot(p.id, 'sm'),
       LAB.el('span', { style: 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600;flex:1' }, p.name),
       LAB.posBadge(p.pos),
       oRanks[p.id] ? LAB.el('span', { class: 'mono muted', style: 'font-size:11px' }, '#' + oRanks[p.id]) : '',
-      LAB.el('b', { class: 'mono', style: 'color:' + col + ';width:38px;text-align:right' }, fmtPct(prob)),
-      extra || '');
+      LAB.el('b', { class: 'mono', style: 'color:' + col + ';width:38px;text-align:right' }, fmtPct(prob)));
   }
 
   function pickDetail(sim, pick) {
     const k = sim.openIdx[pick];
-    const rows = sim.pool
-      .filter(p => sim.seqOf[p.id] >= Math.max(0, k - 30) && sim.seqOf[p.id] <= k + 25)
+    const rows = sim.adpOrder
+      .filter(p => sim.othersIdx[p.id] != null && sim.othersIdx[p.id] >= Math.max(0, k - 30) && sim.othersIdx[p.id] <= k + 25)
       .map(p => ({ p, prob: sim.probAvail(p.id, k) }))
       .filter(x => x.prob >= 0.01 && x.prob <= 0.995)
       .sort((a, b) => b.prob - a.prob)
@@ -118,7 +178,7 @@
     LAB.modal(LAB.el('div', {},
       LAB.el('h2', {}, `Pick ${r}.${String(pick - (r - 1) * sim.N).padStart(2, '0')} (overall #${pick})`),
       LAB.el('p', { class: 'muted', style: 'font-size:12px;margin:4px 0 10px' },
-        'Odds each player is still on the board when this pick comes up. Locks (≈100%) are omitted — anyone ranked well below this pick will be there.'),
+        'Odds each player is still on the board at this pick, given keepers and positional need (1 QB / 1 TE per team, DEF in R15-16). Locks (≈100%) are omitted.'),
       rows.map(x => probChip(x.p, x.prob))));
   }
 
@@ -136,15 +196,22 @@
     const planner = LAB.el('div', { class: 'card', style: 'margin-top:14px' },
       LAB.el('h2', {}, `Your picks — slot ${sim.mySlot} of ${sim.N}`),
       LAB.el('p', { class: 'muted', style: 'font-size:12px;margin:4px 0 6px' },
-        'Best available by YOUR board at each of your picks, with the odds they last that long. ',
+        'The ', LAB.el('b', { class: 'accent' }, 'orange card'), ' is your projected pick off YOUR board (one QB, one TE, filled positions drop out). Below it: alternatives with the odds they last. ',
         LAB.el('b', { style: 'color:#3ee68f' }, 'green = safe'), ' → ', LAB.el('b', { style: 'color:#ff5c5c' }, 'red = long shot'), '.'));
     const cols = LAB.el('div', { style: 'display:flex;gap:10px;overflow-x:auto;padding-bottom:6px' });
+    const myFilled = { QB: 0, TE: 0, DEF: 0 }; // my keepers count toward my caps
+    const heroTaken = new Set(); // my projected picks so far, excluded from later lists
+    const { keeps } = LAB.predictKeepers(L, byId, oRanks);
+    for (const k of keeps) {
+      const p = byId[k.pid];
+      if (p && (L.rosters.find(r => r.rid === sim.myRid)?.players || []).includes(k.pid) && p.pos in myFilled) myFilled[p.pos]++;
+    }
     for (let r = 1; r <= sim.ROUNDS; r++) {
       const pick = sim.pickNum(r, sim.mySlot);
       const cell = sim.cells[pick];
       const col = LAB.el('div', { style: 'flex:none;width:216px' });
       col.append(LAB.el('div', {
-        class: 'tier-head', style: 'cursor:' + (cell ? 'default' : 'pointer'), 'data-pick': pick,
+        class: 'tier-head', style: 'cursor:' + (cell ? 'default' : 'pointer'),
         title: cell ? 'this pick is consumed by your keeper' : 'click for the full odds list',
         onclick: cell ? null : () => pickDetail(sim, pick),
       }, `R${r}`, LAB.el('span', { class: 'count' }, '#' + pick)));
@@ -156,13 +223,23 @@
           LAB.el('span', { class: 'badge keeper' }, cell.official ? 'KEPT' : 'PROJ KEEP')));
       } else {
         const k = sim.openIdx[pick];
-        const cands = sim.pool
-          .filter(p => sim.seqOf[p.id] <= k + 22)
+        const heroPid = sim.expected[pick];
+        if (heroPid) col.append(probChip(byId[heroPid], sim.probAvail(heroPid, k), true));
+        const heroPos = byId[heroPid]?.pos;
+        const cands = sim.adpOrder
+          .filter(p => p.id !== heroPid
+            && !heroTaken.has(p.id) // already projected as one of my earlier picks
+            && (sim.othersIdx[p.id] == null ? (oRanks[p.id] ?? 9e3) < 300 : sim.othersIdx[p.id] <= k + 22)
+            && !(p.pos === 'QB' && (myFilled.QB >= 1 || heroPos === 'QB'))
+            && !(p.pos === 'TE' && (myFilled.TE >= 1 || heroPos === 'TE'))
+            && !(p.pos === 'DEF' && r < DEF_FROM_ROUND))
           .map(p => ({ p, prob: sim.probAvail(p.id, k) }))
           .filter(x => x.prob >= 0.08)
           .sort((a, b) => (oRanks[a.p.id] ?? 9e3) - (oRanks[b.p.id] ?? 9e3))
-          .slice(0, 8);
+          .slice(0, 7);
         cands.forEach(x => col.append(probChip(x.p, x.prob)));
+        if (heroPos && heroPos in myFilled) myFilled[heroPos]++;
+        if (heroPid) heroTaken.add(heroPid);
       }
       cols.append(col);
     }
@@ -173,10 +250,9 @@
     const boardCard = LAB.el('div', { class: 'card', style: 'margin-top:14px' },
       LAB.el('h2', {}, 'Projected snake board'),
       LAB.el('p', { class: 'muted', style: 'font-size:12px;margin:4px 0 8px' },
-        'Solid amber = keeper locked on the real board · dashed = predicted keeper · everything else = most-likely pick by keeper-adjusted ADP. Your column is highlighted. Click any open cell for odds.'));
+        'Solid amber = keeper locked on the real board · dashed = predicted keeper · everything else = most-likely pick given ADP + positional need (1 QB / 1 TE each, DEF in R15-16). Your column runs off your board. Click any open cell for odds.'));
     const wrap = LAB.el('div', { style: 'overflow-x:auto' });
     const grid = LAB.el('div', { style: `display:grid;grid-template-columns:34px repeat(${sim.N},minmax(108px,1fr));gap:3px;min-width:${34 + sim.N * 112}px` });
-    // header: slot owners
     grid.append(LAB.el('div', {}));
     const nameOfSlot = {};
     Object.entries(sim.dd.draftOrder).forEach(([uid, slot]) => (nameOfSlot[slot] = L.users[uid]?.name || 'slot ' + slot));
