@@ -56,6 +56,7 @@ for tag in ("ggg", "lob"):
         "rosters": load(f"{tag}_rosters.json"),
         "drafts": load(f"{tag}_drafts.json"),
         "draft_picks": load(f"{tag}_draft_picks.json"),
+        "draft_detail": load(f"{tag}_draft_detail.json"),
         "history": load(f"{tag}_history.json"),
     }
 
@@ -370,6 +371,13 @@ def league_out(tag):
         # keepers already PLACED on this season's actual draft board
         "draftKeepers": [{"pid": pk["player_id"], "round": pk["round"], "pick": pk.get("pick_no")}
                          for pk in (L.get("draft_picks") or []) if pk.get("is_keeper")],
+        # this season's draft shape (order/slots known once the league sets them)
+        "draftDetail": (lambda dd: {
+            "status": dd.get("status"), "type": dd.get("type"),
+            "rounds": (dd.get("settings") or {}).get("rounds"),
+            "draftOrder": dd.get("draft_order"),
+            "slotToRoster": dd.get("slot_to_roster_id"),
+        })(L.get("draft_detail") or {}),
         "keeperRule": "round_slot" if tag == "ggg" else "round_minus_1",
         "keeperMax": (L["league"].get("settings") or {}).get("max_keepers", 3),
     }
