@@ -178,7 +178,10 @@
       LAB.el('span', { style: 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600;flex:1' }, p.name),
       LAB.posBadge(p.pos),
       E.eligible(p)
-        ? LAB.el('span', { class: 'mono muted', style: 'font-size:10.5px;flex:none' }, 'K R' + E.costRd(p))
+        ? LAB.el('span', { class: 'mono', style: 'font-size:10.5px;flex:none;color:var(--ink-3)' },
+          'K R' + E.costRd(p) + ' · ',
+          LAB.el('b', { style: 'color:' + (s > 0 ? '#3ee68f' : s < 0 ? '#ff5c5c' : 'var(--ink-3)') },
+            (s > 0 ? '+' : '') + Math.round(s ?? 0)))
         : LAB.el('span', { class: 'mono', style: 'font-size:10.5px;flex:none;color:var(--ink-3)' }, '—'),
       LAB.el('b', { class: 'mono', style: 'width:48px;text-align:right;flex:none;color:' + (v >= 1 ? 'var(--good, #3ee68f)' : 'var(--ink-3)') }, pts(v)));
   }
@@ -188,7 +191,7 @@
     const card = LAB.el('div', { class: 'card', style: 'flex:1;min-width:330px' },
       LAB.el('h2', {}, label),
       LAB.el('p', { class: 'muted', style: 'font-size:11.5px;margin:2px 0 6px' },
-        teamName(roster.rid) + ' · ' + mgrName(roster.rid) + ' — click players or add picks; value = ' + (lens === 'keeper' ? 'keeper surplus' : 'season VORP') + ' in pts'));
+        teamName(roster.rid) + ' · ' + mgrName(roster.rid) + ' — green/red = ' + BASIS_LABEL[basis].toLowerCase() + ' in draft slots (the Keepers-page number); the right column is trade value in pts, what the verdict adds up.'));
     // pick adder
     const owned = ownedPicks(roster.rid).filter(op => !listArr.some(a => a.kind === 'pick' && sameAsset(a, { ...op, kind: 'pick' })));
     const sel = LAB.el('select', { style: 'flex:1' },
