@@ -54,13 +54,28 @@
       roundVal[r] = a.length ? a[Math.floor(a.length / 2)] : 0;
     }
     for (let r = 15; r >= 1; r--) roundVal[r] = Math.max(roundVal[r], roundVal[r + 1]);
+    // the keeper-draft slot sequence (round of the i-th player off the board)
+    // lets ANY ordering — Sleeper ADP or my board — map a player to a round,
+    // so surplus can be measured on three bases
+    const sortAdp = p => p.adp ?? 500 - (p.proj || 0) / 1000;
+    const pool = players.filter(p => !kSim.keptSet.has(p.id)).sort((a, b) => sortAdp(a) - sortAdp(b));
+    const seq = pool.map(p => kSim.rounds[p.id]).filter(Boolean);
+    const boardRound = {};
+    pool.slice().sort((a, b) => (oRanks[a.id] ?? 9e3 + sortAdp(a)) - (oRanks[b.id] ?? 9e3 + sortAdp(b)))
+      .forEach((p, i) => { if (i < seq.length) boardRound[p.id] = seq[i]; });
     const actual = {};
     for (const k of (L.draftKeepers || [])) actual[k.pid] = k.round;
     const kept = new Set(L.lastKept || []);
     const eligible = p => p && p.pos !== 'DEF' && !!L.lastDraftRound[p.id];
     const costRd = p => Math.min(16, actual[p.id]
       ?? LAB.keeperCostRound(L, L.lastDraftRound[p.id] || null, kept.has(p.id)));
-    const surplus = p => eligible(p) ? vorp(p) - roundVal[costRd(p)] : null;
+    // what the player is worth: his projection (VORP), or the value of the
+    // round the market (ADP) / my board says he'd go in this keeper draft
+    const worth = (p, basis) =>
+      basis === 'adp' ? roundVal[Math.min(16, kSim.rounds[p.id] ?? kSim.wouldBe(p))]
+        : basis === 'board' ? roundVal[Math.min(16, boardRound[p.id] ?? kSim.wouldBe(p))]
+          : vorp(p);
+    const surplus = (p, basis) => eligible(p) ? worth(p, basis) - roundVal[costRd(p)] : null;
     const pickVal = (season, round) => {
       const yrs = Math.max(0, (+season) - (+L.season));
       return roundVal[Math.min(16, +round)] * Math.pow(0.85, yrs);
@@ -72,14 +87,15 @@
     if (a.kind === 'pick') return E.pickVal(a.season, a.round);
     const p = byId[a.id];
     if (!p) return 0;
-    const s = E.surplus(p);
+    const s = E.surplus(p, basis);
     if (lens === 'keeper') return Math.max(0, s ?? 0);
     return vorp(p) + 0.3 * Math.max(0, s ?? 0);
   }
   const pts = v => Math.round(v);
+  const BASIS_LABEL = { proj: 'Keeper surplus', adp: 'ADP surplus', board: 'My-rank surplus' };
 
   // ---------- per-league state ----------
-  let L, TR, E, lens, partnerRid, give, get, showAllLog;
+  let L, TR, E, lens, basis, partnerRid, give, get, showAllLog;
   const teamName = rid => {
     const r = L.rosters.find(x => x.rid === rid);
     const u = r && L.users[r.owner];
@@ -95,6 +111,7 @@
     TR = trades[tag] || { trades: [], roundHist: {}, tradedPicks: [] };
     E = makeEngine(L);
     lens = L.status === 'in_season' ? 'season' : 'keeper';
+    basis = 'proj';
     const myRid = (L.rosters.find(r => r.owner === L.myUserId) || {}).rid;
     partnerRid = (L.rosters.find(r => r.rid !== myRid) || {}).rid;
     give = []; get = []; showAllLog = false;
@@ -128,7 +145,7 @@
   // ---------- optimal keeper slate ----------
   function slate(pids) {
     return pids.map(pid => byId[pid]).filter(p => E.eligible(p))
-      .map(p => ({ p, cost: E.costRd(p), s: E.surplus(p) }))
+      .map(p => ({ p, cost: E.costRd(p), s: E.surplus(p, basis) }))
       .sort((a, b) => b.s - a.s)
       .slice(0, L.keeperMax || 3);
   }
@@ -137,7 +154,7 @@
   // ---------- UI pieces ----------
   function playerRow(p, listArr, otherArr) {
     const inList = listArr.some(a => a.kind === 'player' && a.id === p.id);
-    const s = E.surplus(p);
+    const s = E.surplus(p, basis);
     const v = assetVal(E, lens, { kind: 'player', id: p.id });
     return LAB.el('div', {
       class: 'flex',
@@ -149,7 +166,7 @@
         render();
       },
       title: E.eligible(p)
-        ? `keeper cost R${E.costRd(p)} · surplus ${pts(s)} pts over that pick`
+        ? `keeper cost R${E.costRd(p)} · ${BASIS_LABEL[basis].toLowerCase()} ${pts(s)} pts over that pick`
         : 'not keeper-eligible (not in last year\'s draft)' + (p.pos === 'DEF' ? ' — DEF' : ''),
     },
       LAB.headshot(p.id, 'sm'),
@@ -221,14 +238,13 @@
       LAB.el('b', { style: 'font-family:var(--font-display);font-size:20px;letter-spacing:.03em;color:' + label[1] }, label[0]),
       LAB.el('span', { class: 'mono', style: 'color:' + label[1] }, (d >= 0 ? '+' : '') + pts(d) + ' pts'),
       LAB.el('span', { class: 'muted', style: 'font-size:11.5px' },
-        lens === 'keeper' ? 'keeper-draft lens: surplus + pick value, in points over replacement'
-          : 'season lens: rest-of-season VORP + 30% of keeper surplus')));
+        lens === 'keeper' ? `keeper-draft lens: ${BASIS_LABEL[basis].toLowerCase()} + pick value, in pts over replacement`
+          : `season lens: rest-of-season VORP + 30% of ${BASIS_LABEL[basis].toLowerCase()}`)));
     // itemization
     const item = a => {
       const v = assetVal(E, lens, a);
       if (a.kind === 'pick') return `${a.season} R${a.round} (${pts(v)})`;
       const p = byId[a.id];
-      const s = E.surplus(p);
       return `${p.name} (${pts(v)}${E.eligible(p) ? ` · K R${E.costRd(p)}` : ' · no keep'})`;
     };
     card.append(LAB.el('p', { class: 'muted', style: 'font-size:11.5px;margin-top:8px' },
@@ -294,8 +310,34 @@
         `${pk.season} R${pk.round}` + (pk.became ? ` → ${pk.became.name}${pk.became.keeper ? ' (K)' : ''}` : ''))),
       (!s.players.length && !s.picks.length) ? LAB.el('span', { class: 'muted' }, 'nothing?') : '');
     return LAB.el('div', { style: 'border:1px solid var(--border);border-radius:8px;padding:6px 9px;margin-top:6px;background:var(--surface)' },
-      LAB.el('div', { class: 'mono muted', style: 'font-size:10.5px' }, `${t.season} · week ${t.week}`),
+      LAB.el('div', { class: 'mono muted', style: 'font-size:10.5px' },
+        `${t.season} · ` + (isPre(t) ? 'preseason' : 'week ' + t.week)),
       t.sides.map(side));
+  }
+
+  // "week 1" trades in this league are (per Alex) preseason keeper/pick deals
+  const isPre = t => t.week === 1;
+
+  // how much a historical trade resembles the current proposal: timing
+  // (preseason deals compare to preseason deals), shared players, and
+  // picks of the same or adjacent rounds
+  function similarity(t) {
+    const preNow = L.status !== 'in_season';
+    let s = isPre(t) === preNow ? 2 : 0;
+    const propPids = new Set([...give, ...get].filter(a => a.kind === 'player').map(a => a.id));
+    const propRounds = [...give, ...get].filter(a => a.kind === 'pick').map(a => a.round);
+    let roundHit = 0;
+    for (const side of t.sides) {
+      for (const p of side.players) if (propPids.has(p.id)) s += 3;
+      for (const pk of side.picks) for (const r of propRounds) {
+        if (pk.round === r) roundHit = Math.max(roundHit, 2);
+        else if (Math.abs(pk.round - r) === 1) roundHit = Math.max(roundHit, 1);
+      }
+    }
+    s += roundHit;
+    const tPicks = t.sides.some(x => x.picks.length);
+    if (propRounds.length) s += tPicks ? 1 : -1;
+    return s;
   }
 
   function historyCard() {
@@ -313,11 +355,22 @@
         LAB.el('div', { class: 'flex', style: 'flex-wrap:wrap;gap:5px;margin-top:3px' },
           hist.map(x => LAB.el('span', { class: 'badge', title: x.season }, `${x.season.slice(2)}' ${x.name}`)),
           LAB.el('span', { class: 'muted', style: 'font-size:11px' }, `· worth ~${pts(E.roundVal[r])} pts in this year's keeper draft`))));
-      const prec = TR.trades.filter(t => t.sides.some(s => s.picks.some(pk => pk.round === r))).slice(0, 4);
-      if (prec.length) {
-        card.append(LAB.el('div', { class: 'muted', style: 'font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-top:5px' },
-          `past trades moving an R${r}`));
-        prec.forEach(t => card.append(tradeLine(t)));
+    }
+    // similar trades: ranked by timing (preseason vs in-season), shared
+    // players, and matching pick rounds
+    if (give.length || get.length) {
+      const sims = TR.trades
+        .map(t => ({ t, s: similarity(t) }))
+        .filter(x => x.s > 0)
+        .sort((a, b) => b.s - a.s || (b.t.ts || 0) - (a.t.ts || 0))
+        .slice(0, 6);
+      if (sims.length) {
+        card.append(LAB.el('div', { style: 'margin-top:10px' },
+          LAB.el('b', { style: 'font-family:var(--font-display);text-transform:uppercase;letter-spacing:.04em;font-size:12.5px;color:var(--accent)' },
+            'Similar trades'),
+          LAB.el('span', { class: 'muted', style: 'font-size:11px;margin-left:8px' },
+            'matched on timing' + ' · players · pick rounds')));
+        sims.forEach(x => card.append(tradeLine(x.t)));
       }
     }
     // the full log
@@ -346,10 +399,13 @@
     const lensSeg = LAB.el('div', { class: 'seg' },
       [['keeper', 'Keeper draft'], ['season', 'In-season']].map(([k, lbl]) =>
         LAB.el('button', { class: k === lens ? 'active' : '', onclick: () => { lens = k; render(); } }, lbl)));
+    const basisSeg = LAB.el('div', { class: 'seg', title: 'what a player is worth: his projection, the round ADP says he goes, or the round MY board says he goes — always vs the round he costs to keep' },
+      [['proj', 'Keeper surplus'], ['adp', 'ADP surplus'], ['board', 'My-rank surplus']].map(([k, lbl]) =>
+        LAB.el('button', { class: k === basis ? 'active' : '', onclick: () => { basis = k; render(); } }, lbl)));
     root.append(LAB.el('div', { class: 'card', style: 'margin-top:14px' },
       LAB.el('div', { class: 'flex', style: 'gap:12px;flex-wrap:wrap;align-items:center' },
         LAB.el('b', { style: 'font-family:var(--font-display);text-transform:uppercase;letter-spacing:.04em' }, 'Trade partner'),
-        partnerSel, LAB.el('div', { class: 'spacer', style: 'flex:1' }), lensSeg)));
+        partnerSel, LAB.el('div', { class: 'spacer', style: 'flex:1' }), lensSeg, basisSeg)));
 
     root.append(LAB.el('div', { class: 'flex', style: 'gap:14px;margin-top:14px;flex-wrap:wrap;align-items:flex-start' },
       sideCard('You send', me, give),
