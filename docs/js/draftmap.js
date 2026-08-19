@@ -191,6 +191,11 @@
         `${L.name} hasn't set its draft order yet — the snake map unlocks the moment Sleeper knows the slots. (Keeper-round projections on the Board and Keepers pages work already.)`));
       return;
     }
+    // page layout: everything on the left, my projected team in its own
+    // sidebar on the right so the snake board never has to scroll
+    const main = LAB.el('div', { style: 'flex:1;min-width:0' });
+    const aside = LAB.el('div', { style: 'flex:none;width:230px' });
+    root.append(LAB.el('div', { style: 'display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap' }, main, aside));
 
     // ---------- my picks planner ----------
     const planner = LAB.el('div', { class: 'card', style: 'margin-top:14px' },
@@ -262,21 +267,23 @@
       cols.append(col);
     }
     planner.append(cols);
-    root.append(planner);
+    main.append(planner);
 
     // ---------- full snake board + my projected team ----------
     const boardCard = LAB.el('div', { class: 'card', style: 'margin-top:14px' },
       LAB.el('h2', {}, 'Projected snake board'),
       LAB.el('p', { class: 'muted', style: 'font-size:12px;margin:4px 0 8px' },
         'Solid amber = keeper locked on the real board · dashed = predicted keeper · everything else = most-likely pick given ADP + positional need (1 QB / 1 TE each, DEF in R16 unless keepers ate it). Your column runs off your board; your resulting team is on the right. Click any open cell for odds.'));
-    const wrap = LAB.el('div', { style: 'overflow-x:auto;flex:1;min-width:0' });
-    const grid = LAB.el('div', { style: `display:grid;grid-template-columns:34px repeat(${sim.N},minmax(108px,1fr));gap:3px;min-width:${34 + sim.N * 112}px` });
+    // columns compress to fit — the board never scrolls horizontally
+    const wrap = LAB.el('div', { style: 'min-width:0' });
+    const grid = LAB.el('div', { style: `display:grid;grid-template-columns:28px repeat(${sim.N},minmax(0,1fr));gap:3px` });
     grid.append(LAB.el('div', {}));
     const nameOfSlot = {};
     Object.entries(sim.dd.draftOrder).forEach(([uid, slot]) => (nameOfSlot[slot] = L.users[uid]?.name || 'slot ' + slot));
     for (let s = 1; s <= sim.N; s++) {
       grid.append(LAB.el('div', {
-        style: 'font-family:var(--font-display);font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.04em;padding:3px 5px;text-align:center;color:' + (s === sim.mySlot ? 'var(--accent)' : 'var(--ink-3)'),
+        style: 'font-family:var(--font-display);font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.04em;padding:3px 2px;text-align:center;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:' + (s === sim.mySlot ? 'var(--accent)' : 'var(--ink-3)'),
+        title: nameOfSlot[s],
       }, s === sim.mySlot ? 'YOU' : nameOfSlot[s]));
     }
     for (let r = 1; r <= sim.ROUNDS; r++) {
@@ -301,34 +308,39 @@
       }
     }
     wrap.append(grid);
+    boardCard.append(wrap);
+    main.append(boardCard);
 
-    // my full projected team, round by round
-    const teamPanel = LAB.el('div', { style: 'flex:none;width:224px' },
-      LAB.el('div', { style: 'font-family:var(--font-display);font-weight:700;font-size:14px;text-transform:uppercase;letter-spacing:.05em;color:var(--accent);padding:3px 0 5px' }, 'Your projected team'));
-    const tally = { QB: 0, RB: 0, WR: 0, TE: 0, DEF: 0 };
+    // ---------- my projected team, grouped by position (right sidebar) ----------
+    const teamCard = LAB.el('div', { class: 'card', style: 'margin-top:14px;position:sticky;top:10px' },
+      LAB.el('h2', {}, 'Your projected team'));
+    const byPos = { QB: [], RB: [], WR: [], TE: [], DEF: [] };
     for (let r = 1; r <= sim.ROUNDS; r++) {
       const pick = sim.pickNum(r, sim.mySlot);
       const cell = sim.cells[pick];
       const pid = cell ? cell.pid : sim.expected[pick];
       const p = byId[pid];
-      if (p && p.pos in tally) tally[p.pos]++;
-      teamPanel.append(LAB.el('div', {
-        class: 'flex', style: 'gap:6px;padding:3px 6px;border-radius:7px;margin-top:3px;font-size:12px;' +
-          (cell ? 'background:rgba(245,197,66,.10);border:1px solid var(--warn)' : 'background:var(--surface);border:1px solid var(--border)'),
-        title: p ? `R${r} (#${pick}) — ${p.name}` + (cell ? (cell.official ? ' · your keeper' : ' · predicted keeper') : ' · projected pick') : '',
-        onclick: p ? () => LAB.playerCard(p.id) : null,
-      },
-        LAB.el('span', { class: 'mono muted', style: 'width:24px;flex:none' }, 'R' + r),
-        p ? LAB.headshot(p.id, 'sm') : '',
-        LAB.el('span', { style: 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600;flex:1' }, p ? p.name : '—'),
-        p ? LAB.posBadge(p.pos) : '',
-        cell ? LAB.el('span', { class: 'badge keeper', style: 'font-size:9px' }, 'K') : ''));
+      if (p && p.pos in byPos) byPos[p.pos].push({ r, pick, p, cell });
     }
-    teamPanel.append(LAB.el('div', { class: 'muted mono', style: 'font-size:11px;margin-top:7px;text-align:center' },
-      Object.entries(tally).filter(([, n]) => n).map(([pos, n]) => `${n} ${pos}`).join(' · ')));
-
-    boardCard.append(LAB.el('div', { style: 'display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap' }, wrap, teamPanel));
-    root.append(boardCard);
+    for (const [pos, list] of Object.entries(byPos)) {
+      if (!list.length) continue;
+      teamCard.append(LAB.el('div', {
+        class: 'flex', style: `margin:8px 0 2px;font-family:var(--font-display);font-weight:700;font-size:12.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--${pos.toLowerCase()})`,
+      }, pos, LAB.el('span', { class: 'muted', style: 'font-family:var(--font-body);font-weight:400;text-transform:none;font-size:11px' }, `× ${list.length}`)));
+      for (const { r, pick, p, cell } of list) {
+        teamCard.append(LAB.el('div', {
+          class: 'flex', style: 'gap:6px;padding:3px 6px;border-radius:7px;margin-top:3px;font-size:12px;' +
+            (cell ? 'background:rgba(245,197,66,.10);border:1px solid var(--warn)' : 'background:var(--surface);border:1px solid var(--border)'),
+          title: `R${r} (#${pick}) — ${p.name}` + (cell ? (cell.official ? ' · your keeper' : ' · predicted keeper') : ' · projected pick'),
+          onclick: () => LAB.playerCard(p.id),
+        },
+          LAB.el('span', { class: 'mono muted', style: 'width:24px;flex:none' }, 'R' + r),
+          LAB.headshot(p.id, 'sm'),
+          LAB.el('span', { style: 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600;flex:1' }, p.name),
+          cell ? LAB.el('span', { class: 'badge keeper', style: 'font-size:9px' }, 'K') : ''));
+      }
+    }
+    aside.append(teamCard);
   }
 
   render();
