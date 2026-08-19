@@ -243,28 +243,38 @@
     return wasKept ? Math.max(1, lastRd - 1) : lastRd;
   };
 
-  // predicted keepers for every roster: official where declared, else the
-  // roster's top keeperMax by surplus (board rank first, ADP fallback) —
-  // mirrors the Keepers page's TOP-3 logic
+  // keepers for every roster: officially declared ones first (at their REAL
+  // draft-board slot when the league has placed them), topped up to keeperMax
+  // with the roster's best remaining candidates by surplus — mirrors the
+  // Keepers page's TOP-3 logic. Before the deadline a short official list
+  // usually means "not done declaring", so top-ups keep the model honest.
   LAB.predictKeepers = function (L, byId, oRanks) {
     const kept = new Set(L.lastKept || []);
     const midPick = r => (r - 0.5) * 10;
+    const actual = {};
+    for (const k of (L.draftKeepers || [])) actual[k.pid] = k.round;
     const keeps = [];
     for (const roster of L.rosters) {
       const official = (roster.keepers || []).filter(pid => byId[pid]);
+      const chosen = official.map(pid => ({
+        pid,
+        costRd: actual[pid] ?? LAB.keeperCostRound(L, L.lastDraftRound[pid] || null, kept.has(pid)),
+        official: true,
+      }));
       const cands = (roster.players || [])
         .map(pid => byId[pid])
         // only players DRAFTED last year are keeper-eligible (no FA pickups)
-        .filter(p => p && p.pos !== 'DEF' && L.lastDraftRound[p.id])
+        .filter(p => p && p.pos !== 'DEF' && L.lastDraftRound[p.id] && !official.includes(p.id))
         .map(p => {
           const costRd = LAB.keeperCostRound(L, L.lastDraftRound[p.id], kept.has(p.id));
           const worth = oRanks[p.id] ?? p.adp ?? 300;
           return { pid: p.id, costRd, surplus: midPick(costRd) - worth };
         })
         .sort((a, b) => b.surplus - a.surplus);
-      const chosen = official.length
-        ? cands.filter(c => official.includes(c.pid))
-        : cands.slice(0, L.keeperMax);
+      for (const c of cands) {
+        if (chosen.length >= L.keeperMax) break;
+        chosen.push(c);
+      }
       keeps.push(...chosen);
     }
     return { keeps, keptSet: new Set(keeps.map(k => k.pid)) };

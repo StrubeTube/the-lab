@@ -18,6 +18,8 @@
   function candidates(L, roster, sim) {
     const kept = new Set(L.lastKept || []);
     const officialKeepers = new Set(roster.keepers || []);
+    const actual = {}; // real draft-board slot for keepers the league has placed
+    for (const k of (L.draftKeepers || [])) actual[k.pid] = k.round;
     return (roster.players || [])
       .map(pid => byId[pid])
       // undrafted/waiver pickups are NOT keeper-eligible — drafted last year only
@@ -25,7 +27,7 @@
       .map(p => {
         const lastRd = L.lastDraftRound[p.id];
         const wasKept = kept.has(p.id);
-        const costRd = LAB.keeperCostRound(L, lastRd, wasKept);
+        const costRd = actual[p.id] ?? LAB.keeperCostRound(L, lastRd, wasKept);
         const cost = midPick(costRd);
         const myRank = oRanks[p.id] || null;
         const kRd = sim.rounds[p.id] ?? null; // null = predicted keeper, never drafted
