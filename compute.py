@@ -665,6 +665,13 @@ def build_trades(tag):
         return {"name": f"{md.get('first_name', '')} {md.get('last_name', '')}".strip(),
                 "pos": md.get("position"), "keeper": bool(p.get("is_keeper"))}
 
+    # historical ADP (overall pick) by season for retro keeper surplus
+    adp_hist = load_opt("ffc_adp_hist.json", {})
+    adp_by_season = {}
+    for yr, d in adp_hist.items():
+        adp_by_season[yr] = {norm(p.get("name")): p.get("adp")
+                             for p in (d.get("players") or [])}
+
     # who was KEPT in each season's draft (pid, roster) -> keeper round; the
     # current season's board keeps count too (placed keeper slots)
     kept_at = {}
@@ -717,9 +724,13 @@ def build_trades(tag):
                     outs = [max(0, int(pk["season"]) - int(season)) for pk in other["picks"]]
                     for pl in side["players"]:
                         if pl["keptAt"]:
+                            # retro surplus at trade time: keeper-cost slot
+                            # minus that season's national ADP (FFC)
+                            adp = (adp_by_season.get(str(season)) or {}).get(norm(pl["name"]))
+                            surp = round((pl["keptAt"] - 0.5) * 10 - adp) if adp else None
                             market.append({"season": season, "name": pl["name"], "pos": pl["pos"],
                                            "cost": pl["keptAt"], "paid": sorted(paid),
-                                           "out": min(outs)})
+                                           "out": min(outs), "surp": surp, "ts": t.get("created")})
     trades.sort(key=lambda x: -(x["ts"] or 0))
     market.sort(key=lambda x: -int(x["season"]))
 

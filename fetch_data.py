@@ -136,6 +136,11 @@ def fetch_trades(tag, lid):
 def fetch_adp():
     print("FFC ADP (half-ppr, 10-team)")
     save("ffc_adp.json", get_json(f"https://fantasyfootballcalculator.com/api/v1/adp/half-ppr?teams=10&year={SEASON}"))
+    # historical ADP per past season — retro keeper surplus for the trade market
+    hist = {}
+    for yr in range(2020, int(SEASON)):
+        hist[str(yr)] = get_json(f"https://fantasyfootballcalculator.com/api/v1/adp/half-ppr?teams=10&year={yr}") or {}
+    save("ffc_adp_hist.json", hist)
 
 
 def fetch_borischen():

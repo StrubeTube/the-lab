@@ -40,7 +40,6 @@
   const vorp = p => Math.max(0, (p.proj || 0) - (basePts[p.pos] || 0));
 
   // ---------- keeper-lens engine (draft-slot units, Keepers-page math) ----------
-  const median = a => a.length ? a.slice().sort((x, y) => x - y)[Math.floor(a.length / 2)] : null;
   function makeEngine(L, TR) {
     const kSim = LAB.keeperSim(players, L, board);
     const actual = {};
@@ -61,49 +60,24 @@
       if (b === 'board') return oRanks[p.id] != null ? cost - oRanks[p.id] : null;
       return cost - midPick(wouldRd(p));
     };
-    // what a keeper costing round R is typically worth TODAY (median surplus
-    // of the positive-surplus keeper candidates at that cost round)
-    const surplusByCost = {};
-    {
-      const lists = {};
-      for (const p of players) {
-        if (!eligible(p)) continue;
-        const s = surplusSlots(p, 'keeper');
-        if (s != null && s > 0) (lists[costRd(p)] = lists[costRd(p)] || []).push(s);
-      }
-      for (let r = 1; r <= 16; r++) surplusByCost[r] = median(lists[r] || []);
-      for (let r = 1; r <= 16; r++) {
-        if (surplusByCost[r] != null) continue;
-        let lo = r - 1, hi = r + 1;
-        while (lo >= 1 && surplusByCost[lo] == null) lo--;
-        while (hi <= 16 && surplusByCost[hi] == null) hi++;
-        const n = [surplusByCost[lo], surplusByCost[hi]].filter(x => x != null);
-        surplusByCost[r] = n.length ? n.reduce((a, b) => a + b, 0) / n.length : 0;
-      }
-    }
-    // the league's own market: what cost of keeper a pick of round R buys
-    // (from preseason trades where the traded player was actually kept)
-    const MK = TR.market || [];
-    const marketFor = round => {
-      let evts = MK.filter(e => Math.abs(e.paid[0] - round) <= 1);
-      if (!evts.length) evts = MK.filter(e => Math.abs(e.paid[0] - round) <= 2);
-      return evts;
-    };
-    const pickMarket = (season, round) => {
-      const r = +round;
-      const evts = marketFor(r);
-      const cost = evts.length ? median(evts.map(e => e.cost)) : Math.min(16, r + 2);
+    // a pick is worth its DRAFT POSITION: slots of value over a last-round
+    // pick, so an earlier pick is always worth more (R4 +125, R9 +75, R16 +5);
+    // future-year picks discounted 15%/yr
+    const pickVal = (season, round) => {
       const yrs = Math.max(0, (+season) - (+L.season));
-      const val = Math.max(0, (surplusByCost[Math.min(16, Math.max(1, cost))] || 0) * Math.pow(0.85, yrs));
-      return { val, cost, n: evts.length };
+      return Math.max(0, (16.5 - Math.min(16, +round)) * 10) * Math.pow(0.85, yrs);
     };
-    // precedent the other way: what picks keepers at cost round R have fetched
-    const soldFor = cost => MK.filter(e => Math.abs(e.cost - cost) <= 1);
-    return { eligible, costRd, surplusSlots, pickMarket, soldFor };
+    // the league's real market, keyed by the keeper's surplus AT TRADE TIME
+    // (retro: cost slot minus that season's national ADP)
+    const MK = TR.market || [];
+    const surpMatches = s => MK.filter(e => e.surp != null)
+      .map(e => ({ ...e, diff: Math.abs(e.surp - s) }))
+      .sort((a, b) => a.diff - b.diff || (b.ts || 0) - (a.ts || 0));
+    return { eligible, costRd, surplusSlots, pickVal, surpMatches };
   }
 
   function assetVal(E, lens, a) {
-    if (a.kind === 'pick') return E.pickMarket(a.season, a.round).val;
+    if (a.kind === 'pick') return E.pickVal(a.season, a.round);
     const p = byId[a.id];
     if (!p) return 0;
     if (lens === 'keeper') return Math.max(0, E.surplusSlots(p, basis) ?? 0);
@@ -205,10 +179,8 @@
   }
 
   function pickChipTitle(a) {
-    const m = E.pickMarket(a.season, a.round);
-    return m.n
-      ? `in this league, picks around R${a.round} have bought keepers kept at ~R${m.cost} (${m.n} precedent${m.n > 1 ? 's' : ''}); a typical R${m.cost}-cost keeper today carries ~+${fmt(m.val)} surplus — click to remove`
-      : `no league precedent for an R${a.round} pick — assuming it buys a keeper costing ~R${m.cost} (~+${fmt(m.val)} surplus) — click to remove`;
+    return `draft-position value: ≈+${fmt(E.pickVal(a.season, a.round))} slots over a last-round pick`
+      + (+a.season > +L.season ? ' · future year, discounted 15%/yr' : '') + ' — click to remove';
   }
 
   function sideCard(label, roster, listArr) {
@@ -237,7 +209,7 @@
           class: 'badge', style: 'cursor:pointer;border:1px solid var(--accent);background:rgba(255,106,43,.12)',
           title: pickChipTitle(a),
           onclick: () => { listArr.splice(listArr.findIndex(x => sameAsset(x, a)), 1); render(); },
-        }, `${a.season} R${a.round}` + (a.origRid !== roster.rid ? ` · orig ${teamName(a.origRid)}` : '') + ` — ≈+${fmt(E.pickMarket(a.season, a.round).val)} ✕`))));
+        }, `${a.season} R${a.round}` + (a.origRid !== roster.rid ? ` · orig ${teamName(a.origRid)}` : '') + ` — +${fmt(E.pickVal(a.season, a.round))} ✕`))));
     }
     const list = LAB.el('div', { style: 'max-height:330px;overflow-y:auto;padding-right:2px' });
     (roster.players || []).map(pid => byId[pid]).filter(Boolean)
@@ -250,7 +222,21 @@
   function totalOf(listArr) { return listArr.reduce((t, a) => t + assetVal(E, lens, a), 0); }
 
   function verdictCard() {
-    const gv = totalOf(give), rv = totalOf(get);
+    const me = myRoster();
+    const sentP = give.filter(a => a.kind === 'player').map(a => a.id);
+    const gotP = get.filter(a => a.kind === 'player').map(a => a.id);
+    let gv, rv, slateD = 0;
+    if (lens === 'keeper') {
+      // players count by what they do to MY keeper slate — surplus I was
+      // never going to keep costs me nothing; picks by their draft position
+      const before = slateSum(slate(me.players));
+      const after = slateSum(slate(me.players.filter(pid => !sentP.includes(pid)).concat(gotP)));
+      slateD = after - before;
+      gv = give.filter(a => a.kind === 'pick').reduce((t, a) => t + E.pickVal(a.season, a.round), 0) + Math.max(0, -slateD);
+      rv = get.filter(a => a.kind === 'pick').reduce((t, a) => t + E.pickVal(a.season, a.round), 0) + Math.max(0, slateD);
+    } else {
+      gv = totalOf(give); rv = totalOf(get);
+    }
     const card = LAB.el('div', { class: 'card', style: 'margin-top:14px' }, LAB.el('h2', {}, 'Verdict'));
     if (!give.length && !get.length) {
       card.append(LAB.el('p', { class: 'muted', style: 'font-size:12.5px' }, 'Add assets to both sides to grade the deal.'));
@@ -272,31 +258,39 @@
       LAB.el('span', { class: 'mono', style: 'color:' + label[1] }, fmtS(d) + ' ' + UNIT()),
       LAB.el('span', { class: 'muted', style: 'font-size:11.5px' },
         lens === 'keeper'
-          ? `${BASIS_LABEL[basis].toLowerCase()} in draft slots · picks at the league's historical market rate`
+          ? 'your keeper-slate impact + pick position value, in draft slots'
           : 'rest-of-season projected pts over replacement')));
-    const item = a => {
-      const v = assetVal(E, lens, a);
-      if (a.kind === 'pick') return `${a.season} R${a.round} (≈+${fmt(v)})`;
+    // marginal impact of each individual player on MY slate
+    const base = slateSum(slate(me.players));
+    const marginal = (pid, sent) => sent
+      ? base - slateSum(slate(me.players.filter(x => x !== pid)))
+      : slateSum(slate(me.players.concat(pid))) - base;
+    const item = (a, sent) => {
+      if (a.kind === 'pick') return `${a.season} R${a.round} (+${fmt(E.pickVal(a.season, a.round))})`;
       const p = byId[a.id];
-      return `${p.name} (${lens === 'keeper' ? fmtS(v) : fmt(v)}${E.eligible(p) ? ` · K R${E.costRd(p)}` : ' · no keep'})`;
+      if (lens !== 'keeper') return `${p.name} (${fmt(assetVal(E, lens, a))})`;
+      const m = marginal(a.id, sent);
+      const raw = E.surplusSlots(p, basis);
+      return `${p.name} (slate ${fmtS(sent ? -m : m)}` +
+        (E.eligible(p) ? ` · his surplus ${fmtS(raw ?? 0)} · K R${E.costRd(p)})` : ' · no keep)');
     };
     card.append(LAB.el('p', { class: 'muted', style: 'font-size:11.5px;margin-top:8px' },
-      'Send: ' + (give.map(item).join(' · ') || '—'), LAB.el('br'), 'Get: ' + (get.map(item).join(' · ') || '—')));
-    // market guidance: what picks the keepers you're sending have fetched here
+      'Send: ' + (give.map(a => item(a, true)).join(' · ') || '—'), LAB.el('br'),
+      'Get: ' + (get.map(a => item(a, false)).join(' · ') || '—')));
+    // market guidance: what picks keepers with THIS much surplus have fetched
+    // here — the number to quote at the other manager
     if (lens === 'keeper') {
       for (const a of give) {
         if (a.kind !== 'player') continue;
         const p = byId[a.id];
-        if (!E.eligible(p) || (E.surplusSlots(p, basis) ?? 0) <= 0) continue;
-        const evts = E.soldFor(E.costRd(p));
+        const s = E.surplusSlots(p, basis);
+        if (!E.eligible(p) || s == null) continue;
+        const evts = E.surpMatches(s).slice(0, 4);
         if (evts.length) {
           card.append(LAB.el('p', { style: 'font-size:11.5px;margin-top:6px;color:var(--warn)' },
-            `⚖ Market: keepers costing ~R${E.costRd(p)} (like ${p.name}) have fetched `,
-            evts.slice(0, 4).map(e => `R${e.paid.join('+R')} (${e.name}, '${String(e.season).slice(2)})`).join(' · '),
+            `⚖ Market: ${p.name} carries ${fmtS(s)} surplus — the closest keepers ever traded here went for `,
+            evts.map(e => `R${e.paid.join('+R')} (${e.name} ${fmtS(e.surp)}, '${String(e.season).slice(2)})`).join(' · '),
             ` — ask in that range.`));
-        } else {
-          card.append(LAB.el('p', { class: 'muted', style: 'font-size:11.5px;margin-top:6px' },
-            `No league precedent yet for a keeper costing ~R${E.costRd(p)}.`));
         }
       }
     }
@@ -390,6 +384,17 @@
       }
     }
     s += roundHit;
+    // strongest signal: this trade moved a keeper with surplus close to a
+    // keeper in the proposal — those are the comps worth quoting
+    const sentSurps = [...give, ...get].filter(a => a.kind === 'player')
+      .map(a => E.surplusSlots(byId[a.id], basis)).filter(x => x != null);
+    if (sentSurps.length && t.ts) {
+      for (const e of (TR.market || [])) {
+        if (e.ts !== t.ts || e.surp == null) continue;
+        const d = Math.min(...sentSurps.map(x => Math.abs(e.surp - x)));
+        s += d <= 5 ? 5 : d <= 10 ? 4 : d <= 20 ? 2.5 : d <= 30 ? 1 : 0;
+      }
+    }
     const tPicks = t.sides.some(x => x.picks.length);
     if (propRounds.length) s += tPicks ? 1 : -1;
     return s;
