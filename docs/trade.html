@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Draft Map — The Lab</title>
+<title>Trade Lab — The Lab</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/lab.css?v=25">
@@ -12,13 +12,13 @@
 <body>
 <div class="page">
   <div class="flex" style="justify-content:space-between;flex-wrap:wrap;gap:10px">
-    <h1>Draft Map</h1>
+    <h1>Trade Lab</h1>
     <div class="seg" id="leagueTabs"></div>
   </div>
-  <p class="dim" style="max-width:680px">Who will actually be there when you pick. Placed keepers are locked into their real board slots, undeclared keepers are predicted (top-3 by surplus), and every other pick is simulated <b>500 times</b> with each manager drafting like his six-year league history — his QB/TE/DEF timing, how many he really takes, and what his keepers already cover — so every player gets a real <b>% chance of being available</b> at every pick. Your picks first, the full snake board below. Click any pick for its full odds list.</p>
+  <p class="dim" style="max-width:720px">Build a trade and see who wins — in points over replacement, on the lens that matters right now. Pre-draft, a player is worth his <b>keeper surplus</b> (his projection minus the pick round he costs) because rosters reset at the draft; in-season he's worth his rest-of-season value with a nod to next year's keep. Picks are worth <b>what's actually left on the board</b> in that round of this league's keeper draft, and every offer is checked against the league's real trade history.</p>
   <div id="root"></div>
 </div>
 <script src="js/core.js?v=25"></script>
-<script src="js/draftmap.js?v=25"></script>
+<script src="js/trade.js?v=25"></script>
 </body>
 </html>

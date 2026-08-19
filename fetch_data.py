@@ -103,6 +103,36 @@ def fetch_league(tag, lid):
     save(f"{tag}_history.json", history)
 
 
+def fetch_trades(tag, lid):
+    """Every completed trade across the league's full history, plus current
+    traded-pick ownership. Runs after fetch_league (reads the saved history
+    chain). ~18 requests per season."""
+    print(f"Trades {tag}")
+    chain = [(SEASON, lid)]
+    try:
+        hist = json.loads((RAW / f"{tag}_history.json").read_text(encoding="utf-8"))
+    except OSError:
+        hist = []
+    for h in hist:
+        chain.append((h["season"], h["league"]["league_id"]))
+    keep = ("type", "status", "roster_ids", "adds", "drops", "draft_picks", "created")
+    seasons = {}
+    for season, l in chain:
+        rows = []
+        for wk in range(1, 19):
+            for t in get_json(f"https://api.sleeper.app/v1/league/{l}/transactions/{wk}") or []:
+                if t.get("type") == "trade" and t.get("status") == "complete":
+                    r = {k: t.get(k) for k in keep}
+                    r["week"] = wk
+                    rows.append(r)
+        seasons[season] = rows
+        print(f"  {season}: {len(rows)} trades")
+    save(f"{tag}_trades.json", {
+        "seasons": seasons,
+        "traded_picks": get_json(f"https://api.sleeper.app/v1/league/{lid}/traded_picks") or [],
+    })
+
+
 def fetch_adp():
     print("FFC ADP (half-ppr, 10-team)")
     save("ffc_adp.json", get_json(f"https://fantasyfootballcalculator.com/api/v1/adp/half-ppr?teams=10&year={SEASON}"))
@@ -170,6 +200,7 @@ if __name__ == "__main__":
     fetch_sleeper_core()
     for tag, lid in LEAGUES.items():
         fetch_league(tag, lid)
+        fetch_trades(tag, lid)
     fetch_adp()
     fetch_borischen()
     fetch_vegas()

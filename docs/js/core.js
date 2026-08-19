@@ -433,7 +433,7 @@
   LAB.nav = function (active) {
     const links = [
       ['index.html', 'Home'], ['board.html', 'The Board'], ['draft.html', 'Draft Room'],
-      ['draftmap.html', 'Draft Map'], ['keepers.html', 'Keepers'], ['season.html', 'Season'], ['sos.html', 'SoS'],
+      ['draftmap.html', 'Draft Map'], ['trade.html', 'Trades'], ['keepers.html', 'Keepers'], ['season.html', 'Season'], ['sos.html', 'SoS'],
     ];
     const nav = el('nav', { class: 'nav' },
       el('a', { class: 'wordmark', href: 'index.html' }, el('span', { class: 'spark' }, '⚗'), ' The Lab'),

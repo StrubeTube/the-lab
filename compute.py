@@ -622,6 +622,102 @@ meta = {
                     "draftId": leagues_out[t]["draftId"]} for t in leagues_out},
 }
 
+def load_opt(name, default):
+    try:
+        return load(name)
+    except OSError:
+        return default
+
+
+def build_trades(tag):
+    """League trade history with picks resolved to the player they became,
+    per-round realized draft outcomes, and current traded-pick ownership."""
+    raw = load_opt(f"{tag}_trades.json", {"seasons": {}, "traded_picks": []})
+    cur = load(f"{tag}_league.json")
+    hist = load_opt(f"{tag}_history.json", [])
+
+    def team_names(users, rosters):
+        uname = {u["user_id"]: (u.get("metadata") or {}).get("team_name")
+                 or u.get("display_name") for u in users or []}
+        return {r["roster_id"]: uname.get(r.get("owner_id")) or f"Team {r['roster_id']}"
+                for r in rosters or []}
+
+    ctx = {str(cur.get("season")): {
+        "names": team_names(load(f"{tag}_users.json"), load(f"{tag}_rosters.json"))}}
+    for h in hist:
+        d = (h.get("drafts") or [{}])[0]
+        draft = d.get("draft") or {}
+        ctx[str(h["season"])] = {
+            "names": team_names(h.get("users"), h.get("rosters")),
+            "rid_slot": {int(v): int(k) for k, v in (draft.get("slot_to_roster_id") or {}).items()},
+            "picks": {(p["round"], p["draft_slot"]): p for p in d.get("picks") or []},
+        }
+
+    def resolve_pick(season, rnd, orig_rid):
+        c = ctx.get(str(season))
+        if not c or "picks" not in c:
+            return None  # future draft (or missing history)
+        slot = c["rid_slot"].get(orig_rid)
+        p = c["picks"].get((rnd, slot)) if slot else None
+        if not p:
+            return None
+        md = p.get("metadata") or {}
+        return {"name": f"{md.get('first_name', '')} {md.get('last_name', '')}".strip(),
+                "pos": md.get("position"), "keeper": bool(p.get("is_keeper"))}
+
+    trades = []
+    for season, rows in (raw.get("seasons") or {}).items():
+        names = (ctx.get(str(season)) or {}).get("names") or {}
+        for t in rows:
+            sides = {rid: {"team": names.get(rid, f"Team {rid}"), "players": [], "picks": []}
+                     for rid in t.get("roster_ids") or []}
+            for pid, rid in (t.get("adds") or {}).items():
+                pl = players_db.get(pid) or {}
+                if rid in sides:
+                    sides[rid]["players"].append({
+                        "id": pid,
+                        "name": pl.get("full_name")
+                        or f"{pl.get('first_name', '')} {pl.get('last_name', '')}".strip() or pid,
+                        "pos": pl.get("position") or "?"})
+            for dp in t.get("draft_picks") or []:
+                rid = dp.get("owner_id")
+                if rid in sides:
+                    sides[rid]["picks"].append({
+                        "season": dp.get("season"), "round": dp.get("round"),
+                        "orig": names.get(dp.get("roster_id"), f"Team {dp.get('roster_id')}"),
+                        "became": resolve_pick(dp.get("season"), dp.get("round"), dp.get("roster_id"))})
+            trades.append({"season": season, "week": t.get("week"),
+                           "ts": t.get("created"), "sides": list(sides.values())})
+    trades.sort(key=lambda x: -(x["ts"] or 0))
+
+    # what each round has actually turned into, season by season (drafted
+    # players only — keeper slots are excluded on the front-end when needed)
+    round_hist = {}
+    for h in hist:
+        for (rnd, _slot), p in ctx[str(h["season"])]["picks"].items():
+            md = p.get("metadata") or {}
+            round_hist.setdefault(str(rnd), []).append({
+                "season": h["season"],
+                "name": f"{md.get('first_name', '')} {md.get('last_name', '')}".strip(),
+                "pos": md.get("position"), "keeper": bool(p.get("is_keeper"))})
+    for v in round_hist.values():
+        v.sort(key=lambda x: -int(x["season"]))
+
+    cur_names = ctx[str(cur.get("season"))]["names"]
+    traded_picks = [{"season": d.get("season"), "round": d.get("round"),
+                     "origRid": d.get("roster_id"), "ownerRid": d.get("owner_id"),
+                     "orig": cur_names.get(d.get("roster_id")),
+                     "owner": cur_names.get(d.get("owner_id"))}
+                    for d in raw.get("traded_picks") or []]
+    n_res = sum(1 for t in trades for s in t["sides"] for pk in s["picks"] if pk["became"])
+    print(f"  {tag}: {len(trades)} trades ({n_res} traded picks resolved), "
+          f"{len(traded_picks)} picks currently traded")
+    return {"trades": trades, "roundHist": round_hist, "tradedPicks": traded_picks}
+
+
+print("Building trade history...")
+trades_out = {t: build_trades(t) for t in ("ggg", "lob")}
+
 print("Writing outputs...")
 dump("meta.json", meta)
 dump("players.json", players_out)
@@ -629,4 +725,5 @@ dump("leagues.json", leagues_out)
 dump("intel.json", intel_out)
 dump("sos.json", sos)
 dump("lookup.json", lookup)
+dump("trades.json", trades_out)
 print("Done.")
