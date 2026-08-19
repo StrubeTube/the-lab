@@ -119,13 +119,13 @@
         const rid = (dd.slotToRoster || {})[String(slotOfPick(pick))];
         if (!includeMe && rid === myRid) return;
         const cnt = cnts[rid] || { QB: 0, TE: 0, DEF: 0 };
-        const defWindow = r >= DEF_FROM_ROUND || pick === lastOpen[rid];
+        // DEF goes in R16, full stop — earlier only when keepers ate the 16th
         const forceDef = cnt.DEF < 1 && (r === ROUNDS || pick === lastOpen[rid]);
         const list = includeMe && rid === myRid ? myOrder : adpOrder;
         const p = list.find(x => {
           if (taken.has(x.id)) return false;
           if (forceDef) return x.pos === 'DEF';
-          if (x.pos === 'DEF') return defWindow && cnt.DEF < POS_CAP.DEF;
+          if (x.pos === 'DEF') return false; // never voluntarily early
           if (x.pos in POS_CAP && cnt[x.pos] >= POS_CAP[x.pos]) return false;
           return true;
         });
@@ -224,20 +224,38 @@
       } else {
         const k = sim.openIdx[pick];
         const heroPid = sim.expected[pick];
-        if (heroPid) col.append(probChip(byId[heroPid], sim.probAvail(heroPid, k), true));
         const heroPos = byId[heroPid]?.pos;
-        const cands = sim.adpOrder
-          .filter(p => p.id !== heroPid
-            && !heroTaken.has(p.id) // already projected as one of my earlier picks
-            && (sim.othersIdx[p.id] == null ? (oRanks[p.id] ?? 9e3) < 300 : sim.othersIdx[p.id] <= k + 22)
-            && !(p.pos === 'QB' && (myFilled.QB >= 1 || heroPos === 'QB'))
-            && !(p.pos === 'TE' && (myFilled.TE >= 1 || heroPos === 'TE'))
-            && !(p.pos === 'DEF' && r < DEF_FROM_ROUND))
+        const isMyDefPick = heroPos === 'DEF';
+        // every legal candidate at this pick, in MY board order (hero included)
+        const legalList = sim.adpOrder
+          .filter(p => !heroTaken.has(p.id)
+            && (p.id === heroPid
+              || (sim.othersIdx[p.id] == null ? (oRanks[p.id] ?? 9e3) < 300 : sim.othersIdx[p.id] <= k + 22))
+            && !(p.pos === 'QB' && myFilled.QB >= 1)
+            && !(p.pos === 'TE' && myFilled.TE >= 1)
+            && (p.pos === 'DEF') === isMyDefPick) // DEFs only on my DEF pick
           .map(p => ({ p, prob: sim.probAvail(p.id, k) }))
-          .filter(x => x.prob >= 0.08)
-          .sort((a, b) => (oRanks[a.p.id] ?? 9e3) - (oRanks[b.p.id] ?? 9e3))
-          .slice(0, 7);
-        cands.forEach(x => col.append(probChip(x.p, x.prob)));
+          .filter(x => x.prob >= 0.08 || x.p.id === heroPid)
+          .sort((a, b) => (oRanks[a.p.id] ?? 9e3) - (oRanks[b.p.id] ?? 9e3));
+        // selection zone: everyone you rank above your best SAFE option (>=85%
+        // to be there) with a real shot (>=15%) — that's the set you'll
+        // actually be choosing from; players ranked below the safe anchor are
+        // dominated by him
+        const anchorIdx = legalList.findIndex(x => x.prob >= 0.85);
+        const cut = anchorIdx < 0 ? legalList.length : anchorIdx + 1;
+        const zone = legalList.slice(0, cut).filter(x => x.prob >= 0.15 || x.p.id === heroPid).slice(0, 7);
+        const zoneIds = new Set(zone.map(x => x.p.id));
+        const depth = legalList.filter(x => !zoneIds.has(x.p.id) && x.prob >= 0.5).slice(0, Math.max(0, 8 - zone.length));
+        const zoneBox = LAB.el('div', {
+          style: 'border:1.5px solid var(--accent);border-radius:9px;padding:3px 5px 5px;margin-top:4px',
+          title: 'the players this pick will realistically come down to',
+        }, LAB.el('div', { style: 'font-size:9.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--accent)' }, '⌖ likely picking from'));
+        zone.forEach(x => zoneBox.append(probChip(x.p, x.prob, x.p.id === heroPid)));
+        col.append(zoneBox);
+        if (depth.length) {
+          col.append(LAB.el('div', { class: 'muted', style: 'font-size:9.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin-top:5px' }, 'depth if it breaks weird'));
+          depth.forEach(x => col.append(probChip(x.p, x.prob)));
+        }
         if (heroPos && heroPos in myFilled) myFilled[heroPos]++;
         if (heroPid) heroTaken.add(heroPid);
       }
@@ -246,12 +264,12 @@
     planner.append(cols);
     root.append(planner);
 
-    // ---------- full snake board ----------
+    // ---------- full snake board + my projected team ----------
     const boardCard = LAB.el('div', { class: 'card', style: 'margin-top:14px' },
       LAB.el('h2', {}, 'Projected snake board'),
       LAB.el('p', { class: 'muted', style: 'font-size:12px;margin:4px 0 8px' },
-        'Solid amber = keeper locked on the real board · dashed = predicted keeper · everything else = most-likely pick given ADP + positional need (1 QB / 1 TE each, DEF in R15-16). Your column runs off your board. Click any open cell for odds.'));
-    const wrap = LAB.el('div', { style: 'overflow-x:auto' });
+        'Solid amber = keeper locked on the real board · dashed = predicted keeper · everything else = most-likely pick given ADP + positional need (1 QB / 1 TE each, DEF in R16 unless keepers ate it). Your column runs off your board; your resulting team is on the right. Click any open cell for odds.'));
+    const wrap = LAB.el('div', { style: 'overflow-x:auto;flex:1;min-width:0' });
     const grid = LAB.el('div', { style: `display:grid;grid-template-columns:34px repeat(${sim.N},minmax(108px,1fr));gap:3px;min-width:${34 + sim.N * 112}px` });
     grid.append(LAB.el('div', {}));
     const nameOfSlot = {};
@@ -283,7 +301,33 @@
       }
     }
     wrap.append(grid);
-    boardCard.append(wrap);
+
+    // my full projected team, round by round
+    const teamPanel = LAB.el('div', { style: 'flex:none;width:224px' },
+      LAB.el('div', { style: 'font-family:var(--font-display);font-weight:700;font-size:14px;text-transform:uppercase;letter-spacing:.05em;color:var(--accent);padding:3px 0 5px' }, 'Your projected team'));
+    const tally = { QB: 0, RB: 0, WR: 0, TE: 0, DEF: 0 };
+    for (let r = 1; r <= sim.ROUNDS; r++) {
+      const pick = sim.pickNum(r, sim.mySlot);
+      const cell = sim.cells[pick];
+      const pid = cell ? cell.pid : sim.expected[pick];
+      const p = byId[pid];
+      if (p && p.pos in tally) tally[p.pos]++;
+      teamPanel.append(LAB.el('div', {
+        class: 'flex', style: 'gap:6px;padding:3px 6px;border-radius:7px;margin-top:3px;font-size:12px;' +
+          (cell ? 'background:rgba(245,197,66,.10);border:1px solid var(--warn)' : 'background:var(--surface);border:1px solid var(--border)'),
+        title: p ? `R${r} (#${pick}) — ${p.name}` + (cell ? (cell.official ? ' · your keeper' : ' · predicted keeper') : ' · projected pick') : '',
+        onclick: p ? () => LAB.playerCard(p.id) : null,
+      },
+        LAB.el('span', { class: 'mono muted', style: 'width:24px;flex:none' }, 'R' + r),
+        p ? LAB.headshot(p.id, 'sm') : '',
+        LAB.el('span', { style: 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600;flex:1' }, p ? p.name : '—'),
+        p ? LAB.posBadge(p.pos) : '',
+        cell ? LAB.el('span', { class: 'badge keeper', style: 'font-size:9px' }, 'K') : ''));
+    }
+    teamPanel.append(LAB.el('div', { class: 'muted mono', style: 'font-size:11px;margin-top:7px;text-align:center' },
+      Object.entries(tally).filter(([, n]) => n).map(([pos, n]) => `${n} ${pos}`).join(' · ')));
+
+    boardCard.append(LAB.el('div', { style: 'display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap' }, wrap, teamPanel));
     root.append(boardCard);
   }
 
