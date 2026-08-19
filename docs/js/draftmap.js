@@ -324,6 +324,8 @@
     }
     for (const [pos, list] of Object.entries(byPos)) {
       if (!list.length) continue;
+      const pr = LAB.posRanks(board, pos); // order by MY positional rank, not draft round
+      list.sort((a, b) => (pr[a.p.id] ?? 999) - (pr[b.p.id] ?? 999) || a.r - b.r);
       teamCard.append(LAB.el('div', {
         class: 'flex', style: `margin:8px 0 2px;font-family:var(--font-display);font-weight:700;font-size:12.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--${pos.toLowerCase()})`,
       }, pos, LAB.el('span', { class: 'muted', style: 'font-family:var(--font-body);font-weight:400;text-transform:none;font-size:11px' }, `× ${list.length}`)));
@@ -337,6 +339,7 @@
           LAB.el('span', { class: 'mono muted', style: 'width:24px;flex:none' }, 'R' + r),
           LAB.headshot(p.id, 'sm'),
           LAB.el('span', { style: 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600;flex:1' }, p.name),
+          pr[p.id] ? LAB.el('span', { class: 'mono muted', style: 'font-size:10.5px;flex:none', title: 'your positional rank' }, pos + pr[p.id]) : '',
           cell ? LAB.el('span', { class: 'badge keeper', style: 'font-size:9px' }, 'K') : ''));
       }
     }
