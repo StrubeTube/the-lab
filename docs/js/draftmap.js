@@ -305,6 +305,11 @@
     const cols = LAB.el('div', { style: 'display:flex;gap:10px;overflow-x:auto;padding-bottom:6px' });
     const myFilled = { QB: 0, TE: 0, DEF: 0 }; // my keepers count toward my caps
     const heroTaken = new Set(); // my projected picks so far, excluded from later lists
+    const myOpenSet = new Set(); // my own open picks (don't count against dominance)
+    for (let r = 1; r <= sim.ROUNDS; r++) {
+      const p = sim.pickNum(r, sim.mySlot);
+      if (!sim.cells[p]) myOpenSet.add(p);
+    }
     const { keeps } = LAB.predictKeepers(L, byId, oRanks);
     for (const k of keeps) {
       const p = byId[k.pid];
@@ -329,29 +334,43 @@
         const heroPid = sim.expected[pick];
         const heroPos = byId[heroPid]?.pos;
         const isMyDefPick = heroPos === 'DEF';
+        // DOMINANCE: only (other teams' open picks before mine) players can
+        // leave the pool before I'm on the clock, so someone in my top-D
+        // legal candidates is GUARANTEED to be there — I will never be
+        // picking below that line. In R1 that's a hard 4-5 player set.
+        const othersBefore = sim.openPicks.filter(pk => pk < pick && !myOpenSet.has(pk)).length;
+        const D = othersBefore + 1;
         // every legal candidate at this pick, in MY board order (hero included)
-        const legalList = sim.adpOrder
+        const legalAll = sim.adpOrder
           .filter(p => !heroTaken.has(p.id)
-            && (p.id === heroPid
-              || (sim.roomPick[p.id] == null ? (oRanks[p.id] ?? 9e3) < 300 : sim.roomPick[p.id] <= pick + 24))
             && !(p.pos === 'QB' && myFilled.QB >= 1)
             && !(p.pos === 'TE' && myFilled.TE >= 1)
             && (p.pos === 'DEF') === isMyDefPick) // DEFs only on my DEF pick
-          .map(p => ({ p, prob: sim.probAvail(p.id, pick) }))
-          .filter(x => x.prob >= 0.08 || x.p.id === heroPid)
-          .sort((a, b) => (oRanks[a.p.id] ?? 9e3) - (oRanks[b.p.id] ?? 9e3));
-        // selection zone: everyone you rank above your best SAFE option (>=85%
-        // to be there) with a real shot (>=15%) — that's the set you'll
-        // actually be choosing from; players ranked below the safe anchor are
-        // dominated by him
-        const anchorIdx = legalList.findIndex(x => x.prob >= 0.85);
-        const cut = anchorIdx < 0 ? legalList.length : anchorIdx + 1;
-        const zone = legalList.slice(0, cut).filter(x => x.prob >= 0.15 || x.p.id === heroPid).slice(0, 7);
-        const zoneIds = new Set(zone.map(x => x.p.id));
-        const depth = legalList.filter(x => !zoneIds.has(x.p.id) && x.prob >= 0.5).slice(0, Math.max(0, 8 - zone.length));
+          .sort((a, b) => (oRanks[a.id] ?? 9e3) - (oRanks[b.id] ?? 9e3));
+        const topD = legalAll.slice(0, D).map(p => ({ p, prob: sim.probAvail(p.id, pick) }));
+        let zone, depth;
+        if (D <= 8) {
+          // the guaranteed set IS the choice set — show it whole
+          zone = topD.filter(x => x.prob >= 0.03 || x.p.id === heroPid).slice(0, 7);
+          depth = [];
+        } else {
+          // deeper rounds: within the top-D, everyone above your best SAFE
+          // option (>=85% to be there) with a real shot (>=15%)
+          const legalList = topD
+            .filter(x => x.p.id === heroPid
+              || (sim.roomPick[x.p.id] == null ? (oRanks[x.p.id] ?? 9e3) < 300 : sim.roomPick[x.p.id] <= pick + 24))
+            .filter(x => x.prob >= 0.08 || x.p.id === heroPid);
+          const anchorIdx = legalList.findIndex(x => x.prob >= 0.85);
+          const cut = anchorIdx < 0 ? legalList.length : anchorIdx + 1;
+          zone = legalList.slice(0, cut).filter(x => x.prob >= 0.15 || x.p.id === heroPid).slice(0, 7);
+          const zoneIds = new Set(zone.map(x => x.p.id));
+          depth = legalList.filter(x => !zoneIds.has(x.p.id) && x.prob >= 0.5).slice(0, Math.max(0, 8 - zone.length));
+        }
         const zoneBox = LAB.el('div', {
           style: 'border:1.5px solid var(--accent);border-radius:9px;padding:3px 5px 5px;margin-top:4px',
-          title: 'the players this pick will realistically come down to',
+          title: D <= 8
+            ? `only ${othersBefore} pick${othersBefore === 1 ? '' : 's'} happen before this one — your pick is guaranteed to come from these ${zone.length} players`
+            : 'the players this pick will realistically come down to',
         }, LAB.el('div', { style: 'font-size:9.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--accent)' }, '⌖ likely picking from'));
         zone.forEach(x => zoneBox.append(probChip(x.p, x.prob, x.p.id === heroPid)));
         col.append(zoneBox);
