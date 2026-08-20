@@ -12,7 +12,7 @@
    is the deterministic (most-likely) walk of the same model. */
 (async function () {
   LAB.nav('Draft Map');
-  const { players, leagues, intel } = await LAB.loadData(['players', 'leagues', 'intel']);
+  const { players, leagues, intel, trades } = await LAB.loadData(['players', 'leagues', 'intel', 'trades']);
   const byId = LAB.playersById(players);
   const board = LAB.getBoardOrSeed(players);
   const oRanks = LAB.overallRanks(board);
@@ -70,20 +70,34 @@
       return r % 2 === 1 ? within : N + 1 - within;
     };
 
-    // keepers onto the board
+    // TRADED PICKS: a pick belongs to whoever OWNS it now, not the slot's
+    // team — the owner's tendencies/needs decide the player, and the player
+    // lands on the owner's team
+    const ownerOfPick = {}; // pick number -> acquiring rid (only where traded)
+    for (const t of ((trades[tag] || {}).tradedPicks || [])) {
+      if (String(t.season) !== String(L.season)) continue;
+      const slot = slotOfRoster[t.origRid];
+      if (slot != null && t.ownerRid !== t.origRid) ownerOfPick[pickNum(t.round, slot)] = t.ownerRid;
+    }
+    const ridOfPick = pick => ownerOfPick[pick] ?? (dd.slotToRoster || {})[String(slotOfPick(pick))];
+
+    // keepers onto the board — a predicted keeper can only occupy a pick his
+    // team still OWNS (traded-away rounds spill past)
     const cells = {}; // pick -> {pid, official}
     for (const k of keeps) {
       let pick = officialPick[k.pid];
       if (pick == null) {
-        const slot = slotOfRoster[rosterOfPid[k.pid]];
+        const rid = rosterOfPid[k.pid];
+        const slot = slotOfRoster[rid];
         if (slot == null) continue;
+        const blocked = p => cells[p] || ridOfPick(p) !== rid;
         let r = Math.min(k.costRd, ROUNDS);
         pick = pickNum(r, slot);
-        while (cells[pick] && r < ROUNDS) { r++; pick = pickNum(r, slot); }
-        if (cells[pick]) { // no later round free — collision spills EARLIER
+        while (blocked(pick) && r < ROUNDS) { r++; pick = pickNum(r, slot); }
+        if (blocked(pick)) { // no later round free — collision spills EARLIER
           r = Math.min(k.costRd, ROUNDS) - 1;
           pick = pickNum(r, slot);
-          while (cells[pick] && r > 1) { r--; pick = pickNum(r, slot); }
+          while (blocked(pick) && r > 1) { r--; pick = pickNum(r, slot); }
         }
       }
       if (!cells[pick]) cells[pick] = { pid: k.pid, official: officialPick[k.pid] != null };
@@ -150,10 +164,10 @@
       if (r <= 8 && cnt[pos] >= 3) return 0.35;
       return 1;
     }
-    // each roster's last OPEN pick — a DEF-less team must grab one there even
-    // if keepers ate its R15/R16 picks
+    // each roster's last OPEN pick (ownership-aware) — a DEF-less team must
+    // grab one there even if keepers/trades ate its late picks
     const lastOpen = {};
-    for (const pick of openPicks) lastOpen[(dd.slotToRoster || {})[String(slotOfPick(pick))]] = pick;
+    for (const pick of openPicks) lastOpen[ridOfPick(pick)] = pick;
 
     // draft order lists: everyone by ADP, me by MY board
     const sortAdp = p => p.adp ?? 500 - (p.proj || 0) / 1000;
@@ -171,7 +185,7 @@
       const taken = new Set(), exp = {}, takenAt = {};
       for (const pick of openPicks) {
         const r = Math.ceil(pick / N);
-        const rid = (dd.slotToRoster || {})[String(slotOfPick(pick))];
+        const rid = ridOfPick(pick);
         const cnt = cnts[rid] || { QB: 0, RB: 0, WR: 0, TE: 0, DEF: 0 };
         let p = null;
         if (rid === myRid) {
@@ -255,7 +269,14 @@
     };
     const expected = runDraft(true, null).exp; // display board incl. my board-driven picks
     const mySlot = dd.draftOrder[L.myUserId];
-    return { ROUNDS, N, cells, openPicks, adpOrder, roomPick, expected, probAvail, pickNum, mySlot, myRid, dd, keptSet, priors };
+    // every pick that is MINE: open picks I own (incl. acquired via trade,
+    // excl. ones I traded away) + cells holding MY keepers
+    const myPicks = [];
+    for (let p = 1; p <= ROUNDS * N; p++) {
+      const c = cells[p];
+      if (c ? rosterOfPid[c.pid] === myRid : ridOfPick(p) === myRid) myPicks.push(p);
+    }
+    return { ROUNDS, N, cells, openPicks, adpOrder, roomPick, expected, probAvail, pickNum, slotOfPick, mySlot, myRid, myPicks, ownerOfPick, ridOfPick, dd, keptSet, priors };
   }
 
   function probChip(p, prob, hero) {
@@ -312,25 +333,25 @@
     const cols = LAB.el('div', { style: 'display:flex;gap:10px;overflow-x:auto;padding-bottom:6px' });
     const myFilled = { QB: 0, TE: 0, DEF: 0 }; // my keepers count toward my caps
     const heroTaken = new Set(); // my projected picks so far, excluded from later lists
-    const myOpenSet = new Set(); // my own open picks (don't count against dominance)
-    for (let r = 1; r <= sim.ROUNDS; r++) {
-      const p = sim.pickNum(r, sim.mySlot);
-      if (!sim.cells[p]) myOpenSet.add(p);
-    }
+    const myOpenSet = new Set(sim.myPicks.filter(p => !sim.cells[p])); // my open picks (don't count against dominance)
+    const ridName = {};
+    L.rosters.forEach(rr => (ridName[rr.rid] = L.users[rr.owner]?.name || 'Team ' + rr.rid));
     const { keeps } = LAB.predictKeepers(L, byId, oRanks);
     for (const k of keeps) {
       const p = byId[k.pid];
       if (p && (L.rosters.find(r => r.rid === sim.myRid)?.players || []).includes(k.pid) && p.pos in myFilled) myFilled[p.pos]++;
     }
-    for (let r = 1; r <= sim.ROUNDS; r++) {
-      const pick = sim.pickNum(r, sim.mySlot);
+    for (const pick of sim.myPicks) {
+      const r = Math.ceil(pick / sim.N);
       const cell = sim.cells[pick];
+      const acquired = sim.slotOfPick(pick) !== sim.mySlot;
       const col = LAB.el('div', { style: 'flex:none;width:216px' });
       col.append(LAB.el('div', {
         class: 'tier-head', style: 'cursor:' + (cell ? 'default' : 'pointer'),
-        title: cell ? 'this pick is consumed by your keeper' : 'click for the full odds list',
+        title: (cell ? 'this pick is consumed by your keeper' : 'click for the full odds list')
+          + (acquired ? ` — acquired via trade (originally ${ridName[(sim.dd.slotToRoster || {})[String(sim.slotOfPick(pick))]] || '?'}'s slot)` : ''),
         onclick: cell ? null : () => pickDetail(sim, pick),
-      }, `R${r}`, LAB.el('span', { class: 'count' }, '#' + pick)));
+      }, `R${r}` + (acquired ? ' ⇄' : ''), LAB.el('span', { class: 'count' }, '#' + pick)));
       if (cell) {
         const kp = byId[cell.pid];
         col.append(LAB.el('div', { class: 'flex', style: 'gap:7px;padding:6px;border:1px dashed var(--warn);border-radius:7px;margin-top:4px;font-size:12.5px' },
@@ -419,18 +440,20 @@
         const cell = sim.cells[pick];
         const pid = cell ? cell.pid : sim.expected[pick];
         const p = byId[pid];
-        const mineCol = s === sim.mySlot;
+        const owner = !cell && sim.ownerOfPick[pick] != null ? sim.ownerOfPick[pick] : null;
+        const mineCell = owner != null ? owner === sim.myRid : s === sim.mySlot;
         const base = 'padding:4px 6px;border-radius:6px;font-size:11.5px;min-height:34px;display:flex;flex-direction:column;justify-content:center;overflow:hidden;';
         const style = cell
           ? base + (cell.official ? 'background:rgba(245,197,66,.13);border:1px solid var(--warn);' : 'background:rgba(245,197,66,.06);border:1px dashed var(--warn);')
-          : base + `background:var(--surface);border:1px solid ${mineCol ? 'var(--accent)' : 'var(--border)'};cursor:pointer;`;
+          : base + `background:var(--surface);border:1px solid ${mineCell ? 'var(--accent)' : 'var(--border)'};cursor:pointer;`;
         grid.append(LAB.el('div', {
           style,
-          title: p ? `${r}.${String(pick - (r - 1) * sim.N).padStart(2, '0')} — ${p.name}` + (cell ? (cell.official ? ' (keeper, locked)' : ' (predicted keeper)') : ' (most likely; click for odds)') : '',
+          title: p ? `${r}.${String(pick - (r - 1) * sim.N).padStart(2, '0')} — ${p.name}` + (cell ? (cell.official ? ' (keeper, locked)' : ' (predicted keeper)') : ' (most likely; click for odds)')
+            + (owner != null ? ` — PICK TRADED: ${ridName[owner]} drafts here` : '') : '',
           onclick: cell ? () => LAB.playerCard(pid) : () => pickDetail(sim, pick),
         },
           LAB.el('span', { style: 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600;color:var(--' + ({ QB: 'qb', RB: 'rb', WR: 'wr', TE: 'te', DEF: 'def' }[p?.pos] || 'ink') + ')' }, p ? p.name : '—'),
-          LAB.el('span', { class: 'mono', style: 'font-size:9.5px;color:var(--ink-3)' }, `${r}.${String(pick - (r - 1) * sim.N).padStart(2, '0')}` + (cell ? (cell.official ? ' · KEPT' : ' · proj') : ''))));
+          LAB.el('span', { class: 'mono', style: 'font-size:9.5px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis' }, `${r}.${String(pick - (r - 1) * sim.N).padStart(2, '0')}` + (cell ? (cell.official ? ' · KEPT' : ' · proj') : '') + (owner != null ? ` ⇄ ${ridName[owner]}` : ''))));
       }
     }
     wrap.append(grid);
@@ -441,8 +464,8 @@
     const teamCard = LAB.el('div', { class: 'card', style: 'margin-top:14px;position:sticky;top:10px' },
       LAB.el('h2', {}, 'Your projected team'));
     const byPos = { QB: [], RB: [], WR: [], TE: [], DEF: [] };
-    for (let r = 1; r <= sim.ROUNDS; r++) {
-      const pick = sim.pickNum(r, sim.mySlot);
+    for (const pick of sim.myPicks) {
+      const r = Math.ceil(pick / sim.N);
       const cell = sim.cells[pick];
       const pid = cell ? cell.pid : sim.expected[pick];
       const p = byId[pid];
