@@ -829,7 +829,15 @@
   // ---------- render ----------
   const root = LAB.$('#boardRoot');
   let kSim = null; // keeper-draft simulation for the overlay league
+  let lastViewSig = null;
   function render() {
+    // rebuilding wipes the page height for a moment, which would clamp the
+    // window scroll to the top — hold the position and restore it after,
+    // but only when re-rendering the SAME tab+view (i.e. after an edit);
+    // actual tab/view switches still start from the top
+    const sig = state.view + ':' + state.tab + ':' + (state.dynW > 0) + ':' + state.overlay;
+    const scrollY = sig === lastViewSig ? window.scrollY : 0;
+    lastViewSig = sig;
     root.innerHTML = '';
     const ovl = overlayInfo();
     kSim = ovl ? LAB.keeperSim(players, leagues[ovl.tag], board) : null;
@@ -837,11 +845,12 @@
     LAB.$('#addTierBtn').style.display =
       (state.tab === 'OVR' || state.view !== 'list' || dynActive) ? 'none' : '';
     LAB.$('#dynWrap').style.display = state.view === 'list' ? '' : 'none';
-    if (state.view === 'compare') return renderCompare(root);
-    if (state.view === 'grid') return renderGrid(root, ovl);
-    if (dynActive) return renderDynasty(root, ovl);
-    if (state.tab === 'OVR') renderOverall(root, ovl);
+    if (state.view === 'compare') renderCompare(root);
+    else if (state.view === 'grid') renderGrid(root, ovl);
+    else if (dynActive) renderDynasty(root, ovl);
+    else if (state.tab === 'OVR') renderOverall(root, ovl);
     else renderPosition(root, state.tab, ovl);
+    window.scrollTo(0, scrollY);
   }
   render();
 })();
