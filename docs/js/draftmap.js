@@ -121,9 +121,12 @@
       };
     });
 
-    // how attractive a position is to THIS manager at THIS round, given what
-    // he already holds — 0 means he won't take it here
-    function posWeight(pos, cnt, pr, r) {
+    // how attractive a player is to THIS manager at THIS pick, given what he
+    // already holds — 0 means he won't take him here. History drives the
+    // windows, but they're never absolute: managers deviate, and elite
+    // fallers get stolen (no player should ever be a flat 100% safe).
+    function posWeight(x, cnt, pr, r, pick) {
+      const pos = x.pos;
       if (pos === 'DEF') {
         if (cnt.DEF >= pr.cap.DEF) return 0;
         if (cnt.DEF >= 1) return r >= 15 ? 0.4 : 0;  // a second DEF: dead-late only
@@ -132,10 +135,14 @@
       }
       if (pos === 'QB' || pos === 'TE') {
         const first = pos === 'QB' ? pr.qbRd : pr.teRd;
-        if (cnt[pos] >= pr.cap[pos]) return 0;
-        if (cnt[pos] >= 1) return r >= 13 ? 0.3 : 0; // backups: dead-late only
-        if (r < first - 2) return 0;                 // won't reach that early
-        if (r < first - 0.5) return 0.45;            // window approaching
+        const fall = x.adp != null ? pick - x.adp : -99; // how far past ADP he's slid
+        if (cnt[pos] >= pr.cap[pos]) {
+          // even a set team steals a mega-faller (2 QBs is a real roster)
+          return fall >= 30 && cnt[pos] < 2 ? 0.25 : 0;
+        }
+        if (cnt[pos] >= 1) return r >= 13 ? 0.3 : fall >= 30 ? 0.25 : 0; // backups: dead-late or mega-value
+        if (r < first - 2) return fall >= 18 ? 0.5 : 0.05; // early strike is rare, not impossible
+        if (r < first - 0.5) return Math.max(0.45, fall >= 18 ? 0.9 : 0);
         return 3;                                    // his historical window
       }
       // RB/WR: soft roster need — keepers that already fill the RB (or WR)
@@ -180,7 +187,7 @@
           for (const x of adpOrder) {
             if (taken.has(x.id)) continue;
             if (forceDef) { if (x.pos !== 'DEF') continue; cands.push({ x, w: 1 }); break; }
-            const w = posWeight(x.pos, cnt, pr, r);
+            const w = posWeight(x, cnt, pr, r, pick);
             if (w > 0) cands.push({ x, w: w * Math.pow(DECAY, cands.length) });
             if (cands.length >= 12) break;
           }
