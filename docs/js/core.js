@@ -156,6 +156,27 @@
     return board;
   };
 
+  // reset that KEEPS your tier structure: same tiers (ids, count, sizes) and
+  // the same overall arrangement — only the players re-sort by analyst
+  // consensus and reflow through the tiers in order
+  LAB.reflowBoard = function (board, players) {
+    const byId = LAB.playersById(players);
+    const key = p => p.cr != null ? p.cr : 200 + (p.adp ?? (500 - (p.proj || 0)));
+    for (const pos of LAB.POS) {
+      const tiers = board.pos[pos]?.tiers || [];
+      const pool = [];
+      tiers.forEach(t => t.players.forEach(id => pool.push(id)));
+      pool.sort((a, b) => key(byId[a] || {}) - key(byId[b] || {}));
+      let i = 0;
+      for (const t of tiers) {
+        const n = t.players.length;
+        t.players = pool.slice(i, i + n);
+        i += n;
+      }
+    }
+    return board;
+  };
+
   // reconcile a stored board with today's player pool
   LAB.reconcileBoard = function (board, players) {
     const poolIds = new Set(players.map(p => p.id));

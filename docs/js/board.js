@@ -120,13 +120,11 @@
   LAB.$('#exportBtn').addEventListener('click', LAB.exportBoard);
   LAB.$('#importBtn').addEventListener('click', () => LAB.importBoard(() => { board = LAB.loadBoard(); LAB.reconcileBoard(board, players); render(); }));
   LAB.$('#resetBtn').addEventListener('click', () => {
-    if (!confirm('Reset the ENTIRE board (all positions + overall) back to the average of your analyst rankings, tiers included? Notes survive. This cannot be undone past the undo stack.')) return;
+    if (!confirm('Reset player order back to your analyst consensus? Your tiers stay exactly where they are (same count, same sizes, same overall arrangement) — players re-sort and reflow through them. Notes survive. This cannot be undone past the undo stack.')) return;
     snapshot();
-    const notes = board.notes || {};
-    board = LAB.seedBoard(players);
-    board.notes = notes;
+    LAB.reflowBoard(board, players);
     commit();
-    LAB.toast('Board + tiers reseeded from your analyst consensus', 'good');
+    LAB.toast('Players reflowed to analyst consensus — your tiers kept', 'good');
   });
   LAB.$('#addTierBtn').addEventListener('click', () => {
     if (state.tab === 'OVR') return LAB.toast('Add tiers on a position tab — overall arranges those tiers');
