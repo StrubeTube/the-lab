@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Trade Lab — The Lab</title>
+<title>Trade Finder — The Lab</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/lab.css?v=39">
@@ -12,13 +12,14 @@
 <body>
 <div class="page">
   <div class="flex" style="justify-content:space-between;flex-wrap:wrap;gap:10px">
-    <h1>Trade Lab</h1>
+    <h1>Trade Finder</h1>
     <div class="seg" id="leagueTabs"></div>
   </div>
-  <p class="dim" style="max-width:720px">Build a trade and see who wins, from <b>your</b> chair. Players count by what they do to <b>your keeper slate</b> — surplus you were never going to keep costs you nothing to send. Picks count by <b>draft position</b> (an R9 always beats an R16). And the <b>market lines</b> quote this league's real history: what picks keepers with this much surplus have actually fetched, with the closest comps first so you can send them straight to the other manager.</p>
+  <p class="dim" style="max-width:740px">Every proposable preseason trade, ranked by how likely it is to land. Built from your <b>spare keepers</b> and open picks (and theirs, on the buy side), priced against <b>both leagues' real trade history</b>, and scored on who's actually motivated: rosters over the pick limit, weak keeper slates, and managers who <b>really trade</b> (six years of receipts). Steer it, mark what you've sent, and let the ladder work.</p>
   <div id="root"></div>
 </div>
 <script src="js/core.js?v=39"></script>
-<script src="js/trade.js?v=39"></script>
+<script src="js/tradecore.js?v=39"></script>
+<script src="js/finder.js?v=39"></script>
 </body>
 </html>

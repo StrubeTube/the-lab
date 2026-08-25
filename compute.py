@@ -642,13 +642,18 @@ def build_trades(tag):
         return {r["roster_id"]: uname.get(r.get("owner_id")) or f"Team {r['roster_id']}"
                 for r in rosters or []}
 
+    def owner_uids(rosters):
+        return {r["roster_id"]: r.get("owner_id") for r in rosters or []}
+
     ctx = {str(cur.get("season")): {
-        "names": team_names(load(f"{tag}_users.json"), load(f"{tag}_rosters.json"))}}
+        "names": team_names(load(f"{tag}_users.json"), load(f"{tag}_rosters.json")),
+        "uids": owner_uids(load(f"{tag}_rosters.json"))}}
     for h in hist:
         d = (h.get("drafts") or [{}])[0]
         draft = d.get("draft") or {}
         ctx[str(h["season"])] = {
             "names": team_names(h.get("users"), h.get("rosters")),
+            "uids": owner_uids(h.get("rosters")),
             "rid_slot": {int(v): int(k) for k, v in (draft.get("slot_to_roster_id") or {}).items()},
             "picks": {(p["round"], p["draft_slot"]): p for p in d.get("picks") or []},
         }
@@ -690,8 +695,10 @@ def build_trades(tag):
     market = []  # preseason exchange rate: keeper cost round <-> pick rounds paid
     for season, rows in (raw.get("seasons") or {}).items():
         names = (ctx.get(str(season)) or {}).get("names") or {}
+        uids = (ctx.get(str(season)) or {}).get("uids") or {}
         for t in rows:
-            sides = {rid: {"team": names.get(rid, f"Team {rid}"), "players": [], "picks": []}
+            sides = {rid: {"team": names.get(rid, f"Team {rid}"), "uid": uids.get(rid),
+                           "players": [], "picks": []}
                      for rid in t.get("roster_ids") or []}
             for pid, rid in (t.get("adds") or {}).items():
                 pl = players_db.get(pid) or {}

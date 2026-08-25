@@ -64,7 +64,7 @@
   LAB.loadData = async function (names) {
     const need = names.filter(n => !cache[n]);
     await Promise.all(need.map(async n => {
-      const r = await fetch(`data/${n}.json`);
+      const r = await fetch(`data/${n}.json`, { cache: 'no-cache' }); // revalidate — stale data JSONs poison every page
       cache[n] = await r.json();
     }));
     const out = {};
@@ -454,7 +454,7 @@
   LAB.nav = function (active) {
     const links = [
       ['index.html', 'Home'], ['board.html', 'The Board'], ['draft.html', 'Draft Room'],
-      ['draftmap.html', 'Draft Map'], ['trade.html', 'Trades'], ['keepers.html', 'Keepers'], ['season.html', 'Season'], ['sos.html', 'SoS'],
+      ['draftmap.html', 'Draft Map'], ['trade.html', 'Trades'], ['finder.html', 'Finder'], ['keepers.html', 'Keepers'], ['season.html', 'Season'], ['sos.html', 'SoS'],
     ];
     const nav = el('nav', { class: 'nav' },
       el('a', { class: 'wordmark', href: 'index.html' }, el('span', { class: 'spark' }, '⚗'), ' The Lab'),

@@ -17,7 +17,12 @@
   const oRanks = LAB.overallRanks(board);
   const root = LAB.$('#root');
 
-  let tag = LAB.prefs.trLeague || 'ggg';
+  // a proposal handed over from the Finder page
+  let handoff = null;
+  try { handoff = JSON.parse(localStorage.getItem('thelab-handoff-v1')); } catch (e) { /* no-op */ }
+  if (handoff) localStorage.removeItem('thelab-handoff-v1');
+
+  let tag = (handoff && handoff.tag) || LAB.prefs.trLeague || 'ggg';
   const tabs = LAB.$('#leagueTabs');
   for (const t of ['ggg', 'lob']) {
     tabs.append(LAB.el('button', {
@@ -117,10 +122,14 @@
     const myRid = (L.rosters.find(r => r.owner === L.myUserId) || {}).rid;
     partnerRid = (L.rosters.find(r => r.rid !== myRid) || {}).rid;
     give = []; get = []; showAllLog = false;
-    finderExcl = new Set(); finderType = 'all'; finderShowAll = false;
+    if (handoff && handoff.tag === tag) {
+      partnerRid = handoff.partnerRid;
+      give = (handoff.give || []).map(a => ({ ...a }));
+      get = (handoff.get || []).map(a => ({ ...a }));
+      handoff = null;
+    }
     render();
   }
-  let finderExcl, finderType, finderShowAll;
   const myRoster = () => L.rosters.find(r => r.owner === L.myUserId);
   const partner = () => L.rosters.find(r => r.rid === partnerRid);
 
@@ -453,217 +462,6 @@
     return card;
   }
 
-  // ---------- TRADE FINDER ----------
-  // Generates opening proposals for the preseason: my SPARE keepers (outside
-  // my optimal slate, so they cost my slate nothing) and my open picks, aimed
-  // at the partners most likely to say yes — teams sitting on extra picks
-  // they literally can't roster, and teams whose keeper slates my spares
-  // would upgrade. Asks are a LADDER: an opening ~1 round better than the
-  // historical market rate (both leagues' history), and a fallback at market.
-  const MKT_ALL = () => [...((trades.ggg || {}).market || []), ...((trades.lob || {}).market || [])];
-  const INTEREST = () => {
-    // known buyer intel: Chris (VEROVILLIANZ) wants George Pickens
-    const vero = L.rosters.find(r => (L.users[r.owner]?.name || '').toUpperCase().startsWith('VEROVILLI'));
-    return vero ? [{ rid: vero.rid, pid: '8137', boost: 3.5, note: 'Chris is already interested in Pickens' }] : [];
-  };
-  const pv = r => Math.max(0, (16.5 - Math.min(16, +r)) * 10);
-
-  function buildProposals() {
-    const me = myRoster();
-    const rosterOfPid = {};
-    L.rosters.forEach(r => (r.players || []).forEach(pid => (rosterOfPid[pid] = r.rid)));
-    const { keeps } = LAB.predictKeepers(L, byId, oRanks);
-    const kRounds = {}; // rid -> {round: count} consumed by (official+predicted) keepers
-    let kCount = {};
-    for (const k of keeps) {
-      const rid = rosterOfPid[k.pid];
-      if (rid == null) continue;
-      const r = Math.min(16, k.costRd);
-      (kRounds[rid] = kRounds[rid] || {})[r] = (kRounds[rid][r] || 0) + 1;
-      kCount[rid] = (kCount[rid] || 0) + 1;
-    }
-    // a team's OPEN owned picks this season (keeper-consumed rounds removed;
-    // keepers on rounds the team no longer owns spill onto the latest opens)
-    function openOf(rid) {
-      const owned = ownedPicks(rid).filter(o => +o.season === +L.season);
-      const used = { ...(kRounds[rid] || {}) };
-      const open = [];
-      let spill = 0;
-      for (const o of owned.slice().sort((a, b) => a.round - b.round || (a.origRid === rid ? -1 : 1))) {
-        if (used[o.round] > 0) { used[o.round]--; continue; }
-        open.push(o);
-      }
-      for (const r in used) spill += used[r];
-      return open.slice(0, Math.max(0, open.length - spill));
-    }
-    const myOpen = openOf(me.rid);
-    const myOwnedCount = ownedPicks(me.rid).filter(o => +o.season === +L.season).length;
-    // my spare keepers: eligible, positive surplus, NOT in my optimal slate.
-    // s (display/gain) follows the active basis; sK (slot units) drives the
-    // historical market matching
-    const mySlateIds = new Set(slate(me.players).map(x => x.p.id));
-    const spares = me.players.map(pid => byId[pid])
-      .filter(p => E.eligible(p) && !mySlateIds.has(p.id) && (E.surplusSlots(p, basis) ?? 0) > 0)
-      .map(p => ({ p, s: E.surplusSlots(p, basis), sK: E.surplusSlots(p, 'keeper'), cost: E.costRd(p) }))
-      .sort((a, b) => b.s - a.s);
-    // market rate for a keeper of surplus s: median headline pick round of the
-    // closest comps across BOTH leagues (fallback: keepers fetch ~1.5 rounds
-    // earlier than they cost)
-    const rateFor = (s, cost) => {
-      const evts = MKT_ALL().filter(e => e.surp != null)
-        .map(e => ({ ...e, diff: Math.abs(e.surp - s) }))
-        .sort((a, b) => a.diff - b.diff).slice(0, 5).filter(e => e.diff <= 25);
-      if (!evts.length) return { round: Math.max(1, Math.round(cost - 1.5)), evts: [] };
-      const rounds = evts.map(e => e.paid[0]).sort((a, b) => a - b);
-      return { round: rounds[Math.floor(rounds.length / 2)], evts };
-    };
-    const props = [];
-    for (const P of L.rosters) {
-      if (P.rid === me.rid) continue;
-      const pOpen = openOf(P.rid);
-      // roster pressure: every owned pick becomes a player (keepers consume
-      // picks, they don't add) — more than 16 owned picks = must shed
-      const extra = ownedPicks(P.rid).filter(o => +o.season === +L.season).length - 16;
-      const pSlate = slate(P.players);
-      const weak3 = pSlate.length >= (L.keeperMax || 3) ? pSlate[pSlate.length - 1].s : -999;
-      const baseSum = slateSum(pSlate);
-      const chips = [];
-      if (extra > 0) chips.push(`${extra} more pick${extra > 1 ? 's' : ''} than roster spots — must shed`);
-      if (extra < 0) chips.push(`${-extra} pick${extra < -1 ? 's' : ''} short`);
-      if (weak3 < 15 && weak3 > -900) chips.push(`weak #${L.keeperMax || 3} keeper (${fmtS(weak3)})`);
-      // A: spare keeper -> their open pick (ladder ask). CRITICAL: the keeper
-      // I'm sending must be KEPT at his cost round — that consumes one of
-      // THEIR open picks (at his cost, else the next open after, else their
-      // latest open), and that pick can never be part of my ask.
-      const reserveFor = costRd => {
-        let idx = pOpen.findIndex(o => o.round === costRd);
-        if (idx < 0) idx = pOpen.findIndex(o => o.round > costRd);
-        if (idx < 0) idx = pOpen.length - 1;
-        return pOpen.filter((_, i) => i !== idx);
-      };
-      for (const sp of spares.slice(0, 4)) {
-        const gain = slateSum(slate(P.players.concat(sp.p.id))) - baseSum;
-        const intr = INTEREST().find(i => i.rid === P.rid && i.pid === sp.p.id);
-        if (gain < 3 && !intr) continue;
-        const avail = reserveFor(Math.min(16, sp.cost));
-        if (!avail.length) continue;
-        const { round: mktRd, evts } = rateFor(sp.sK, sp.cost);
-        const pickAt = want => avail.find(o => o.round >= want) || avail[avail.length - 1];
-        const open = pickAt(Math.max(1, mktRd - 1)), fall = pickAt(mktRd);
-        if (!open) continue;
-        let score = 5 + (extra > 0 ? 1.5 : extra < 0 ? -2 : 0) + Math.min(2.5, gain / 15) + (weak3 < 15 ? 1 : 0)
-          + (evts.length >= 3 ? 1 : 0) + (intr ? intr.boost : 0);
-        props.push({
-          type: 'keeper', rid: P.rid, score,
-          myGain: pv(open.round), theirGain: gain, chips: intr ? [...chips, intr.note] : chips,
-          title: `${sp.p.name} (K R${sp.cost} · ${fmtS(sp.s)}) → their pick`,
-          opening: { give: [{ kind: 'player', id: sp.p.id }], get: [{ kind: 'pick', ...open }], label: `2026 R${open.round}${open.origRid !== P.rid ? ' (orig ' + teamName(open.origRid) + ')' : ''}` },
-          fallback: fall && fall !== open ? { give: [{ kind: 'player', id: sp.p.id }], get: [{ kind: 'pick', ...fall }], label: `2026 R${fall.round}${fall.origRid !== P.rid ? ' (orig ' + teamName(fall.origRid) + ')' : ''}` } : null,
-          precedent: evts.slice(0, 3).map(e => `R${e.paid.join('+R')} (${e.name} ${fmtS(e.surp)}, '${String(e.season).slice(2)})`).join(' · ')
-            || 'no close comps — priced from the cost-round rule of thumb',
-        });
-      }
-      // B: consolidation — my 1 earlier open pick for 2 of their opens.
-      // ONLY when it works for both rosters: I must be UNDER 16 picks (or
-      // I couldn't roster my own draft class) and they must be OVER
-      if (pOpen.length >= 2 && myOwnedCount < 16 && extra > 0) {
-        let best = null;
-        for (const a of myOpen) {
-          if (a.round < 3) continue; // my early picks aren't for sale
-          const later = pOpen.filter(o => o.round > a.round);
-          for (let i = 0; i < later.length - 1; i++) {
-            const b = later[i], c = later[i + 1];
-            const net = pv(b.round) + pv(c.round) - pv(a.round);
-            // my edge must be real but small enough that a crunched team
-            // still says yes (consolidating is worth a modest haircut to
-            // them, not a fleecing)
-            if (net < 8 || net > 40) continue;
-            const theirNet = -net + (extra > 0 ? 25 : 0);
-            if (theirNet < -15) continue;
-            const score = 3.5 + (extra > 0 ? 2.5 : extra < 0 ? -3 : 0) + Math.min(2, net / 15) - Math.max(0, -theirNet) / 15;
-            if (!best || score + net / 100 > best.score + best.net / 100) {
-              best = { a, b, c, net, score };
-            }
-          }
-        }
-        if (best) {
-          props.push({
-            type: 'picks', rid: P.rid, score: best.score,
-            myGain: best.net, theirGain: -best.net + (extra > 0 ? 25 : 0), chips,
-            title: `my 2026 R${best.a.round} → their R${best.b.round} + R${best.c.round} (they consolidate)`,
-            opening: {
-              give: [{ kind: 'pick', ...best.a }],
-              get: [{ kind: 'pick', ...best.b }, { kind: 'pick', ...best.c }],
-              label: `2026 R${best.b.round} + R${best.c.round}`,
-            },
-            fallback: null,
-            precedent: 'pick-for-pick swaps: they turn spare picks into one better one',
-          });
-        }
-      }
-    }
-    return props.sort((x, y) => y.score - x.score || y.myGain - x.myGain);
-  }
-
-  function loadProposal(rid, side) {
-    partnerRid = rid;
-    give = side.give.map(a => ({ ...a }));
-    get = side.get.map(a => ({ ...a }));
-    render();
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  }
-
-  function finderCard() {
-    const card = LAB.el('div', { class: 'card', style: 'margin-top:14px' },
-      LAB.el('h2', {}, '🔎 Trade Finder — preseason openers'),
-      LAB.el('p', { class: 'muted', style: 'font-size:11.5px;margin:2px 0 8px' },
-        'Proposals built from YOUR spare keepers (outside your optimal slate — sending them costs you nothing) and open picks, aimed at the teams most likely to accept: pick-rich rosters that must shed, and weak keeper slates your spares upgrade. Never asks for a pick a keeper is sitting on. Each card: an OPENING ask ~1 round better than the market rate from both leagues\' trade history, and a FALLBACK at market. Send several — one falls.'));
-    if (lens !== 'keeper') {
-      card.append(LAB.el('p', { class: 'muted', style: 'font-size:12px' }, 'Switch to the Keeper draft lens for preseason proposals.'));
-      return card;
-    }
-    const props = buildProposals();
-    // filters: team chips EXCLUDE — click a team to hide its proposals
-    const teams = [...new Set(props.map(x => x.rid))];
-    const chipRow = LAB.el('div', { class: 'flex', style: 'flex-wrap:wrap;gap:6px;margin-bottom:8px' });
-    const mkChip = (label, active, fn, dim) => LAB.el('button', {
-      class: active ? 'active' : '', style: 'font-size:11.5px;padding:3px 9px' + (dim ? ';opacity:.45;text-decoration:line-through' : ''),
-      title: dim ? 'hidden — click to show again' : undefined, onclick: fn,
-    }, label);
-    chipRow.append(mkChip('All teams', finderExcl.size === 0, () => { finderExcl = new Set(); render(); }));
-    teams.forEach(rid => chipRow.append(mkChip(mgrName(rid) || teamName(rid), false, () => {
-      if (finderExcl.has(rid)) finderExcl.delete(rid); else finderExcl.add(rid);
-      render();
-    }, finderExcl.has(rid))));
-    chipRow.append(LAB.el('span', { style: 'width:10px' }));
-    [['all', 'All types'], ['keeper', 'Keeper → pick'], ['picks', 'Pick swaps']].forEach(([k, lbl]) =>
-      chipRow.append(mkChip(lbl, finderType === k, () => { finderType = k; render(); })));
-    card.append(chipRow);
-    const shown = props.filter(x => !finderExcl.has(x.rid) && (finderType === 'all' || x.type === finderType));
-    const list = finderShowAll ? shown : shown.slice(0, 8);
-    if (!list.length) card.append(LAB.el('p', { class: 'muted', style: 'font-size:12px' }, 'No proposals under these filters — your spares don\'t upgrade these slates, or no open picks line up.'));
-    for (const x of list) {
-      const tag_ = x.score >= 8 ? ['🔥 likely', '#3ee68f'] : x.score >= 6 ? ['⚖ coin-flip', 'var(--warn)'] : ['🎯 anchor shot', '#ff5c5c'];
-      const row = LAB.el('div', { style: 'border:1px solid var(--border);border-radius:9px;padding:8px 10px;margin-top:7px;background:var(--surface)' },
-        LAB.el('div', { class: 'flex', style: 'gap:8px;flex-wrap:wrap;align-items:baseline' },
-          LAB.el('b', { style: 'font-family:var(--font-display);font-size:14px' }, mgrName(x.rid) || teamName(x.rid)),
-          LAB.el('b', { style: 'font-size:11.5px;color:' + tag_[1] }, tag_[0]),
-          LAB.el('span', { class: 'mono', style: 'font-size:11px;color:#3ee68f' }, `you ${fmtS(x.myGain)}`),
-          LAB.el('span', { class: 'mono muted', style: 'font-size:11px' }, `them ${fmtS(Math.round(x.theirGain))}`),
-          x.chips.map(c => LAB.el('span', { class: 'badge', style: 'font-size:9.5px' }, c))),
-        LAB.el('div', { style: 'font-size:12.5px;margin-top:3px;font-weight:600' }, x.title),
-        LAB.el('div', { class: 'flex', style: 'gap:8px;flex-wrap:wrap;margin-top:5px;align-items:center' },
-          LAB.el('button', { style: 'font-size:11.5px', onclick: () => loadProposal(x.rid, x.opening) }, `OPEN: ask ${x.opening.label} ▸`),
-          x.fallback ? LAB.el('button', { style: 'font-size:11.5px', onclick: () => loadProposal(x.rid, x.fallback) }, `FALLBACK: ${x.fallback.label} ▸`) : ''),
-        LAB.el('div', { class: 'muted', style: 'font-size:10.5px;margin-top:4px' }, '⚖ ' + x.precedent));
-      card.append(row);
-    }
-    if (!finderShowAll && shown.length > 8) {
-      card.append(LAB.el('button', { style: 'margin-top:8px', onclick: () => { finderShowAll = true; render(); } }, `show all ${shown.length} proposals`));
-    }
-    return card;
-  }
-
   // ---------- page ----------
   function render() {
     root.innerHTML = '';
@@ -692,7 +490,6 @@
     root.append(verdictCard());
     root.append(keeperImpactCard());
     root.append(historyCard());
-    root.append(finderCard());
   }
 
   initLeague();
