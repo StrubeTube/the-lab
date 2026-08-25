@@ -389,7 +389,9 @@ def league_out(tag):
             "draftOrder": dd.get("draft_order"),
             "slotToRoster": dd.get("slot_to_roster_id"),
         })(L.get("draft_detail") or {}),
-        "keeperRule": "round_slot" if tag == "ggg" else "round_minus_1",
+        # both leagues use the same rule (confirmed by Alex 08-25): first keep
+        # costs the round he was drafted; repeat keeps escalate one round/yr
+        "keeperRule": "round_slot",
         "keeperMax": (L["league"].get("settings") or {}).get("max_keepers", 3),
     }
 
