@@ -109,10 +109,10 @@
     const myRid = (L.rosters.find(r => r.owner === L.myUserId) || {}).rid;
     partnerRid = (L.rosters.find(r => r.rid !== myRid) || {}).rid;
     give = []; get = []; showAllLog = false;
-    finderTeam = 0; finderType = 'all'; finderShowAll = false;
+    finderExcl = new Set(); finderType = 'all'; finderShowAll = false;
     render();
   }
-  let finderTeam, finderType, finderShowAll;
+  let finderExcl, finderType, finderShowAll;
   const myRoster = () => L.rosters.find(r => r.owner === L.myUserId);
   const partner = () => L.rosters.find(r => r.rid === partnerRid);
 
@@ -519,13 +519,24 @@
       if (extra > 0) chips.push(`${extra} more pick${extra > 1 ? 's' : ''} than roster spots — must shed`);
       if (extra < 0) chips.push(`${-extra} pick${extra < -1 ? 's' : ''} short`);
       if (weak3 < 15 && weak3 > -900) chips.push(`weak #${L.keeperMax || 3} keeper (${fmtS(weak3)})`);
-      // A: spare keeper -> their open pick (ladder ask)
+      // A: spare keeper -> their open pick (ladder ask). CRITICAL: the keeper
+      // I'm sending must be KEPT at his cost round — that consumes one of
+      // THEIR open picks (at his cost, else the next open after, else their
+      // latest open), and that pick can never be part of my ask.
+      const reserveFor = costRd => {
+        let idx = pOpen.findIndex(o => o.round === costRd);
+        if (idx < 0) idx = pOpen.findIndex(o => o.round > costRd);
+        if (idx < 0) idx = pOpen.length - 1;
+        return pOpen.filter((_, i) => i !== idx);
+      };
       for (const sp of spares.slice(0, 4)) {
         const gain = slateSum(slate(P.players.concat(sp.p.id))) - baseSum;
         const intr = INTEREST().find(i => i.rid === P.rid && i.pid === sp.p.id);
         if (gain < 3 && !intr) continue;
+        const avail = reserveFor(Math.min(16, sp.cost));
+        if (!avail.length) continue;
         const { round: mktRd, evts } = rateFor(sp.s, sp.cost);
-        const pickAt = want => pOpen.find(o => o.round >= want) || pOpen[pOpen.length - 1];
+        const pickAt = want => avail.find(o => o.round >= want) || avail[avail.length - 1];
         const open = pickAt(Math.max(1, mktRd - 1)), fall = pickAt(mktRd);
         if (!open) continue;
         let score = 5 + (extra > 0 ? 1.5 : extra < 0 ? -2 : 0) + Math.min(2.5, gain / 15) + (weak3 < 15 ? 1 : 0)
@@ -599,19 +610,23 @@
       return card;
     }
     const props = buildProposals();
-    // filters
+    // filters: team chips EXCLUDE — click a team to hide its proposals
     const teams = [...new Set(props.map(x => x.rid))];
     const chipRow = LAB.el('div', { class: 'flex', style: 'flex-wrap:wrap;gap:6px;margin-bottom:8px' });
-    const mkChip = (label, active, fn) => LAB.el('button', {
-      class: active ? 'active' : '', style: 'font-size:11.5px;padding:3px 9px', onclick: fn,
+    const mkChip = (label, active, fn, dim) => LAB.el('button', {
+      class: active ? 'active' : '', style: 'font-size:11.5px;padding:3px 9px' + (dim ? ';opacity:.45;text-decoration:line-through' : ''),
+      title: dim ? 'hidden — click to show again' : undefined, onclick: fn,
     }, label);
-    chipRow.append(mkChip('All teams', finderTeam === 0, () => { finderTeam = 0; render(); }));
-    teams.forEach(rid => chipRow.append(mkChip(mgrName(rid) || teamName(rid), finderTeam === rid, () => { finderTeam = rid; render(); })));
+    chipRow.append(mkChip('All teams', finderExcl.size === 0, () => { finderExcl = new Set(); render(); }));
+    teams.forEach(rid => chipRow.append(mkChip(mgrName(rid) || teamName(rid), false, () => {
+      if (finderExcl.has(rid)) finderExcl.delete(rid); else finderExcl.add(rid);
+      render();
+    }, finderExcl.has(rid))));
     chipRow.append(LAB.el('span', { style: 'width:10px' }));
     [['all', 'All types'], ['keeper', 'Keeper → pick'], ['picks', 'Pick swaps']].forEach(([k, lbl]) =>
       chipRow.append(mkChip(lbl, finderType === k, () => { finderType = k; render(); })));
     card.append(chipRow);
-    const shown = props.filter(x => (finderTeam === 0 || x.rid === finderTeam) && (finderType === 'all' || x.type === finderType));
+    const shown = props.filter(x => !finderExcl.has(x.rid) && (finderType === 'all' || x.type === finderType));
     const list = finderShowAll ? shown : shown.slice(0, 8);
     if (!list.length) card.append(LAB.el('p', { class: 'muted', style: 'font-size:12px' }, 'No proposals under these filters — your spares don\'t upgrade these slates, or no open picks line up.'));
     for (const x of list) {
