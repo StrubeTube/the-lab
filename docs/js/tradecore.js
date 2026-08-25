@@ -317,7 +317,36 @@
           }
         }
       }
-      // ---- consolidation (roster-law gated) ----
+      // ---- consolidation DOWN (I'm OVER): my 2 later picks -> their 1
+      // higher — the shed leg of the broker play. They must be UNDER 16
+      // (they need the count), and my value haircut stays small.
+      if (myOwned > 16 && pOwned < 16 && myOpen.length >= 2) {
+        let best = null;
+        for (const a of pOpen) {
+          if (a.round < 3) continue; // their early picks aren't for sale either
+          const laters = myOpen.filter(x => x.round > a.round);
+          for (let i = 0; i < laters.length - 1; i++) {
+            const net = pv(a.round) - pv(laters[i].round) - pv(laters[i + 1].round);
+            if (net < -8 || net > 25) continue; // near-fair; count is their payment
+            const score = 4 + 2 * W.motivation + Math.min(1.5, Math.max(0, net) / 10) + W.propensity * prop.score * 0.5;
+            if (!best || score > best.score) best = { a, b: laters[i], c: laters[i + 1], net, score };
+          }
+        }
+        if (best) {
+          push({
+            type: 'picks', rid: P.rid, score: best.score,
+            give: [{ kind: 'pick', ...best.b }, { kind: 'pick', ...best.c }], get: [{ kind: 'pick', ...best.a }],
+            rung: 'SHED', chips: [...chips, 'I must shed — they need count'],
+            myGain: best.net + 10, theirGain: 15 - Math.max(0, best.net),
+            parts: [{ k: 'motivation', v: 2 * W.motivation }, { k: 'propensity', v: W.propensity * prop.score * 0.5 },
+              { k: 'fairness', v: W.fairness * (best.net <= 0 ? 1.2 : 0.6) }],
+            title: `my R${best.b.round} + R${best.c.round} → their R${best.a.round} (I consolidate down)`,
+            why: `they're ${16 - pOwned} pick${16 - pOwned > 1 ? 's' : ''} short — two real picks fix their roster math`,
+            precedent: 'the shed leg: count for them, quality for me',
+          });
+        }
+      }
+      // ---- consolidation UP (I'm UNDER): my 1 pick -> their 2 later ----
       if (myOwned < 16 && extra > 0 && pOpen.length >= 2) {
         for (const a of myOpen) {
           if (a.round < 3) continue;
