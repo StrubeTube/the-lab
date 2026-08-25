@@ -40,7 +40,9 @@
   let weights = store(K_WEIGHTS, { motivation: 1, propensity: 1, fairness: 1, market: 1, intel: 1 });
 
   let L, C, props;
-  const ui = { sort: 'success', shop: null, target: 'any', minTier: 'all', minGain: 0, aggr: 'ladder', maxAssets: 3, showWeights: false, showDead: false };
+  // filters are EXCLUSION-style (per Alex): everything shows by default,
+  // click a chip to remove it from the feed, click again to bring it back
+  const ui = { sort: 'success', exclAssets: new Set(), exclTeams: new Set(), exclTargets: new Set(), minTier: 'all', minGain: 0, aggr: 'ladder', maxAssets: 3, showWeights: false, showDead: false };
 
   const mgrName = rid => (L.users[(L.rosters.find(r => r.rid === rid) || {}).owner]?.name) || 'Team ' + rid;
   const pname = pid => C.byId[pid]?.name || pid;
@@ -65,7 +67,7 @@
   function init() {
     L = leagues[tag];
     C = LAB.tradeCore(players, LAB.getBoardOrSeed(players), L, trades[tag] || { trades: [], tradedPicks: [], market: [] }, trades);
-    ui.shop = null;
+    ui.exclAssets = new Set(); ui.exclTeams = new Set(); ui.exclTargets = new Set();
     rebuild();
     render();
   }
@@ -90,8 +92,26 @@
   function controlsRail() {
     const rail = LAB.el('div', { class: 'card', style: 'width:250px;flex:none' }, LAB.el('h2', {}, 'Steer'));
     const label = t => LAB.el('div', { class: 'muted', style: 'font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin:10px 0 4px' }, t);
-    // shop-a-player
-    rail.append(label('Shop an asset'));
+    // exclusion chip: lit = in the feed, dimmed/struck = filtered out
+    const xchip = (lbl, excluded, fn) => LAB.el('button', {
+      class: excluded ? '' : 'active',
+      style: 'font-size:11px;padding:2px 8px' + (excluded ? ';opacity:.4;text-decoration:line-through' : ''),
+      title: excluded ? 'hidden — click to include again' : 'click to filter out',
+      onclick: fn,
+    }, lbl);
+    const toggle = (set, key) => { set.has(key) ? set.delete(key) : set.add(key); render(); };
+    // teams (click to exclude)
+    rail.append(label('Teams'));
+    const teamRow = LAB.el('div', { class: 'flex', style: 'flex-wrap:wrap;gap:4px' });
+    teamRow.append(LAB.el('button', {
+      class: ui.exclTeams.size ? '' : 'active', style: 'font-size:11px;padding:2px 8px',
+      onclick: () => { ui.exclTeams = new Set(); render(); },
+    }, 'All'));
+    L.rosters.filter(r => r.rid !== C.myRid).forEach(r =>
+      teamRow.append(xchip(mgrName(r.rid), ui.exclTeams.has(r.rid), () => toggle(ui.exclTeams, r.rid))));
+    rail.append(teamRow);
+    // my assets (click to stop shopping one)
+    rail.append(label('My assets'));
     const myAssets = [];
     const me = L.rosters.find(r => r.rid === C.myRid);
     const slateIds = new Set(C.slate(me.players, 'true').map(x => x.p.id));
@@ -100,15 +120,17 @@
       .forEach(p => myAssets.push({ key: 'pl:' + p.id, label: p.name }));
     C.openOf(C.myRid).forEach(o => myAssets.push({ key: 'pk:' + o.round + '.' + o.origRid, label: 'R' + o.round + (o.origRid !== C.myRid ? ' ⇄' : '') }));
     const shopRow = LAB.el('div', { class: 'flex', style: 'flex-wrap:wrap;gap:4px' });
-    const chip = (lbl, on, fn, extra) => LAB.el('button', { class: on ? 'active' : '', style: 'font-size:11px;padding:2px 8px' + (extra || ''), onclick: fn }, lbl);
-    shopRow.append(chip('Everything', !ui.shop, () => { ui.shop = null; render(); }));
-    myAssets.forEach(a => shopRow.append(chip(a.label, ui.shop === a.key, () => { ui.shop = ui.shop === a.key ? null : a.key; render(); })));
+    shopRow.append(LAB.el('button', {
+      class: ui.exclAssets.size ? '' : 'active', style: 'font-size:11px;padding:2px 8px',
+      onclick: () => { ui.exclAssets = new Set(); render(); },
+    }, 'All'));
+    myAssets.forEach(a => shopRow.append(xchip(a.label, ui.exclAssets.has(a.key), () => toggle(ui.exclAssets, a.key))));
     rail.append(shopRow);
-    // target-a-return
-    rail.append(label('I want back'));
+    // return types (click to exclude what you DON'T want back)
+    rail.append(label('Returns (click to exclude)'));
     const tRow = LAB.el('div', { class: 'flex', style: 'flex-wrap:wrap;gap:4px' });
-    [['any', 'Anything'], ['early', 'R1-4 pick'], ['mid', 'R5-8 pick'], ['late', 'R9+ picks'], ['upgrade', 'Slate upgrade'], ['consolidate', 'Consolidate']]
-      .forEach(([k, lbl]) => tRow.append(chip(lbl, ui.target === k, () => { ui.target = k; render(); })));
+    [['early', 'R1-4 pick'], ['mid', 'R5-8 pick'], ['late', 'R9+ pick'], ['upgrade', 'Slate upgrade'], ['consolidate', 'Consolidate']]
+      .forEach(([k, lbl]) => tRow.append(xchip(lbl, ui.exclTargets.has(k), () => toggle(ui.exclTargets, k))));
     rail.append(tRow);
     // dials
     rail.append(label('Dials'));
@@ -214,23 +236,50 @@
   function matchesUI(x) {
     const st = statuses[x.h]?.status;
     if (st === 'dead' || st === 'accepted') return false; // live feed only
-    if (ui.shop) {
-      const [kind, key] = ui.shop.split(':');
-      const inGive = x.give.some(a => kind === 'pl' ? a.id === key : a.kind === 'pick' && (a.round + '.' + a.origRid) === key);
-      if (!inGive) return false;
+    if (ui.exclTeams.has(x.rid)) return false;
+    // any excluded asset on my give side hides the card
+    for (const a of x.give) {
+      const key = a.kind === 'player' ? 'pl:' + a.id : 'pk:' + a.round + '.' + a.origRid;
+      if (ui.exclAssets.has(key)) return false;
     }
-    if (ui.target !== 'any') {
-      const gp = x.get.filter(a => a.kind === 'pick').map(a => a.round);
-      if (ui.target === 'early' && !gp.some(r => r <= 4)) return false;
-      if (ui.target === 'mid' && !gp.some(r => r >= 5 && r <= 8)) return false;
-      if (ui.target === 'late' && !gp.some(r => r >= 9)) return false;
-      if (ui.target === 'upgrade' && !x.get.some(a => a.kind === 'player')) return false;
-      if (ui.target === 'consolidate' && x.type !== 'picks') return false;
-    }
+    // any excluded return category hides the card
+    const gp = x.get.filter(a => a.kind === 'pick').map(a => a.round);
+    if (ui.exclTargets.has('early') && gp.some(r => r <= 4)) return false;
+    if (ui.exclTargets.has('mid') && gp.some(r => r >= 5 && r <= 8)) return false;
+    if (ui.exclTargets.has('late') && gp.some(r => r >= 9)) return false;
+    if (ui.exclTargets.has('upgrade') && x.get.some(a => a.kind === 'player')) return false;
+    if (ui.exclTargets.has('consolidate') && x.type === 'picks') return false;
     if (ui.minTier === 'fire' && x.score < 8) return false;
     if (ui.minTier === 'coin' && x.score < 6) return false;
     if (x.myGain < ui.minGain) return false;
     return true;
+  }
+
+  // one asset, drawn like a person would read it: face + name + the keeper
+  // math for players, a big round chip for picks
+  function assetRow(a, ownerRid) {
+    if (a.kind === 'pick') {
+      const via = a.origRid !== ownerRid;
+      return LAB.el('div', { class: 'flex', style: 'gap:8px;align-items:center;padding:3px 0' },
+        LAB.el('span', {
+          class: 'mono',
+          style: 'flex:none;width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;background:rgba(245,197,66,.12);border:1px solid var(--warn);color:var(--warn)',
+        }, 'R' + a.round),
+        LAB.el('div', { style: 'min-width:0' },
+          LAB.el('div', { style: 'font-weight:600;font-size:12.5px' }, `Round ${a.round} pick`),
+          LAB.el('div', { class: 'mono muted', style: 'font-size:10px' }, a.season + (via ? ' · via trade' : ''))));
+    }
+    const p = C.byId[a.id];
+    const s = C.surplusSlots(p, 'true') ?? 0;
+    return LAB.el('div', { class: 'flex', style: 'gap:8px;align-items:center;padding:3px 0' },
+      LAB.headshot(a.id, 'sm'),
+      LAB.el('div', { style: 'min-width:0' },
+        LAB.el('div', { class: 'flex', style: 'gap:5px;align-items:center' },
+          LAB.el('b', { style: 'font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis' }, p.name),
+          LAB.posBadge(p.pos)),
+        LAB.el('div', { class: 'mono muted', style: 'font-size:10px' },
+          `keeps at R${C.costRd(p)} · `,
+          LAB.el('b', { style: 'color:' + (s > 0 ? '#3ee68f' : 'var(--ink-3)') }, (s > 0 ? '+' : '') + Math.round(s) + ' true'))));
   }
 
   function card(x) {
@@ -251,8 +300,15 @@
         LAB.el('span', { class: 'mono muted', style: 'font-size:11px' }, `them ${x.theirGain >= 0 ? '+' : ''}${Math.round(x.theirGain)}`),
         deadOpening ? LAB.el('span', { style: 'font-size:10.5px;color:var(--accent);font-weight:700' }, '↩ NEXT RUNG — opening died') : '',
         x.chips.slice(0, 2).map(c => LAB.el('span', { class: 'badge', style: 'font-size:9px' }, c))),
-      LAB.el('div', { style: 'font-weight:600;font-size:13px;margin-top:3px' }, x.title),
-      x.why ? LAB.el('div', { class: 'muted', style: 'font-size:11.5px;margin-top:2px' }, 'Their angle: ' + x.why) : '',
+      LAB.el('div', { style: 'display:flex;gap:10px;align-items:stretch;margin-top:7px' },
+        LAB.el('div', { style: 'flex:1;min-width:0;border:1px solid rgba(255,92,92,.35);border-radius:8px;padding:4px 9px 6px;background:rgba(255,92,92,.05)' },
+          LAB.el('div', { style: 'font-size:9px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:#ff5c5c' }, 'you send'),
+          x.give.map(a => assetRow(a, C.myRid))),
+        LAB.el('div', { style: 'align-self:center;flex:none;font-size:17px;color:var(--ink-3)' }, '⇄'),
+        LAB.el('div', { style: 'flex:1;min-width:0;border:1px solid rgba(62,230,143,.35);border-radius:8px;padding:4px 9px 6px;background:rgba(62,230,143,.05)' },
+          LAB.el('div', { style: 'font-size:9px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:#3ee68f' }, 'you get'),
+          x.get.map(a => assetRow(a, x.rid)))),
+      x.why ? LAB.el('div', { class: 'muted', style: 'font-size:11.5px;margin-top:4px' }, 'Their angle: ' + x.why) : '',
       LAB.el('div', { class: 'muted', style: 'font-size:10.5px;margin-top:3px' }, '⚖ ' + x.precedent),
       LAB.el('div', {
         class: 'mono muted', style: 'font-size:10px;margin-top:3px', title: 'score breakdown',
