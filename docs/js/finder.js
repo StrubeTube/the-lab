@@ -381,15 +381,31 @@
       const pitch = 'Two clean pick trades, no players:\n' +
         `1) ${oName}: my R${pr.over.give.map(a => a.round).join('+R')} for your R${pr.over.get.map(a => a.round).join('+R')} — you're ${oOver} pick${oOver > 1 ? 's' : ''} over the roster limit; this sheds one.\n` +
         `2) ${uName}: my R${pr.under.give.map(a => a.round).join('+R')} for your R${pr.under.get.map(a => a.round).join('+R')} — you're ${uShort} short; this fixes your count.`;
+      const outR = [...pr.over.give, ...pr.under.give].map(a => a.round).sort((x, y) => x - y);
+      const inR = [...pr.over.get, ...pr.under.get].map(a => a.round).sort((x, y) => x - y);
+      const netChip = (r, col2) => LAB.el('span', {
+        class: 'mono',
+        style: `display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:7px;font-weight:700;font-size:12px;margin-right:4px;border:1px solid ${col2};color:${col2};background:${col2}11`,
+      }, 'R' + r);
       col.append(LAB.el('div', {
         style: 'border:1px solid var(--border);border-radius:10px;padding:9px 12px;margin-top:8px;background:var(--surface)',
       },
-        LAB.el('div', { class: 'flex', style: 'gap:10px;flex-wrap:wrap;align-items:baseline' },
-          LAB.el('b', { style: 'font-size:12.5px;color:#3ee68f' }, `+${Math.round(pr.total)} value`),
-          LAB.el('span', { class: 'muted', style: 'font-size:11px' }, 'count nets to 16 · no shared picks')),
-        LAB.el('div', { style: 'display:flex;gap:16px;flex-wrap:wrap;margin-top:6px' },
-          box(`Trade 1 — ${oName}`, `${oOver} over, must shed`, pr.over, pr.over.rid),
-          box(`Trade 2 — ${uName}`, `${uShort} short, needs count`, pr.under, pr.under.rid)),
+        // 1) THE NET — what the whole package does to my picks
+        LAB.el('div', { style: 'border:1.5px solid var(--accent);border-radius:9px;padding:6px 10px 8px;background:rgba(255,106,43,.05)' },
+          LAB.el('div', { class: 'flex', style: 'gap:10px;flex-wrap:wrap;align-items:baseline' },
+            LAB.el('b', { style: 'font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--accent)' }, 'net — both trades together'),
+            LAB.el('b', { style: 'font-size:12.5px;color:#3ee68f' }, `+${Math.round(pr.total)} value`),
+            LAB.el('span', { class: 'muted', style: 'font-size:10.5px' }, 'count stays 16 · no shared picks')),
+          LAB.el('div', { class: 'flex', style: 'gap:12px;flex-wrap:wrap;margin-top:5px;align-items:center' },
+            LAB.el('span', { style: 'font-size:10px;font-weight:700;color:#ff5c5c;text-transform:uppercase' }, 'out'),
+            LAB.el('span', {}, outR.map(r => netChip(r, '#ff5c5c'))),
+            LAB.el('span', { style: 'color:var(--ink-3)' }, '→'),
+            LAB.el('span', { style: 'font-size:10px;font-weight:700;color:#3ee68f;text-transform:uppercase' }, 'in'),
+            LAB.el('span', {}, inR.map(r => netChip(r, '#3ee68f'))))),
+        // 2) + 3) the two legs
+        LAB.el('div', { style: 'display:flex;gap:16px;flex-wrap:wrap;margin-top:8px' },
+          box(`1 · ${oName}`, `${oOver} over, must shed`, pr.over, pr.over.rid),
+          box(`2 · ${uName}`, `${uShort} short, needs count`, pr.under, pr.under.rid)),
         LAB.el('div', { class: 'flex', style: 'gap:6px;margin-top:7px;flex-wrap:wrap' },
           LAB.el('button', {
             style: 'font-size:11px',
