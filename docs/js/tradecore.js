@@ -373,4 +373,82 @@
     for (const x of props) x.score = scoreOf(x.parts);
     return props;
   };
+
+  // small follow-up shed that returns me to 16 after a trade hands me an
+  // extra pick: give 2 of my laters -> 1 higher from an under-16 team,
+  // near-fair (their real payment is the count they need)
+  LAB.rebalanceFor = function (C, L, opts) {
+    const o = { exclude: [], ...opts }; // pick keys I can't give (spent in the main trade)
+    const myOpen = C.openOf(C.myRid).filter(p => !o.exclude.includes(p.round + '.' + p.origRid));
+    const pv = r => C.pickVal(L.season, r, 'true');
+    let best = null;
+    for (const P of L.rosters) {
+      if (P.rid === C.myRid) continue;
+      const pOwned = C.ownedPicks(P.rid).length;
+      if (pOwned >= 16) continue;
+      const prop = (C.propensity[P.rid] || {}).score || 0;
+      for (const d of C.openOf(P.rid)) {
+        if (d.round < 3) continue;
+        const laters = myOpen.filter(x => x.round > d.round);
+        for (let i = 0; i < laters.length - 1; i++) {
+          const net = pv(d.round) - pv(laters[i].round) - pv(laters[i + 1].round);
+          if (net < -8 || net > 15) continue;
+          const score = (16 - pOwned) + prop + net / 10;
+          if (!best || score > best.score) best = { rid: P.rid, give: [laters[i], laters[i + 1]], get: d, net, score };
+        }
+      }
+    }
+    return best;
+  };
+
+  // PAIRED pick-only trades: consolidate UP with an over-16 team while
+  // simultaneously shedding DOWN to an under-16 team — no shared picks, my
+  // count nets back to 16, and my pick quality rises. One best pair per
+  // (over, under) partner combination.
+  LAB.pickPairs = function (C, L) {
+    const pv = r => C.pickVal(L.season, r, 'true');
+    const myOpen = C.openOf(C.myRid);
+    const overs = [], unders = [];
+    for (const P of L.rosters) {
+      if (P.rid === C.myRid) continue;
+      const n = C.ownedPicks(P.rid).length;
+      if (n > 16) overs.push({ P, n });
+      if (n < 16) unders.push({ P, n });
+    }
+    const pairs = [];
+    for (const { P: O, n: nO } of overs) {
+      const oOpen = C.openOf(O.rid);
+      for (const { P: U, n: nU } of unders) {
+        let best = null;
+        for (const a1 of myOpen) {
+          if (a1.round < 2) continue;
+          const bs = oOpen.filter(x => x.round > a1.round);
+          for (let i = 0; i < bs.length - 1; i++) {
+            const netA = pv(bs[i].round) + pv(bs[i + 1].round) - pv(a1.round);
+            if (netA < 0 || netA > 30) continue; // O eats a small value loss to shed count
+            for (const d of C.openOf(U.rid)) {
+              if (d.round < 3) continue;
+              const cs = myOpen.filter(x => x !== a1 && x.round > d.round);
+              for (let j = 0; j < cs.length - 1; j++) {
+                const netB = pv(d.round) - pv(cs[j].round) - pv(cs[j + 1].round);
+                if (netB < -8 || netB > 15) continue; // U eats a small loss to gain count
+                const total = netA + netB;
+                if (total < 6) continue; // the whole point: I come out ahead
+                const score = total / 8 + (nO - 16) + (16 - nU)
+                  + ((C.propensity[O.rid] || {}).score || 0) * 0.5
+                  + ((C.propensity[U.rid] || {}).score || 0) * 0.5;
+                if (!best || score > best.score) best = {
+                  over: { rid: O.rid, give: [a1], get: [bs[i], bs[i + 1]], net: netA },
+                  under: { rid: U.rid, give: [cs[j], cs[j + 1]], get: [d], net: netB },
+                  total, score,
+                };
+              }
+            }
+          }
+        }
+        if (best) pairs.push(best);
+      }
+    }
+    return pairs.sort((x, y) => y.score - x.score);
+  };
 })();

@@ -42,7 +42,7 @@
   let L, C, props;
   // filters are EXCLUSION-style (per Alex): everything shows by default,
   // click a chip to remove it from the feed, click again to bring it back
-  const ui = { sort: 'success', exclAssets: new Set(), exclTeams: new Set(), exclTargets: new Set(), minTier: 'all', minGain: 0, aggr: 'ladder', maxAssets: 3, showWeights: false, showDead: false };
+  const ui = { view: 'feed', sort: 'success', exclAssets: new Set(), exclTeams: new Set(), exclTargets: new Set(), minTier: 'all', minGain: 0, aggr: 'ladder', maxAssets: 3, showWeights: false, showDead: false };
 
   const mgrName = rid => (L.users[(L.rosters.find(r => r.rid === rid) || {}).owner]?.name) || 'Team ' + rid;
   const pname = pid => C.byId[pid]?.name || pid;
@@ -282,6 +282,26 @@
           LAB.el('b', { style: 'color:' + (s > 0 ? '#3ee68f' : 'var(--ink-3)') }, (s > 0 ? '+' : '') + Math.round(s) + ' true'))));
   }
 
+  // if this trade nets me an extra pick (over the 16 limit), suggest the
+  // small follow-up shed that balances me back — rendered as a quiet rider
+  function rebalanceRow(x) {
+    const netPicks = x.get.filter(a => a.kind === 'pick').length - x.give.filter(a => a.kind === 'pick').length;
+    if (netPicks <= 0) return '';
+    const given = x.give.filter(a => a.kind === 'pick').map(a => a.round + '.' + a.origRid);
+    const rb = LAB.rebalanceFor(C, L, { exclude: given });
+    if (!rb) return '';
+    return LAB.el('div', {
+      style: 'margin-top:5px;padding:4px 8px;border-left:2px solid var(--accent);background:rgba(255,106,43,.05);border-radius:0 6px 6px 0;font-size:10.5px;color:var(--ink-2)',
+    },
+      LAB.el('b', { style: 'color:var(--accent)' }, '↩ then rebalance to 16: '),
+      `my R${rb.give[0].round} + R${rb.give[1].round} → ${mgrName(rb.rid)}'s R${rb.get.round}`,
+      LAB.el('span', { class: 'mono muted' }, ` (${rb.net >= 0 ? '+' : ''}${Math.round(rb.net)} value, they're short on picks) `),
+      LAB.el('button', {
+        style: 'font-size:10px;padding:1px 7px;margin-left:4px',
+        onclick: () => loadProposal(rb.rid, { give: rb.give.map(a => ({ kind: 'pick', ...a })), get: [{ kind: 'pick', ...rb.get }] }),
+      }, 'load ▸'));
+  }
+
   function card(x) {
     const t = tier(x.score);
     const st = statuses[x.h]?.status;
@@ -309,6 +329,7 @@
           LAB.el('div', { style: 'font-size:9px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:#3ee68f' }, 'you get'),
           x.get.map(a => assetRow(a, x.rid)))),
       x.why ? LAB.el('div', { class: 'muted', style: 'font-size:11.5px;margin-top:4px' }, 'Their angle: ' + x.why) : '',
+      rebalanceRow(x),
       LAB.el('div', { class: 'muted', style: 'font-size:10.5px;margin-top:3px' }, '⚖ ' + x.precedent),
       LAB.el('div', {
         class: 'mono muted', style: 'font-size:10px;margin-top:3px', title: 'score breakdown',
@@ -331,17 +352,79 @@
     return el;
   }
 
+  // ---------- Pick Pairs: two offsetting pick-only trades ----------
+  function renderPairs(col) {
+    col.append(LAB.el('p', { class: 'muted', style: 'font-size:11.5px;margin-top:8px' },
+      'Two pick-only trades to set up and accept TOGETHER: consolidate up with a team that\'s over the 16-pick limit, shed down to a team that\'s short — no shared picks, your count nets back to 16, and your picks get higher. Each partner needs exactly what you\'re giving them.'));
+    const pairs = LAB.pickPairs(C, L).filter(pr => !ui.exclTeams.has(pr.over.rid) && !ui.exclTeams.has(pr.under.rid));
+    if (!pairs.length) {
+      col.append(LAB.el('p', { class: 'muted', style: 'font-size:12.5px;margin-top:8px' },
+        'No workable pairs right now — needs at least one team over 16 picks and one under, with combos that leave you ahead.'));
+      return;
+    }
+    const box = (title, sub, side, ownerRid) => LAB.el('div', { style: 'flex:1;min-width:230px' },
+      LAB.el('div', { class: 'flex', style: 'gap:6px;align-items:baseline' },
+        LAB.el('b', { style: 'font-family:var(--font-display);font-size:13px' }, title),
+        LAB.el('span', { class: 'muted', style: 'font-size:10px' }, sub)),
+      LAB.el('div', { style: 'display:flex;gap:8px;margin-top:3px' },
+        LAB.el('div', { style: 'flex:1;border:1px solid rgba(255,92,92,.35);border-radius:7px;padding:3px 7px 5px;background:rgba(255,92,92,.05)' },
+          LAB.el('div', { style: 'font-size:8.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:#ff5c5c' }, 'you send'),
+          side.give.map(a => assetRow({ kind: 'pick', ...a }, C.myRid))),
+        LAB.el('div', { style: 'align-self:center;flex:none;color:var(--ink-3)' }, '⇄'),
+        LAB.el('div', { style: 'flex:1;border:1px solid rgba(62,230,143,.35);border-radius:7px;padding:3px 7px 5px;background:rgba(62,230,143,.05)' },
+          LAB.el('div', { style: 'font-size:8.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:#3ee68f' }, 'you get'),
+          side.get.map(a => assetRow({ kind: 'pick', ...a }, ownerRid)))));
+    for (const pr of pairs.slice(0, 8)) {
+      const oName = mgrName(pr.over.rid), uName = mgrName(pr.under.rid);
+      const oOver = C.ownedPicks(pr.over.rid).length - 16, uShort = 16 - C.ownedPicks(pr.under.rid).length;
+      const pitch = 'Two clean pick trades, no players:\n' +
+        `1) ${oName}: my R${pr.over.give.map(a => a.round).join('+R')} for your R${pr.over.get.map(a => a.round).join('+R')} — you're ${oOver} pick${oOver > 1 ? 's' : ''} over the roster limit; this sheds one.\n` +
+        `2) ${uName}: my R${pr.under.give.map(a => a.round).join('+R')} for your R${pr.under.get.map(a => a.round).join('+R')} — you're ${uShort} short; this fixes your count.`;
+      col.append(LAB.el('div', {
+        style: 'border:1px solid var(--border);border-radius:10px;padding:9px 12px;margin-top:8px;background:var(--surface)',
+      },
+        LAB.el('div', { class: 'flex', style: 'gap:10px;flex-wrap:wrap;align-items:baseline' },
+          LAB.el('b', { style: 'font-size:12.5px;color:#3ee68f' }, `+${Math.round(pr.total)} value`),
+          LAB.el('span', { class: 'muted', style: 'font-size:11px' }, 'count nets to 16 · no shared picks')),
+        LAB.el('div', { style: 'display:flex;gap:16px;flex-wrap:wrap;margin-top:6px' },
+          box(`Trade 1 — ${oName}`, `${oOver} over, must shed`, pr.over, pr.over.rid),
+          box(`Trade 2 — ${uName}`, `${uShort} short, needs count`, pr.under, pr.under.rid)),
+        LAB.el('div', { class: 'flex', style: 'gap:6px;margin-top:7px;flex-wrap:wrap' },
+          LAB.el('button', {
+            style: 'font-size:11px',
+            onclick: () => loadProposal(pr.over.rid, { give: pr.over.give.map(a => ({ kind: 'pick', ...a })), get: pr.over.get.map(a => ({ kind: 'pick', ...a })) }),
+          }, '⚗ trade 1 in builder'),
+          LAB.el('button', {
+            style: 'font-size:11px',
+            onclick: () => loadProposal(pr.under.rid, { give: pr.under.give.map(a => ({ kind: 'pick', ...a })), get: pr.under.get.map(a => ({ kind: 'pick', ...a })) }),
+          }, '⚗ trade 2 in builder'),
+          LAB.el('button', {
+            style: 'font-size:11px',
+            onclick: () => navigator.clipboard.writeText(pitch).then(() => LAB.toast('both pitches copied', 'good')),
+          }, '📋 copy both pitches'))));
+    }
+  }
+
   function render() {
     root.innerHTML = '';
     const row = LAB.el('div', { style: 'display:flex;gap:14px;margin-top:14px;align-items:flex-start;flex-wrap:wrap' });
     row.append(controlsRail());
     const feedCol = LAB.el('div', { style: 'flex:1;min-width:340px' });
-    // sort seg
+    const viewSeg = LAB.el('div', { class: 'seg' },
+      [['feed', 'Proposals'], ['pairs', '⚖ Pick pairs']].map(([k, lbl]) =>
+        LAB.el('button', { class: ui.view === k ? 'active' : '', onclick: () => { ui.view = k; render(); } }, lbl)));
     const sortSeg = LAB.el('div', { class: 'seg' },
       [['success', 'Success'], ['gain', 'My value'], ['ev', 'Blend']].map(([k, lbl]) =>
         LAB.el('button', { class: ui.sort === k ? 'active' : '', onclick: () => { ui.sort = k; render(); } }, lbl)));
     feedCol.append(LAB.el('div', { class: 'flex', style: 'gap:10px;align-items:center;flex-wrap:wrap' },
-      LAB.el('b', { style: 'font-family:var(--font-display);text-transform:uppercase;letter-spacing:.04em' }, 'Proposals'), sortSeg));
+      viewSeg, ui.view === 'feed' ? sortSeg : ''));
+    if (ui.view === 'pairs') {
+      renderPairs(feedCol);
+      row.append(feedCol);
+      row.append(campaignRail());
+      root.append(row);
+      return;
+    }
     let list = props.filter(matchesUI);
     list.sort((a, b2) => ui.sort === 'gain' ? b2.myGain - a.myGain
       : ui.sort === 'ev' ? prob(b2.score) * b2.myGain - prob(a.score) * a.myGain
