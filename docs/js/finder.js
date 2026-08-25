@@ -42,7 +42,7 @@
   let L, C, props;
   // filters are EXCLUSION-style (per Alex): everything shows by default,
   // click a chip to remove it from the feed, click again to bring it back
-  const ui = { view: 'feed', sort: 'success', exclAssets: new Set(), exclTeams: new Set(), exclTargets: new Set(), minTier: 'all', minGain: 0, aggr: 'ladder', maxAssets: 3, showWeights: false, showDead: false };
+  const ui = { view: 'feed', sort: 'success', exclAssets: new Set(), exclTeams: new Set(), exclTargets: new Set(), minTier: 'all', minGain: 0, aggr: 'ladder', maxAssets: 3, showWeights: false, showDead: false, groupSel: {} };
 
   const mgrName = rid => (L.users[(L.rosters.find(r => r.rid === rid) || {}).owner]?.name) || 'Team ' + rid;
   const pname = pid => C.byId[pid]?.name || pid;
@@ -302,7 +302,13 @@
       }, 'load ▸'));
   }
 
-  function card(x) {
+  // one card per distinct trade SHAPE (same assets out, same rounds back) —
+  // when it works with several teams, one card lists them all as chips
+  const shapeKey = x => [x.type,
+    x.give.map(a => a.kind === 'pick' ? 'p' + a.round : a.id).join('+'),
+    x.get.map(a => a.kind === 'pick' ? 'p' + a.round : a.id).join('+')].join('|');
+
+  function card(x, grp) {
     const t = tier(x.score);
     const st = statuses[x.h]?.status;
     // auto-ladder: a dead OPENING makes its FALLBACK sibling glow
@@ -320,6 +326,14 @@
         LAB.el('span', { class: 'mono muted', style: 'font-size:11px' }, `them ${x.theirGain >= 0 ? '+' : ''}${Math.round(x.theirGain)}`),
         deadOpening ? LAB.el('span', { style: 'font-size:10.5px;color:var(--accent);font-weight:700' }, '↩ NEXT RUNG — opening died') : '',
         x.chips.slice(0, 2).map(c => LAB.el('span', { class: 'badge', style: 'font-size:9px' }, c))),
+      grp && grp.vs.length > 1 ? LAB.el('div', { class: 'flex', style: 'gap:5px;flex-wrap:wrap;margin-top:4px;align-items:center' },
+        LAB.el('span', { class: 'muted', style: 'font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em' }, 'works with'),
+        grp.vs.map((v, i) => LAB.el('button', {
+          class: v === x ? 'active' : '',
+          style: 'font-size:10.5px;padding:1px 8px',
+          title: `${tier(v.score)[0]} · me +${Math.round(v.myGain)} · them ${v.theirGain >= 0 ? '+' : ''}${Math.round(v.theirGain)}`,
+          onclick: () => { ui.groupSel[grp.k] = i; render(); },
+        }, `${mgrName(v.rid)} ${tier(v.score)[0].split(' ')[0]}`))) : '',
       LAB.el('div', { style: 'display:flex;gap:10px;align-items:stretch;margin-top:7px' },
         LAB.el('div', { style: 'flex:1;min-width:0;border:1px solid rgba(255,92,92,.35);border-radius:8px;padding:4px 9px 6px;background:rgba(255,92,92,.05)' },
           LAB.el('div', { style: 'font-size:9px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:#ff5c5c' }, 'you send'),
@@ -450,10 +464,21 @@
     list.sort((a, b2) => ui.sort === 'gain' ? b2.myGain - a.myGain
       : ui.sort === 'ev' ? prob(b2.score) * b2.myGain - prob(a.score) * a.myGain
         : b2.score - a.score || b2.myGain - a.myGain);
-    if (!list.length) feedCol.append(LAB.el('p', { class: 'muted', style: 'font-size:12.5px;margin-top:10px' }, 'Nothing matches these filters — loosen a dial or clear the shop selection.'));
-    list.slice(0, ui.showAll ? 999 : 14).forEach(x => feedCol.append(card(x)));
-    if (!ui.showAll && list.length > 14) {
-      feedCol.append(LAB.el('button', { style: 'margin-top:8px', onclick: () => { ui.showAll = true; render(); } }, `show all ${list.length}`));
+    // collapse identical shapes across teams into one card w/ team chips
+    const groups = new Map();
+    for (const x of list) {
+      const k = shapeKey(x);
+      if (!groups.has(k)) groups.set(k, { k, vs: [] });
+      groups.get(k).vs.push(x);
+    }
+    const glist = [...groups.values()];
+    if (!glist.length) feedCol.append(LAB.el('p', { class: 'muted', style: 'font-size:12.5px;margin-top:10px' }, 'Nothing matches these filters — loosen a dial or clear the shop selection.'));
+    glist.slice(0, ui.showAll ? 999 : 14).forEach(g => {
+      const sel = Math.min(ui.groupSel[g.k] ?? 0, g.vs.length - 1);
+      feedCol.append(card(g.vs[sel], g));
+    });
+    if (!ui.showAll && glist.length > 14) {
+      feedCol.append(LAB.el('button', { style: 'margin-top:8px', onclick: () => { ui.showAll = true; render(); } }, `show all ${glist.length}`));
     }
     row.append(feedCol);
     row.append(campaignRail());
