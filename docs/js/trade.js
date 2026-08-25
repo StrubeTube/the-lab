@@ -62,13 +62,20 @@
     // (R10) ≈ 12 — the same 20-slot gap is worth far more up high than late.
     // TRUE SURPLUS = value(market slot) − value(cost slot) on this curve.
     const V = s => 100 * Math.exp(-Math.max(1, s) / 45);
+    // 'adp' is KEEPER-AWARE (v40): his ADP maps him onto this keeper board
+    // (keepers removed, real open slots = wouldRd) — the old raw-national-ADP
+    // and keeper-round surpluses merged, per Alex. 'true' = the value-curve
+    // average of the board and keeper-ADP forms. 'keeper' kept as an alias.
     const surplusSlots = (p, b) => {
       if (!eligible(p)) return null;
       const cost = midPick(costRd(p));
-      if (b === 'adp') return p.adp != null ? cost - p.adp : null;
       if (b === 'board') return oRanks[p.id] != null ? cost - oRanks[p.id] : null;
-      if (b === 'true') return V(midPick(wouldRd(p))) - V(cost);
-      return cost - midPick(wouldRd(p));
+      if (b === 'true') {
+        const vAdp = V(midPick(wouldRd(p))) - V(cost);
+        const vBoard = oRanks[p.id] != null ? V(Math.max(1, oRanks[p.id])) - V(cost) : null;
+        return vBoard == null ? vAdp : (vAdp + vBoard) / 2;
+      }
+      return cost - midPick(wouldRd(p)); // 'adp' (and legacy 'keeper')
     };
     // a pick is worth its DRAFT POSITION: slots of value over a last-round
     // pick, so an earlier pick is always worth more (R4 +125, R9 +75, R16 +5);
@@ -98,7 +105,7 @@
   }
   const fmt = v => Math.round(v);
   const fmtS = v => (v > 0 ? '+' : '') + Math.round(v);
-  const BASIS_LABEL = { true: 'True surplus', keeper: 'Keeper surplus', adp: 'ADP surplus', board: 'My-rank surplus' };
+  const BASIS_LABEL = { true: 'True surplus', adp: 'ADP surplus', board: 'My-rank surplus', keeper: 'ADP surplus' };
   const UNIT = () => lens === 'keeper' ? (basis === 'true' ? 'value' : 'surplus') : 'pts';
 
   // ---------- per-league state ----------
@@ -476,8 +483,8 @@
     const lensSeg = LAB.el('div', { class: 'seg' },
       [['keeper', 'Keeper draft'], ['season', 'In-season']].map(([k, lbl]) =>
         LAB.el('button', { class: k === lens ? 'active' : '', onclick: () => { lens = k; render(); } }, lbl)));
-    const basisSeg = LAB.el('div', { class: 'seg', title: 'True surplus (default) weights the gap on a convex draft-value curve — the same slots saved count for much more early in the draft. The other three are the raw Keepers-page surpluses: vs keeper-draft round, vs ADP, vs my board rank.' },
-      [['true', 'True surplus'], ['keeper', 'Keeper surplus'], ['adp', 'ADP surplus'], ['board', 'My-rank surplus']].map(([k, lbl]) =>
+    const basisSeg = LAB.el('div', { class: 'seg', title: 'True surplus (default) = the value-curve average of the other two. ADP surplus is keeper-aware: his ADP mapped onto this keeper board vs his cost round. My-rank uses your board instead of ADP.' },
+      [['true', 'True surplus'], ['adp', 'ADP surplus'], ['board', 'My-rank surplus']].map(([k, lbl]) =>
         LAB.el('button', { class: k === basis ? 'active' : '', onclick: () => { basis = k; render(); } }, lbl)));
     root.append(LAB.el('div', { class: 'card', style: 'margin-top:14px' },
       LAB.el('div', { class: 'flex', style: 'gap:12px;flex-wrap:wrap;align-items:center' },

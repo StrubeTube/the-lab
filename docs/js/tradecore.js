@@ -21,13 +21,19 @@
     const costRd = p => Math.min(16, actual[p.id]
       ?? LAB.keeperCostRound(L, L.lastDraftRound[p.id] || null, kept.has(p.id)));
     const wouldRd = p => kSim.rounds[p.id] ?? kSim.wouldBe(p);
+    // 'adp' is KEEPER-AWARE (v40): ADP mapped onto this keeper board via
+    // wouldRd; 'true' = value-curve average of the board and keeper-ADP
+    // forms; 'keeper' remains an alias of 'adp'
     const surplusSlots = (p, b) => {
       if (!eligible(p)) return null;
       const cost = midPick(costRd(p));
-      if (b === 'adp') return p.adp != null ? cost - p.adp : null;
       if (b === 'board') return oRanks[p.id] != null ? cost - oRanks[p.id] : null;
-      if (b === 'true') return V(midPick(wouldRd(p))) - V(cost);
-      return cost - midPick(wouldRd(p));
+      if (b === 'true') {
+        const vAdp = V(midPick(wouldRd(p))) - V(cost);
+        const vBoard = oRanks[p.id] != null ? V(Math.max(1, oRanks[p.id])) - V(cost) : null;
+        return vBoard == null ? vAdp : (vAdp + vBoard) / 2;
+      }
+      return cost - midPick(wouldRd(p)); // 'adp' (and legacy 'keeper')
     };
     const pickVal = (season, round, b) => {
       const yrs = Math.max(0, (+season) - (+L.season));

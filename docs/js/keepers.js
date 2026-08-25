@@ -35,12 +35,16 @@
         const myRank = oRanks[p.id] || null;
         const kRd = sim.rounds[p.id] ?? null; // null = predicted keeper, never drafted
         const wouldRd = kRd ?? sim.wouldBe(p); // hypothetical draft round if he entered
+        // Surplus (ADP) is keeper-aware: his ADP maps him onto THIS keeper
+        // board (keepers removed, real open slots) — that's wouldRd.
+        // True surplus = the value-curve average of the board and ADP forms.
+        const vAdp = wouldRd != null ? V(midPick(wouldRd)) - V(cost) : null;
+        const vBoard = myRank != null ? V(Math.max(1, myRank)) - V(cost) : null;
         return {
           p, lastRd, wasKept, costRd, myRank, kRd, wouldRd,
           sBoard: myRank != null ? cost - myRank : null,
-          sAdp: p.adp != null ? cost - p.adp : null,
-          sKrd: wouldRd != null ? cost - midPick(wouldRd) : null,
-          sTrue: wouldRd != null ? V(midPick(wouldRd)) - V(cost) : null,
+          sAdp: wouldRd != null ? cost - midPick(wouldRd) : null,
+          sTrue: vAdp == null ? vBoard : vBoard == null ? vAdp : (vAdp + vBoard) / 2,
           official: officialKeepers.has(p.id),
         };
       });
@@ -58,15 +62,13 @@
     { key: 'sBoard', label: 'Surplus (board)', num: true, get: c => c.sBoard,
       title: 'expected pick value of the cost round minus your board rank — positive = bargain. Sort here to grade by it.' },
     { key: 'sAdp', label: 'Surplus (ADP)', num: true, get: c => c.sAdp,
-      title: 'expected pick value of the cost round minus ADP — positive = bargain. Sort here to grade by it.' },
-    { key: 'sKrd', label: 'Surplus (K rd)', num: true, get: c => c.sKrd,
-      title: 'cost round vs the round he would ACTUALLY go in this keeper draft (kept players use their hypothetical slot) — positive = bargain. Sort here to grade by it.' },
+      title: "keeper-aware ADP surplus: his ADP mapped onto THIS keeper board (keepers removed, real open slots) vs the round he costs — positive = bargain. Sort here to grade by it." },
     { key: 'sTrue', label: 'True surplus', num: true, get: c => c.sTrue,
-      title: 'keeper-draft surplus weighted on a convex draft-value curve — saving 20 slots in round 2 is worth far more than 20 slots in round 12. Sort here to grade by it.' },
+      title: 'the value-weighted blend: board surplus and keeper-ADP surplus both run through the convex draft-value curve (early slots worth far more) and averaged. Sort here to grade by it.' },
   ];
   // per-column natural direction: value columns default to best-first
-  const DEFAULT_DIR = { name: 1, lastRd: 1, costRd: 1, adp: 1, kRd: 1, myRank: 1, sBoard: -1, sAdp: -1, sKrd: -1, sTrue: -1 };
-  const SURPLUS_KEYS = ['sBoard', 'sAdp', 'sKrd', 'sTrue'];
+  const DEFAULT_DIR = { name: 1, lastRd: 1, costRd: 1, adp: 1, kRd: 1, myRank: 1, sBoard: -1, sAdp: -1, sTrue: -1 };
+  const SURPLUS_KEYS = ['sBoard', 'sAdp', 'sTrue'];
 
   for (const [tag, L] of Object.entries(leagues)) {
     const myRoster = L.rosters.find(r => r.owner === L.myUserId);
@@ -172,7 +174,6 @@
           LAB.el('td', { class: 'num' }, c.myRank ? '#' + c.myRank : '–'),
           sCell('sBoard'),
           sCell('sAdp'),
-          sCell('sKrd'),
           sCell('sTrue'),
           LAB.el('td', {}, LAB.el('span', { class: verdict[1], style: 'font-weight:700;font-size:11.5px;text-transform:uppercase' }, verdict[0]))));
       }
