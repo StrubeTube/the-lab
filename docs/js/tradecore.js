@@ -192,7 +192,13 @@
 
       // ---- SELL: keeper (+optional sweetener / pair) -> their pick ----
       for (const sp of spares.slice(0, 4)) {
-        const gain = C.slateSum(C.slate(P.players.concat(sp.p.id), b)) - pSum;
+        const afterSlate = C.slate(P.players.concat(sp.p.id), b);
+        const gain = C.slateSum(afterSlate) - pSum;
+        // who my keeper would knock off their slate — the perspective line
+        const disp = pSlate.find(x => !afterSlate.some(y => y.p.id === x.p.id));
+        const slotLine = afterSlate.some(y => y.p.id === sp.p.id)
+          ? (disp ? `replaces ${disp.p.name} (+${Math.round(disp.s)}) on their keeper slate` : 'fills an empty keeper slot for them')
+          : (pSlate.length ? `doesn't crack their slate (their #${pSlate.length}: ${pSlate[pSlate.length - 1].p.name} +${Math.round(pSlate[pSlate.length - 1].s)})` : '');
         const intel = intelFor(P.rid, [sp.p.id]);
         if (gain < 3 && !intel.length) continue;
         const avail = C.reserve(pOpen, sp.cost);
@@ -211,7 +217,7 @@
               { k: 'market', v: (r.pick.round >= mktRd ? 1.2 : -0.9 * (mktRd - r.pick.round)) * W.market + (evts.length >= 3 ? 0.5 : 0) },
               ...intel.map(i => ({ k: 'intel', v: W.intel * (i.boost ?? 3) }))],
             title: `${sp.p.name} (K R${sp.cost}) → their ${fmtPick(r.pick, P.rid)}`,
-            why: gain > 3 ? `upgrades their slate +${Math.round(gain)}` : (intel[0]?.note || ''),
+            why: gain > 3 ? `${slotLine} — net +${Math.round(gain)}` : [intel[0]?.note, slotLine].filter(Boolean).join(' · '),
             precedent: evts.slice(0, 3).map(e => `R${e.paid.join('+R')} (${e.name} ${e.surp > 0 ? '+' : ''}${e.surp}, '${String(e.season).slice(2)})`).join(' · ') || 'no close comps — cost-round rule of thumb',
           });
         }
@@ -231,7 +237,7 @@
                 { k: 'market', v: 0.4 * W.market },
                 ...intel.map(i => ({ k: 'intel', v: W.intel * (i.boost ?? 3) }))],
               title: `${sp.p.name} + my R${sweet.round} → their ${fmtPick(up, P.rid)}`,
-              why: `slate upgrade + an extra pick for them; I move up to R${up.round}`,
+              why: `${slotLine} + an extra pick for them; I move up to R${up.round}`,
               precedent: 'package pricing: solo market ' + `R${mktRd}` + ' improved ~' + (mktRd - up.round) + ' rounds by the sweetener',
             });
           }
@@ -240,7 +246,9 @@
       // pair of spares -> one good pick
       if (o.maxAssets >= 3 && spares.length >= 2) {
         const [a2, b2] = spares;
-        const gain2 = C.slateSum(C.slate(P.players.concat(a2.p.id, b2.p.id), b)) - pSum;
+        const after2 = C.slate(P.players.concat(a2.p.id, b2.p.id), b);
+        const gain2 = C.slateSum(after2) - pSum;
+        const disp2 = pSlate.filter(x => !after2.some(y => y.p.id === x.p.id)).map(x => `${x.p.name} (+${Math.round(x.s)})`);
         if (gain2 >= 8) {
           let avail = C.reserve(pOpen, a2.cost);
           avail = avail && C.reserve(avail, b2.cost);
@@ -256,7 +264,7 @@
                 { k: 'fairness', v: W.fairness * Math.min(2.5, gain2 / 10) },
                 { k: 'market', v: 0.3 * W.market }],
               title: `${a2.p.name} + ${b2.p.name} → their ${fmtPick(up, P.rid)}`,
-              why: `two slate upgrades at once (+${Math.round(gain2)})`,
+              why: `they'd replace ${disp2.join(' and ') || 'empty slots'} on their slate (+${Math.round(gain2)})`,
               precedent: 'double-keeper deals price ~2 rounds above the better solo comp',
             });
           }
@@ -299,9 +307,12 @@
         // ---- SWAP: my spare <-> their spare, both slates improve ----
         for (const sp of spares.slice(0, 3)) {
           for (const ts of theirSpares) {
-            const mg = C.slateSum(C.slate(me.players.filter(x => x !== sp.p.id).concat(ts.p.id), b)) - mySlateSum;
-            const tg = C.slateSum(C.slate(P.players.filter(x => x !== ts.p.id).concat(sp.p.id), b)) - pSum;
+            const afterM = C.slate(me.players.filter(x => x !== sp.p.id).concat(ts.p.id), b);
+            const afterT = C.slate(P.players.filter(x => x !== ts.p.id).concat(sp.p.id), b);
+            const mg = C.slateSum(afterM) - mySlateSum;
+            const tg = C.slateSum(afterT) - pSum;
             if (mg < 3 || tg < 2) continue;
+            const dispT = pSlate.find(x => x.p.id !== ts.p.id && !afterT.some(y => y.p.id === x.p.id));
             push({
               type: 'swap', rid: P.rid,
               give: [{ kind: 'player', id: sp.p.id }], get: [{ kind: 'player', id: ts.p.id }],
@@ -311,7 +322,7 @@
                 { k: 'fairness', v: W.fairness * Math.min(2.5, tg / 8) },
                 { k: 'market', v: 0.6 * W.market }],
               title: `${sp.p.name} ⇄ ${ts.p.name}`,
-              why: `win-win: my slate +${Math.round(mg)}, theirs +${Math.round(tg)} — each spare fits the other roster`,
+              why: `win-win: my slate +${Math.round(mg)}, theirs +${Math.round(tg)}` + (dispT ? ` — ${sp.p.name} replaces ${dispT.p.name} (+${Math.round(dispT.s)}) for them` : ''),
               precedent: 'keeper-for-keeper: both sides keep someone they otherwise lose',
             });
           }
