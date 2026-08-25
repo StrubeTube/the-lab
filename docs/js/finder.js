@@ -366,7 +366,11 @@
       LAB.el('div', { class: 'flex', style: 'gap:6px;align-items:baseline' },
         LAB.el('b', { style: 'font-family:var(--font-display);font-size:13px' }, title),
         LAB.el('span', { class: 'muted', style: 'font-size:10px' }, sub),
-        LAB.el('span', { class: 'mono', style: 'font-size:10px;color:#3ee68f' }, `me +${Math.round(side.net)}`)),
+        LAB.el('span', { class: 'mono', style: 'font-size:10px;color:#3ee68f' }, `me +${Math.round(side.net)}`),
+        side.optics != null ? LAB.el('span', {
+          class: 'mono', style: 'font-size:10px;color:var(--warn)',
+          title: 'what the deal looks like TO THEM on a classic linear value chart — positive means two real picks beat the one they give',
+        }, `their chart +${Math.round(side.optics)}`) : ''),
       LAB.el('div', { style: 'display:flex;gap:8px;margin-top:3px' },
         LAB.el('div', { style: 'flex:1;border:1px solid rgba(255,92,92,.35);border-radius:7px;padding:3px 7px 5px;background:rgba(255,92,92,.05)' },
           LAB.el('div', { style: 'font-size:8.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:#ff5c5c' }, 'you send'),
@@ -380,7 +384,7 @@
       const oOver = C.ownedPicks(pr.over.rid).length - 16, uShort = 16 - C.ownedPicks(pr.under.rid).length;
       const pitch = 'Two clean pick trades, no players:\n' +
         `1) ${oName}: my R${pr.over.give.map(a => a.round).join('+R')} for your R${pr.over.get.map(a => a.round).join('+R')} — you're ${oOver} pick${oOver > 1 ? 's' : ''} over the roster limit; this sheds one.\n` +
-        `2) ${uName}: my R${pr.under.give.map(a => a.round).join('+R')} for your R${pr.under.get.map(a => a.round).join('+R')} — you're ${uShort} short; this fixes your count.`;
+        `2) ${uName}: my R${pr.under.give.map(a => a.round).join('+R')} for your R${pr.under.get.map(a => a.round).join('+R')} — you're ${uShort} short; this fixes your count AND nets you +${Math.round(pr.under.optics || 0)} on a classic value chart (two real picks beat the one).`;
       const outR = [...pr.over.give, ...pr.under.give].map(a => a.round).sort((x, y) => x - y);
       const inR = [...pr.over.get, ...pr.under.get].map(a => a.round).sort((x, y) => x - y);
       const netChip = (r, col2) => LAB.el('span', {
