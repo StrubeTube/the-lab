@@ -53,11 +53,16 @@
     // adp = cost vs Sleeper ADP (sAdp), board = cost vs my rank (sBoard)
     const midPick = r => (r - 0.5) * 10;
     const wouldRd = p => kSim.rounds[p.id] ?? kSim.wouldBe(p);
+    // convex draft-value curve: slot 5 ≈ 90, slot 35 (R4) ≈ 46, slot 95
+    // (R10) ≈ 12 — the same 20-slot gap is worth far more up high than late.
+    // TRUE SURPLUS = value(market slot) − value(cost slot) on this curve.
+    const V = s => 100 * Math.exp(-Math.max(1, s) / 45);
     const surplusSlots = (p, b) => {
       if (!eligible(p)) return null;
       const cost = midPick(costRd(p));
       if (b === 'adp') return p.adp != null ? cost - p.adp : null;
       if (b === 'board') return oRanks[p.id] != null ? cost - oRanks[p.id] : null;
+      if (b === 'true') return V(midPick(wouldRd(p))) - V(cost);
       return cost - midPick(wouldRd(p));
     };
     // a pick is worth its DRAFT POSITION: slots of value over a last-round
@@ -65,7 +70,10 @@
     // future-year picks discounted 15%/yr
     const pickVal = (season, round) => {
       const yrs = Math.max(0, (+season) - (+L.season));
-      return Math.max(0, (16.5 - Math.min(16, +round)) * 10) * Math.pow(0.85, yrs);
+      const base = basis === 'true'
+        ? V(midPick(Math.min(16, +round))) // same convex curve as true surplus
+        : Math.max(0, (16.5 - Math.min(16, +round)) * 10);
+      return base * Math.pow(0.85, yrs);
     };
     // the league's real market, keyed by the keeper's surplus AT TRADE TIME
     // (retro: cost slot minus that season's national ADP)
@@ -85,8 +93,8 @@
   }
   const fmt = v => Math.round(v);
   const fmtS = v => (v > 0 ? '+' : '') + Math.round(v);
-  const BASIS_LABEL = { keeper: 'Keeper surplus', adp: 'ADP surplus', board: 'My-rank surplus' };
-  const UNIT = () => lens === 'keeper' ? 'surplus' : 'pts';
+  const BASIS_LABEL = { true: 'True surplus', keeper: 'Keeper surplus', adp: 'ADP surplus', board: 'My-rank surplus' };
+  const UNIT = () => lens === 'keeper' ? (basis === 'true' ? 'value' : 'surplus') : 'pts';
 
   // ---------- per-league state ----------
   let L, TR, E, lens, basis, partnerRid, give, get, showAllLog;
@@ -105,7 +113,7 @@
     TR = trades[tag] || { trades: [], roundHist: {}, tradedPicks: [], market: [] };
     E = makeEngine(L, TR);
     lens = L.status === 'in_season' ? 'season' : 'keeper';
-    basis = 'keeper';
+    basis = 'true';
     const myRid = (L.rosters.find(r => r.owner === L.myUserId) || {}).rid;
     partnerRid = (L.rosters.find(r => r.rid !== myRid) || {}).rid;
     give = []; get = []; showAllLog = false;
@@ -285,12 +293,13 @@
       for (const a of give) {
         if (a.kind !== 'player') continue;
         const p = byId[a.id];
-        const s = E.surplusSlots(p, basis);
+        // market comps are stored in slot units — always match on those
+        const s = E.surplusSlots(p, 'keeper');
         if (!E.eligible(p) || s == null) continue;
         const evts = E.surpMatches(s).slice(0, 4);
         if (evts.length) {
           card.append(LAB.el('p', { style: 'font-size:11.5px;margin-top:6px;color:var(--warn)' },
-            `⚖ Market: ${p.name} carries ${fmtS(s)} surplus — the closest keepers ever traded here went for `,
+            `⚖ Market: ${p.name} carries ${fmtS(s)} keeper surplus — the closest keepers ever traded here went for `,
             evts.map(e => `R${e.paid.join('+R')} (${e.name} ${fmtS(e.surp)}, '${String(e.season).slice(2)})`).join(' · '),
             ` — ask in that range.`));
         }
@@ -389,7 +398,7 @@
     // strongest signal: this trade moved a keeper with surplus close to a
     // keeper in the proposal — those are the comps worth quoting
     const sentSurps = [...give, ...get].filter(a => a.kind === 'player')
-      .map(a => E.surplusSlots(byId[a.id], basis)).filter(x => x != null);
+      .map(a => E.surplusSlots(byId[a.id], 'keeper')).filter(x => x != null); // comps live in slot units
     if (sentSurps.length && t.ts) {
       for (const e of (TR.market || [])) {
         if (e.ts !== t.ts || e.surp == null) continue;
@@ -488,11 +497,14 @@
       return open.slice(0, Math.max(0, open.length - spill));
     }
     const myOpen = openOf(me.rid);
-    // my spare keepers: eligible, positive surplus, NOT in my optimal slate
+    const myOwnedCount = ownedPicks(me.rid).filter(o => +o.season === +L.season).length;
+    // my spare keepers: eligible, positive surplus, NOT in my optimal slate.
+    // s (display/gain) follows the active basis; sK (slot units) drives the
+    // historical market matching
     const mySlateIds = new Set(slate(me.players).map(x => x.p.id));
     const spares = me.players.map(pid => byId[pid])
       .filter(p => E.eligible(p) && !mySlateIds.has(p.id) && (E.surplusSlots(p, basis) ?? 0) > 0)
-      .map(p => ({ p, s: E.surplusSlots(p, basis), cost: E.costRd(p) }))
+      .map(p => ({ p, s: E.surplusSlots(p, basis), sK: E.surplusSlots(p, 'keeper'), cost: E.costRd(p) }))
       .sort((a, b) => b.s - a.s);
     // market rate for a keeper of surplus s: median headline pick round of the
     // closest comps across BOTH leagues (fallback: keepers fetch ~1.5 rounds
@@ -535,7 +547,7 @@
         if (gain < 3 && !intr) continue;
         const avail = reserveFor(Math.min(16, sp.cost));
         if (!avail.length) continue;
-        const { round: mktRd, evts } = rateFor(sp.s, sp.cost);
+        const { round: mktRd, evts } = rateFor(sp.sK, sp.cost);
         const pickAt = want => avail.find(o => o.round >= want) || avail[avail.length - 1];
         const open = pickAt(Math.max(1, mktRd - 1)), fall = pickAt(mktRd);
         if (!open) continue;
@@ -551,9 +563,10 @@
             || 'no close comps — priced from the cost-round rule of thumb',
         });
       }
-      // B: consolidation — my 1 earlier open pick for 2 of their opens
-      // (aimed at teams drowning in picks)
-      if (pOpen.length >= 2) {
+      // B: consolidation — my 1 earlier open pick for 2 of their opens.
+      // ONLY when it works for both rosters: I must be UNDER 16 picks (or
+      // I couldn't roster my own draft class) and they must be OVER
+      if (pOpen.length >= 2 && myOwnedCount < 16 && extra > 0) {
         let best = null;
         for (const a of myOpen) {
           if (a.round < 3) continue; // my early picks aren't for sale
@@ -665,8 +678,8 @@
     const lensSeg = LAB.el('div', { class: 'seg' },
       [['keeper', 'Keeper draft'], ['season', 'In-season']].map(([k, lbl]) =>
         LAB.el('button', { class: k === lens ? 'active' : '', onclick: () => { lens = k; render(); } }, lbl)));
-    const basisSeg = LAB.el('div', { class: 'seg', title: 'which Keepers-page surplus to grade with: vs the keeper-draft round, vs ADP, or vs my board rank — always against the round he costs to keep' },
-      [['keeper', 'Keeper surplus'], ['adp', 'ADP surplus'], ['board', 'My-rank surplus']].map(([k, lbl]) =>
+    const basisSeg = LAB.el('div', { class: 'seg', title: 'True surplus (default) weights the gap on a convex draft-value curve — the same slots saved count for much more early in the draft. The other three are the raw Keepers-page surpluses: vs keeper-draft round, vs ADP, vs my board rank.' },
+      [['true', 'True surplus'], ['keeper', 'Keeper surplus'], ['adp', 'ADP surplus'], ['board', 'My-rank surplus']].map(([k, lbl]) =>
         LAB.el('button', { class: k === basis ? 'active' : '', onclick: () => { basis = k; render(); } }, lbl)));
     root.append(LAB.el('div', { class: 'card', style: 'margin-top:14px' },
       LAB.el('div', { class: 'flex', style: 'gap:12px;flex-wrap:wrap;align-items:center' },

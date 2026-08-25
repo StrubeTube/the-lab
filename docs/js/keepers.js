@@ -14,6 +14,9 @@
 
   // expected overall pick for round R in a 10-team snake (mid-round)
   const midPick = r => (r - 0.5) * 10;
+  // convex draft-value curve for TRUE surplus — the same slots saved are
+  // worth far more high in the draft than late
+  const V = s => 100 * Math.exp(-Math.max(1, s) / 45);
 
   function candidates(L, roster, sim) {
     const kept = new Set(L.lastKept || []);
@@ -37,6 +40,7 @@
           sBoard: myRank != null ? cost - myRank : null,
           sAdp: p.adp != null ? cost - p.adp : null,
           sKrd: wouldRd != null ? cost - midPick(wouldRd) : null,
+          sTrue: wouldRd != null ? V(midPick(wouldRd)) - V(cost) : null,
           official: officialKeepers.has(p.id),
         };
       });
@@ -57,10 +61,12 @@
       title: 'expected pick value of the cost round minus ADP — positive = bargain. Sort here to grade by it.' },
     { key: 'sKrd', label: 'Surplus (K rd)', num: true, get: c => c.sKrd,
       title: 'cost round vs the round he would ACTUALLY go in this keeper draft (kept players use their hypothetical slot) — positive = bargain. Sort here to grade by it.' },
+    { key: 'sTrue', label: 'True surplus', num: true, get: c => c.sTrue,
+      title: 'keeper-draft surplus weighted on a convex draft-value curve — saving 20 slots in round 2 is worth far more than 20 slots in round 12. Sort here to grade by it.' },
   ];
   // per-column natural direction: value columns default to best-first
-  const DEFAULT_DIR = { name: 1, lastRd: 1, costRd: 1, adp: 1, kRd: 1, myRank: 1, sBoard: -1, sAdp: -1, sKrd: -1 };
-  const SURPLUS_KEYS = ['sBoard', 'sAdp', 'sKrd'];
+  const DEFAULT_DIR = { name: 1, lastRd: 1, costRd: 1, adp: 1, kRd: 1, myRank: 1, sBoard: -1, sAdp: -1, sKrd: -1, sTrue: -1 };
+  const SURPLUS_KEYS = ['sBoard', 'sAdp', 'sKrd', 'sTrue'];
 
   for (const [tag, L] of Object.entries(leagues)) {
     const myRoster = L.rosters.find(r => r.owner === L.myUserId);
@@ -138,8 +144,11 @@
       const tb = LAB.el('tbody');
       for (const c of cands) {
         const s = c[activeS] ?? c.sBoard ?? c.sAdp;
+        // True surplus lives on a 0-100 value scale, not slots — its verdict
+        // thresholds are tighter
+        const th = activeS === 'sTrue' ? [18, 6, -4] : [25, 8, -10];
         const verdict = s == null ? ['?', 'muted']
-          : s >= 25 ? ['KEEP', 'good'] : s >= 8 ? ['lean keep', 'warn'] : s <= -10 ? ['let go', 'bad'] : ['toss-up', 'muted'];
+          : s >= th[0] ? ['KEEP', 'good'] : s >= th[1] ? ['lean keep', 'warn'] : s <= th[2] ? ['let go', 'bad'] : ['toss-up', 'muted'];
         const fmtS = v => v == null ? '–' : (v > 0 ? '+' : '') + Math.round(v);
         const sCell = key => LAB.el('td', {
           class: 'num ' + (key === activeS ? (c[key] > 0 ? 'good' : c[key] < 0 ? 'bad' : 'muted') : 'muted'),
@@ -164,6 +173,7 @@
           sCell('sBoard'),
           sCell('sAdp'),
           sCell('sKrd'),
+          sCell('sTrue'),
           LAB.el('td', {}, LAB.el('span', { class: verdict[1], style: 'font-weight:700;font-size:11.5px;text-transform:uppercase' }, verdict[0]))));
       }
       tbl.append(tb);
