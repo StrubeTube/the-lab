@@ -327,7 +327,7 @@
           const laters = myOpen.filter(x => x.round > a.round);
           for (let i = 0; i < laters.length - 1; i++) {
             const net = pv(a.round) - pv(laters[i].round) - pv(laters[i + 1].round);
-            if (net < -8 || net > 25) continue; // near-fair; count is their payment
+            if (net < -8 || net > 8) continue; // near-fair; count is their payment
             const score = 4 + 2 * W.motivation + Math.min(1.5, Math.max(0, net) / 10) + W.propensity * prop.score * 0.5;
             if (!best || score > best.score) best = { a, b: laters[i], c: laters[i + 1], net, score };
           }
@@ -392,7 +392,7 @@
         const laters = myOpen.filter(x => x.round > d.round);
         for (let i = 0; i < laters.length - 1; i++) {
           const net = pv(d.round) - pv(laters[i].round) - pv(laters[i + 1].round);
-          if (net < -8 || net > 15) continue;
+          if (net < -6 || net > 6) continue; // near-even both ways — they'd actually say yes
           const score = (16 - pOwned) + prop + net / 10;
           if (!best || score > best.score) best = { rid: P.rid, give: [laters[i], laters[i + 1]], get: d, net, score };
         }
@@ -425,16 +425,18 @@
           const bs = oOpen.filter(x => x.round > a1.round);
           for (let i = 0; i < bs.length - 1; i++) {
             const netA = pv(bs[i].round) + pv(bs[i + 1].round) - pv(a1.round);
-            if (netA < 0 || netA > 30) continue; // O eats a small value loss to shed count
+            // each LEG must be only a SLIGHT gain for me — the partner's real
+            // payment is the count fix, never a value fleecing they'd refuse
+            if (netA < 0.5 || netA > 10) continue;
             for (const d of C.openOf(U.rid)) {
               if (d.round < 3) continue;
               const cs = myOpen.filter(x => x !== a1 && x.round > d.round);
               for (let j = 0; j < cs.length - 1; j++) {
                 const netB = pv(d.round) - pv(cs[j].round) - pv(cs[j + 1].round);
-                if (netB < -8 || netB > 15) continue; // U eats a small loss to gain count
+                if (netB < 0.5 || netB > 10) continue;
                 const total = netA + netB;
-                if (total < 6) continue; // the whole point: I come out ahead
-                const score = total / 8 + (nO - 16) + (16 - nU)
+                // prefer BALANCED pairs (both legs modest) over max total
+                const score = Math.min(netA, netB) * 0.8 + total / 10 + (nO - 16) + (16 - nU)
                   + ((C.propensity[O.rid] || {}).score || 0) * 0.5
                   + ((C.propensity[U.rid] || {}).score || 0) * 0.5;
                 if (!best || score > best.score) best = {
