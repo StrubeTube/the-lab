@@ -1247,8 +1247,25 @@ for e in players_out:
 # cross-position normalization: position-percentile of the blend, mapped to
 # the position's VORP-at-that-percentile (SIGNED, interpolated — a clamp at
 # zero would collapse every sub-baseline player into one tie), re-ranked
-# across all positions so equal score = equal value over replacement
-BASE_N = {"QB": 12, "RB": 26, "WR": 28, "TE": 12}
+# across all positions so equal score = equal value over replacement.
+# FLEX-AWARE baselines: the leagues start 2RB+2WR+TE+2FLEX per team, so the
+# 20 flex slots (filled by the best remaining RB/WR/TE) push true
+# replacement level much deeper than the starter counts — static RB26/WR28
+# baselines under-valued RB/WR versus the market (mean Lab Edge RB/WR -4.8,
+# TE +18.5 before this fix). Baseline = last player consumed by starters+flex.
+_flex_pool = []
+_consumed = {"QB": 10, "RB": 20, "WR": 20, "TE": 10}  # 10 teams x starters
+for pos2 in ("RB", "WR", "TE"):
+    projs2 = sorted((e.get("proj") or 0 for e in players_out if e["pos"] == pos2
+                     and e.get("proj")), reverse=True)
+    _flex_pool.extend((pr, pos2) for pr in projs2[_consumed[pos2]:])
+_flex_pool.sort(reverse=True)
+for pr, pos2 in _flex_pool[:20]:  # 2 flex x 10 teams
+    _consumed[pos2] += 1
+_consumed["QB"] = 12  # streaming buffer on the onesie position
+BASE_N = _consumed
+print(f"  flex-aware VORP baselines: " +
+      " ".join(f"{p}{n}" for p, n in BASE_N.items()))
 vorp_dist = {}
 for pos2 in POS:
     projs = sorted((e.get("proj") or 0 for e in players_out if e["pos"] == pos2
