@@ -35,8 +35,10 @@ ROOT = Path(__file__).parent
 CACHE = ROOT / "data" / "raw" / "backtest"
 CACHE.mkdir(parents=True, exist_ok=True)
 POS = ["QB", "RB", "WR", "TE"]
-SEASONS = list(range(2018, 2026))  # score-years (FFC half-PPR ADP starts 2018)
-TRAIN = set(range(2018, 2023))     # weight tuning trains here...
+SEASONS = list(range(2014, 2026))  # score-years; pre-2018 uses FFC STANDARD ADP
+                                   # (half-PPR ADP starts 2018 — standard is a fair
+                                   # market-rank proxy, slight pass-catcher skew)
+TRAIN = set(range(2014, 2023))     # weight tuning trains here...
 HOLDOUT = set(range(2023, 2026))   # ...and is judged here
 UA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
 
@@ -82,9 +84,15 @@ for row in nv_draft_rows:
     dc_by_name[norm(row["n"]) + "|" + row["p"]] = e
 
 print("Loading historical stats + rosters (cached after first run)...")
+gsis_to_pid = {}
+for pid_, p_ in players_db.items():
+    if isinstance(p_, dict):
+        g_ = (p_.get("gsis_id") or "").strip()
+        if g_:
+            gsis_to_pid.setdefault(g_, pid_)
 stats = {}
 rosters = {}
-for yr in range(2015, 2026):
+for yr in range(2012, 2026):
     if yr == 2025:
         stats[yr] = json.loads((ROOT / "data" / "raw" / "stats_2025.json").read_text(encoding="utf-8"))
     else:
@@ -92,8 +100,15 @@ for yr in range(2015, 2026):
     rows = cached(f"roster_{yr}.json",
                   f"https://github.com/nflverse/nflverse-data/releases/download/rosters/roster_{yr}.csv",
                   is_csv=True)
-    rosters[yr] = {r["sleeper_id"]: (r["team"] or "").replace("LA", "LAR") if r["team"] == "LA" else r["team"]
-                   for r in rows if r.get("sleeper_id") and r.get("team")}
+    m_ = {}
+    for r in rows:
+        if not r.get("team"):
+            continue
+        team = "LAR" if r["team"] == "LA" else r["team"]
+        pid_ = r.get("sleeper_id") or gsis_to_pid.get((r.get("gsis_id") or "").strip())
+        if pid_:
+            m_[pid_] = team
+    rosters[yr] = m_
 
 # historical positional finishes (for the career-peak pedigree signal)
 fin_hist = {}
@@ -248,9 +263,12 @@ def adp_pool_for(Y):
     """FFC ADP players for year Y — from the repo's history file (2020+) or
     a cached direct FFC fetch for older seasons."""
     d = adp_hist.get(str(Y))
-    if not d:
+    if not d and Y >= 2018:
         d = cached(f"ffc_{Y}.json",
                    f"https://fantasyfootballcalculator.com/api/v1/adp/half-ppr?teams=10&year={Y}")
+    if not d:  # half-PPR ADP starts 2018; standard is the market proxy before
+        d = cached(f"ffc_std_{Y}.json",
+                   f"https://fantasyfootballcalculator.com/api/v1/adp/standard?teams=10&year={Y}")
     return (d or {}).get("players", [])
 
 
@@ -370,12 +388,12 @@ def build_season(Y):
         # --- candidate hone signals ---
         # career touch odometer (RB wear): all touches on record before Y
         odo = 0
-        for yy in range(2019, Y):
+        for yy in range(2012, Y):
             so = (stats.get(yy) or {}).get(pid) or {}
             odo += (so.get("rush_att") or 0) + (so.get("rec") or 0)
         m["odo"] = -odo  # inverted: fresher legs -> higher percentile
         # career-peak pedigree: best positional finish on record before Y
-        peak = min((fin_hist.get(yy, {}).get(pid, 999) for yy in range(2015, Y)), default=999)
+        peak = min((fin_hist.get(yy, {}).get(pid, 999) for yy in range(2012, Y)), default=999)
         if peak < 999:
             m["peak"] = -peak  # inverted: better best-ever finish -> higher pct
         # TD-dependency: share of last-year points that came from TDs
@@ -615,7 +633,7 @@ for Y in SEASONS:
 
 HIT_N = {"QB": 12, "TE": 12, "RB": 24, "WR": 24}
 
-print("\n================ RESULTS (pooled 2021-2025) ================")
+print("\n================ RESULTS (pooled all score-years) ================")
 print("\n-- Test 1: rank correlation with positional finish (higher = better) --")
 for pos in POS:
     grp = [r for r in all_rows if r["pos"] == pos and r["outcome"] and r["adp"] <= 240]
