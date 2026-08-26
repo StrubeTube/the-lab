@@ -486,7 +486,7 @@
             el('span', { class: 't-label', style: 'color:var(--ink-3);font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;font-weight:700' }, 'Lab Score'),
             L2.est ? el('span', { class: 'badge status', title: 'no real 2025 sample — graded off projection + draft capital, shrunk toward the middle' }, 'EST') : '',
             el('span', { class: 'mono ' + LAB.labColor(L2.sc), style: 'margin-left:auto;font-family:var(--font-display);font-size:26px;font-weight:700' }, L2.sc)),
-          bar('Opportunity', L2.o, 'sticky usage: shares of team work, weighted opportunity, snaps — the most predictive pillar'),
+          bar('Opportunity', L2.o, 'sticky usage (shares of team work, weighted opportunity, snaps) blended 70/30 with his PROJECTED 2026 role — so a riser inheriting a vacated backfield gets role credit'),
           bar('Talent', L2.t, 'sticky efficiency: yards per chance, work earned per snap, TD luck inverted'),
           bar('Situation', L2.s, 'team context: vacated work, offense quality, QB, backfield competition'),
           bar('Trajectory', Math.round(((L2.ys ?? 0) + (L2.yc ?? 0)) / 2), 'age curve + draft capital (safety reads the level, ceiling reads the slope)'),

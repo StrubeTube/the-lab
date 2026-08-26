@@ -389,10 +389,16 @@ def build_season(Y):
                 opp = 50 + (opp - 50) * shrink
             if tal is not None:
                 tal = 50 + (tal - 50) * shrink
+        # projected-role blend feeds SAFETY only: "will he return his slot"
+        # depends on the expected current role; CEILING keeps the pure
+        # historical resume so contrarian late-pick signal isn't washed out
+        opp_role = opp
+        if not est and opp is not None and adp_p is not None:
+            opp_role = 0.70 * opp + 0.30 * adp_p
         if any(v is None for v in (opp, tal, sit, trS, trC)):
             continue
         dur_p = pct(pos, m, "dur")
-        safety = mix([(opp, .40), (tal, .20), (sit, .18), (trS, .12), (dur_p, .10)])
+        safety = mix([(opp_role, .40), (tal, .20), (sit, .18), (trS, .12), (dur_p, .10)])
         ceiling = .15 * opp + .30 * tal + .25 * sit + .30 * trC
         wc = max(0.15, min(0.85, (m["adp"] - 24) / 96))
         fin = (1 - wc) * safety + wc * ceiling

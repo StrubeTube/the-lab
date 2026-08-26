@@ -1178,9 +1178,18 @@ for e in players_out:
             tal = 50 + (tal - 50) * shrink
     if any(v is None for v in (opp, tal, sit, trS, trC)):
         continue
+    # PROJECTED-ROLE blend (backtest-validated, safety only): last year's
+    # usage is 70% of the opportunity story, the expected CURRENT role
+    # (Sleeper projection percentile) the rest — a depth-chart riser like a
+    # year-2 back inheriting a vacated backfield finally gets role credit.
+    # Ceiling keeps the pure historical resume: blending market signal there
+    # washed out the contrarian late-pick edge (32/27 -> 30/28).
+    opp_role = opp
+    if not est and proj_p is not None:
+        opp_role = 0.70 * opp + 0.30 * proj_p
     # durability (2-yr games-played rate) is a backtest-validated safety input
     dur_p = pct(e["id"], "dur")
-    safety = mix([(opp, .40), (tal, .20), (sit, .18), (trS, .12), (dur_p, .10)])
+    safety = mix([(opp_role, .40), (tal, .20), (sit, .18), (trS, .12), (dur_p, .10)])
     ceiling = .15 * opp + .30 * tal + .25 * sit + .30 * trC
     adp = e.get("adp") or 200
     wc = max(0.15, min(0.85, (adp - 24) / 96))
@@ -1188,7 +1197,7 @@ for e in players_out:
     if est:  # an unproven profile can't out-grade a proven one at the top
         fin = 50 + (fin - 50) * 0.75
     lab = e.setdefault("lab", {})
-    lab.update({"o": round(opp), "t": round(tal), "s": round(sit),
+    lab.update({"o": round(opp_role), "t": round(tal), "s": round(sit),
                 "ys": round(trS), "yc": round(trC),
                 "sfty": round(safety), "ceil": round(ceiling),
                 "wc": round(wc, 2), "fin": round(fin, 1)})
