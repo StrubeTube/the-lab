@@ -773,10 +773,13 @@ def ceiling_of(r, w):
     base = mixw([(c["opp"], w[0]), (c["tal"], w[1]), (c["sit"], w[2]), (c["trC"], w[3])])
     if base is None:
         return None
-    v = (0.82 * (base + 0.18 * (c["gapv"] or 0))
+    v = (0.82 * base
          + 0.10 * (c["rz"] if c["rz"] is not None else 50)
          + 0.08 * ((c["ad"] if c["ad"] is not None else 50) if r["pos"] == "WR" else 50))
-    return v + (4 if c["win"] else 0)
+    v += 4 if c["win"] else 0
+    if r.get("peak_p") is not None:
+        v = 0.90 * v + 0.10 * r["peak_p"]
+    return v
 
 def bust_gap(score_fn, years):
     grp = [r for r in all_rows if r["adp"] <= 36 and r["outcome"] and r["season"] in years]
@@ -859,6 +862,62 @@ for label, fn in (("shipped ceiling", lambda r: r["ceiling"]),
                   ("E3 +usage-gap .12", lambda r: 0.88 * r["ceiling"] + 0.12 * nzt(r["ug_p"])),
                   ("E5 combo", lambda r: 0.80 * r["ceiling"] + 0.08 * nzt(r["tsd_p"]) + 0.06 * nzt(r["lg_p"]) + 0.06 * nzt(r["ug_p"]))):
     print(f"  {label:32} train {hit_gap(fn, TRAIN):+.1f}   holdout {hit_gap(fn, HOLDOUT):+.1f}")
+
+print("\n================ PER-POSITION MIX TUNING ================")
+print("tune each position's safety/ceiling weights separately (train),")
+print("judge by the POOLED contrasts on holdout vs the global mixes\n")
+
+S_GRID = [(.50, .15, .15, .10, .10), (.60, .10, .10, .10, .10), (.40, .25, .15, .10, .10),
+          (.40, .15, .25, .10, .10), (.40, .15, .15, .20, .10), (.35, .20, .20, .15, .10),
+          (.50, .20, .10, .10, .10), (.45, .15, .15, .15, .10)]
+C_GRID = [(.25, .30, .20, .25), (.35, .25, .15, .25), (.15, .40, .20, .25),
+          (.15, .30, .30, .25), (.20, .25, .20, .35), (.30, .30, .25, .15),
+          (.25, .40, .20, .15), (.10, .30, .25, .35)]
+
+def spear_metric(fn, pos, years, lo, hi):
+    grp = [r for r in all_rows if r["pos"] == pos and r["outcome"]
+           and lo <= r["adp"] <= hi and r["season"] in years and fn(r) is not None]
+    if len(grp) < 25:
+        return None, len(grp)
+    return spearman([-fn(r) for r in grp], [r["outcome"] for r in grp]), len(grp)
+
+def hit_gap_pos(fn, pos, years):
+    grp = [r for r in all_rows if r["pos"] == pos and 84 <= r["adp"] <= 240
+           and r["outcome"] and r["season"] in years and fn(r) is not None]
+    if len(grp) < 40:
+        return None
+    grp.sort(key=lambda r: -fn(r))
+    h = len(grp) // 2
+    return (100 * sum(map(hit, grp[:h])) / h
+            - 100 * sum(map(hit, grp[h:])) / (len(grp) - h))
+
+best_s, best_c = {}, {}
+for pos in POS:
+    # safety: early-pool ordering (per-pos bust samples are too thin)
+    scored = []
+    for w in S_GRID:
+        r_, n_ = spear_metric(lambda r: safety_of(r, w), pos, TRAIN, 0, 72)
+        if r_ is not None:
+            scored.append((r_, w))
+    best_s[pos] = max(scored)[1] if scored else (.50, .15, .15, .10, .10)
+    # ceiling: per-pos late hit gap where the sample allows
+    scored = []
+    for w in C_GRID:
+        g_ = hit_gap_pos(lambda r: ceiling_of(r, w), pos, TRAIN)
+        if g_ is not None:
+            scored.append((g_, w))
+    best_c[pos] = max(scored)[1] if scored else (.25, .30, .20, .25)
+    print(f"  {pos}: best safety {best_s[pos]}  best ceiling {best_c[pos]}")
+
+print("\n-- pooled verdict: per-position mixes vs global (train | holdout) --")
+glob_s = lambda r: safety_of(r, (.50, .15, .15, .10, .10))
+pp_s = lambda r: safety_of(r, best_s[r["pos"]])
+glob_c = lambda r: ceiling_of(r, (.25, .30, .20, .25))
+pp_c = lambda r: ceiling_of(r, best_c[r["pos"]])
+print(f"  SAFETY  global   train {bust_gap(glob_s, TRAIN):+.1f}   holdout {bust_gap(glob_s, HOLDOUT):+.1f}")
+print(f"  SAFETY  per-pos  train {bust_gap(pp_s, TRAIN):+.1f}   holdout {bust_gap(pp_s, HOLDOUT):+.1f}")
+print(f"  CEILING global   train {hit_gap(glob_c, TRAIN):+.1f}   holdout {hit_gap(glob_c, HOLDOUT):+.1f}")
+print(f"  CEILING per-pos  train {hit_gap(pp_c, TRAIN):+.1f}   holdout {hit_gap(pp_c, HOLDOUT):+.1f}")
 
 print("\n-- wc ramp calibration: mean within-position Spearman of the blend --")
 RAMPS = [("(adp-24)/96  [current]", 24, 96), ("(adp-12)/72", 12, 72),
