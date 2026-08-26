@@ -803,13 +803,14 @@ for spid, st in stats25.items():
     if not t25:
         continue
     d = team_opp.setdefault(t25, {"tgt": 0, "att": 0, "ay": 0,
-                                  "vtgt": 0, "vatt": 0, "vay": 0})
+                                  "vtgt": 0, "vatt": 0, "vay": 0, "rz": 0})
     tgt = st.get("rec_tgt") or 0
     att = st.get("rush_att") or 0
     ay = st.get("rec_air_yd") or 0
     d["tgt"] += tgt
     d["att"] += att
     d["ay"] += ay
+    d["rz"] += (st.get("rec_rz_tgt") or 0) + (st.get("rush_rz_att") or 0)
     if pdb.get("team") != t25:  # traded, cut, signed away, or retired
         d["vtgt"] += tgt
         d["vatt"] += att
@@ -1064,6 +1065,14 @@ for e in players_out:
     m["dur"] = (gp + gp2) / 34 if m2 is not None else (gp / 17 if gp else None)
     if lab.get("xtd") is not None:
         m["tdluck"] = -(lab["td"] - lab["xtd"])  # inverted: under-scorers up
+    # ceiling hone signals (backtest-validated combo): red-zone role share
+    # of the 2025 team's rz opportunities + WR air yards per target
+    tt25 = team_opp.get(team_last.get(e["id"]))
+    tgt25 = st.get("rec_tgt") or 0
+    if tt25 and tt25.get("rz"):
+        m["rzsh"] = ((st.get("rec_rz_tgt") or 0) + (st.get("rush_rz_att") or 0)) / tt25["rz"]
+    if tgt25 >= 25:
+        m["adot"] = (st.get("rec_air_yd") or 0) / tgt25
     ta = team_agg.get(e.get("team")) or {}
     m["offq"] = ta.get("proj")
     m["qbq"] = ta.get("qb")
@@ -1190,7 +1199,22 @@ for e in players_out:
     # durability (2-yr games-played rate) is a backtest-validated safety input
     dur_p = pct(e["id"], "dur")
     safety = mix([(opp_role, .40), (tal, .20), (sit, .18), (trS, .12), (dur_p, .10)])
-    ceiling = .15 * opp + .30 * tal + .25 * sit + .30 * trC
+    ceil_base = .15 * opp + .30 * tal + .25 * sit + .30 * trC
+    # ceiling hone combo (backtest: top-quartile hit gap +3 -> +8): the
+    # talent-over-usage GAP (efficiency before volume = the pre-breakout
+    # shape), red-zone role share (cheap TD equity), WR air-yards depth
+    # (spike-week profile), and the capital-gated year-2/3 breakout window
+    gap_v = max(0, tal - opp)
+    rz_p = pct(e["id"], "rzsh")
+    ad_p = pct(e["id"], "adot")
+    window_v = (lab.get("dcr") or 9) <= 3 and (
+        (e["pos"] in ("WR", "TE") and 1 <= (e.get("exp") or 0) <= 3)
+        or (e["pos"] == "RB" and (e.get("exp") or 0) <= 2))
+    ceiling = (0.82 * (ceil_base + 0.18 * gap_v)
+               + 0.10 * (rz_p if rz_p is not None else 50)
+               + 0.08 * ((ad_p if ad_p is not None else 50) if e["pos"] == "WR" else 50))
+    if window_v:
+        ceiling += 4
     adp = e.get("adp") or 200
     wc = max(0.15, min(0.85, (adp - 24) / 96))
     fin = (1 - wc) * safety + wc * ceiling

@@ -212,10 +212,11 @@ def build_season(Y):
         t = ros_prior.get(spid)
         if not t:
             continue
-        d = team_opp.setdefault(t, {"tgt": 0, "att": 0, "ay": 0, "vtgt": 0, "vatt": 0})
+        d = team_opp.setdefault(t, {"tgt": 0, "att": 0, "ay": 0, "vtgt": 0, "vatt": 0, "rz": 0})
         tp = team_pts.setdefault(t, {"all": 0.0, "qb": 0.0, "wrte": 0.0, "rb": {}})
         tgt, att, ay = st.get("rec_tgt") or 0, st.get("rush_att") or 0, st.get("rec_air_yd") or 0
         d["tgt"] += tgt; d["att"] += att; d["ay"] += ay
+        d["rz"] += (st.get("rec_rz_tgt") or 0) + (st.get("rush_rz_att") or 0)
         pts = st.get("pts_half_ppr") or 0
         tp["all"] += pts
         if p["position"] == "QB":
@@ -290,6 +291,24 @@ def build_season(Y):
         # durability: share of possible games played over the lookback
         gp2 = st2.get("gp") or 0
         m["dur"] = (gp + gp2) / 34 if m2 is not None else (gp / 17 if gp else None)
+        # --- candidate hone signals ---
+        # career touch odometer (RB wear): all touches on record before Y
+        odo = 0
+        for yy in range(2019, Y):
+            so = (stats.get(yy) or {}).get(pid) or {}
+            odo += (so.get("rush_att") or 0) + (so.get("rec") or 0)
+        m["odo"] = -odo  # inverted: fresher legs -> higher percentile
+        # TD-dependency: share of last-year points that came from TDs
+        pts_prior = st.get("pts_half_ppr") or 0
+        if pts_prior >= 60:
+            tdp = 6 * ((st.get("rec_td") or 0) + (st.get("rush_td") or 0)) + 4 * (st.get("pass_td") or 0)
+            m["tddep"] = -(tdp / pts_prior)  # inverted: less TD-reliant -> safer
+        # red-zone role: his share of the team's red-zone opportunities
+        if tt and tt.get("rz"):
+            m["rzsh"] = (rzt + rza) / tt["rz"]
+        # air yards per target (spike-week WR profile)
+        if tgt >= 25:
+            m["adot"] = (st.get("rec_air_yd") or 0) / tgt
         if gp >= 1:
             a, b = RATES["rec"]
             exp = a * rzt + b * max(0, tgt - rzt)
@@ -399,16 +418,37 @@ def build_season(Y):
             continue
         dur_p = pct(pos, m, "dur")
         safety = mix([(opp_role, .40), (tal, .20), (sit, .18), (trS, .12), (dur_p, .10)])
-        ceiling = .15 * opp + .30 * tal + .25 * sit + .30 * trC
+        ceil_base = .15 * opp + .30 * tal + .25 * sit + .30 * trC
+        # shipped ceiling (hone combo C5): talent-over-usage gap, red-zone
+        # role share, WR air-yards depth, capital-gated breakout window
+        gap_v = max(0, (tal - opp)) if (tal is not None and opp is not None) else 0
+        rz_p = pct(pos, m, "rzsh")
+        ad_p = pct(pos, m, "adot")
+        window_v = m["dc"] >= 0.65 and ((pos in ("WR", "TE") and 1 <= m.get("exp", 0) <= 3)
+                                        or (pos == "RB" and m.get("exp", 0) <= 2))
+        ceiling = (0.82 * (ceil_base + 0.18 * gap_v)
+                   + 0.10 * (rz_p if rz_p is not None else 50)
+                   + 0.08 * ((ad_p if ad_p is not None else 50) if pos == "WR" else 50))
+        if window_v:
+            ceiling += 4
         wc = max(0.15, min(0.85, (m["adp"] - 24) / 96))
         fin = (1 - wc) * safety + wc * ceiling
         if est:
             fin = 50 + (fin - 50) * 0.75
+        dcr_ok = m["dc"] >= 0.65  # drafted rounds 1-3
         rows.append({"pid": pid, "pos": pos, "adp": m["adp"], "est": est,
-                     "safety": safety, "ceiling": ceiling, "fin": fin,
+                     "safety": safety, "ceiling": ceiling, "ceil_base": ceil_base, "fin": fin,
                      "outcome": fin_rank.get(pid),
                      "pts": S.get(pid, {}).get("pts_half_ppr") or 0,
-                     "season": Y})
+                     "season": Y,
+                     # candidate hone signals (percentiles / flags)
+                     "odo_p": pct(pos, m, "odo"), "tddep_p": pct(pos, m, "tddep"),
+                     "rzsh_p": pct(pos, m, "rzsh"), "adot_p": pct(pos, m, "adot"),
+                     "gap": (tal - opp) if (tal is not None and opp is not None) else None,
+                     "moved": ros_now.get(pid) is not None and ros_prior.get(pid) is not None
+                              and ros_now.get(pid) != ros_prior.get(pid),
+                     "window": dcr_ok and ((pos in ("WR", "TE") and 1 <= m.get("exp", 0) <= 3)
+                                           or (pos == "RB" and m.get("exp", 0) <= 2))})
     return rows
 
 
@@ -501,6 +541,51 @@ whiffs = sorted((r for r in all_rows if r["adp"] <= 36 and r["outcome"] and bust
                 key=lambda r: -r["safety"])[:6]
 for r in whiffs:
     print(f"  {r['season']} {name(r):22} {r['pos']} adp {r['adp']:.0f} safety {r['safety']:.0f} -> finished {r['pos']}{r['outcome']}")
+
+print("\n================ HONE EXPERIMENTS ================")
+print("goal: sharpen the safety (bust) and ceiling (hit) contrasts, not beat ADP\n")
+
+def bust_contrast(score_fn, label):
+    grp = [r for r in all_rows if r["adp"] <= 36 and r["outcome"]]
+    grp.sort(key=lambda r: -score_fn(r))
+    h = len(grp) // 2
+    q = len(grp) // 4
+    bh = 100 * sum(map(bust, grp[:h])) / h
+    bl = 100 * sum(map(bust, grp[h:])) / (len(grp) - h)
+    bqh = 100 * sum(map(bust, grp[:q])) / q
+    bql = 100 * sum(map(bust, grp[-q:])) / q
+    print(f"  {label:34} halves {bh:.0f}%/{bl:.0f}% (gap {bl-bh:+.0f})   quartiles {bqh:.0f}%/{bql:.0f}% (gap {bql-bqh:+.0f})")
+
+def hit_contrast(score_fn, label):
+    grp = [r for r in all_rows if 84 <= r["adp"] <= 240 and r["outcome"]]
+    grp.sort(key=lambda r: -score_fn(r))
+    h = len(grp) // 2
+    q = len(grp) // 4
+    hh = 100 * sum(map(hit, grp[:h])) / h
+    hl = 100 * sum(map(hit, grp[h:])) / (len(grp) - h)
+    hqh = 100 * sum(map(hit, grp[:q])) / q
+    hql = 100 * sum(map(hit, grp[-q:])) / q
+    print(f"  {label:34} halves {hh:.0f}%/{hl:.0f}% (gap {hh-hl:+.0f})   quartiles {hqh:.0f}%/{hql:.0f}% (gap {hqh-hql:+.0f})")
+
+nz = lambda v: 50.0 if v is None else v
+print("-- SAFETY variants (bust rate, lower-better in the top group) --")
+bust_contrast(lambda r: r["safety"], "S0 current")
+bust_contrast(lambda r: 0.85 * r["safety"] + 0.15 * nz(r["tddep_p"]), "S1 +TD-dependency .15")
+bust_contrast(lambda r: 0.85 * r["safety"] + 0.15 * nz(r["odo_p"]) if r["pos"] == "RB" else r["safety"],
+              "S2 +RB odometer .15")
+bust_contrast(lambda r: r["safety"] - (6 if r["moved"] else 0), "S3 moved-team -6")
+bust_contrast(lambda r: (0.78 * r["safety"] + 0.12 * nz(r["tddep_p"])
+                         + (0.10 * nz(r["odo_p"]) if r["pos"] == "RB" else 0.10 * r["safety"]))
+              - (4 if r["moved"] else 0), "S4 combo")
+
+print("-- CEILING variants (hit rate, higher-better in the top group) --")
+hit_contrast(lambda r: r["ceil_base"], "C0 base (pre-hone)")
+hit_contrast(lambda r: r["ceil_base"] + 0.20 * max(0, r["gap"] or 0), "C1 +talent-over-usage gap")
+hit_contrast(lambda r: 0.85 * r["ceil_base"] + 0.15 * nz(r["rzsh_p"]), "C2 +red-zone role .15")
+hit_contrast(lambda r: 0.88 * r["ceil_base"] + 0.12 * nz(r["adot_p"]) if r["pos"] == "WR" else r["ceil_base"],
+             "C3 +WR aDOT .12")
+hit_contrast(lambda r: r["ceil_base"] + (6 if r["window"] else 0), "C4 breakout-window +6")
+hit_contrast(lambda r: r["ceiling"], "C5 combo [SHIPPED]")
 
 print("\n-- wc ramp calibration: mean within-position Spearman of the blend --")
 RAMPS = [("(adp-24)/96  [current]", 24, 96), ("(adp-12)/72", 12, 72),
