@@ -108,6 +108,23 @@ for yy, S_ in stats.items():
             ranks[pid_] = i_ + 1
     fin_hist[yy] = ranks
 
+# late-season weekly touches (weeks 13-18) for the December-role signal
+weekly_late = {}  # (year, pid) -> {"tgt","att","wks"}
+for yr in range(2017, 2025):
+    for wk in range(13, 19):
+        d = cached(f"wk_{yr}_{wk}.json",
+                   f"https://api.sleeper.app/v1/stats/nfl/regular/{yr}/{wk}")
+        for pid, st in (d or {}).items():
+            if not isinstance(st, dict):
+                continue
+            tgt = st.get("rec_tgt") or 0
+            att = st.get("rush_att") or 0
+            if tgt or att:
+                e = weekly_late.setdefault((yr, pid), {"tgt": 0, "att": 0, "wks": 0})
+                e["tgt"] += tgt
+                e["att"] += att
+                e["wks"] += 1
+
 DC_VAL = {1: 1.0, 2: 0.8, 3: 0.65, 4: 0.5, 5: 0.4, 6: 0.32, 7: 0.25}
 AGE_CURVE = {
     "RB": [(21, 0.85), (23, 1.0), (26, 0.97), (27, 0.83), (28, 0.76),
@@ -355,6 +372,23 @@ def build_season(Y):
             tot_room = sum(room.values())
             if tot_room > 0:
                 m["posshare"] = (room.get(pid) or 0) / tot_room
+        # --- predictive-stat candidates (research round 2) ---
+        # usage trajectory: y/y target-share growth (ascending role)
+        if m1 and m2 and m1.get("tshare") is not None and m2.get("tshare") is not None:
+            m["tsdelta"] = m1["tshare"] - m2["tshare"]
+        # December role: late-season touches/gm vs full-season touches/gm
+        wl = weekly_late.get((Y - 1, pid))
+        if wl and wl["wks"] >= 3 and gp >= 8:
+            late_pg = (1.45 * wl["tgt"] + 0.55 * wl["att"]) / wl["wks"]
+            full_pg = (1.45 * tgt + 0.55 * att) / gp
+            if full_pg > 2:
+                m["lategrow"] = late_pg / full_pg
+        # usage-vs-output gap: weighted opportunity outran actual points
+        if m1 and m1.get("wo") is not None and gp >= 6:
+            m["ugap"] = m1["wo"] - (st.get("pts_half_ppr") or 0) / gp
+        # unrealized air yards (WR): deep usage that hasn't converted yet
+        if pos == "WR" and gp >= 6 and tgt >= 40:
+            m["unrl"] = ((st.get("rec_air_yd") or 0) - (st.get("rec_yd") or 0)) / gp
         if gp >= 1:
             a, b = RATES["rec"]
             exp = a * rzt + b * max(0, tgt - rzt)
@@ -502,6 +536,8 @@ def build_season(Y):
                      "odo_p": pct(pos, m, "odo"), "tddep_p": pct(pos, m, "tddep"),
                      "rzsh_p": pct(pos, m, "rzsh"), "adot_p": pct(pos, m, "adot"),
                      "peak_p": pct(pos, m, "peak"),
+                     "tsd_p": pct(pos, m, "tsdelta"), "lg_p": pct(pos, m, "lategrow"),
+                     "ug_p": pct(pos, m, "ugap"), "un_p": pct(pos, m, "unrl"),
                      "gap": (tal - opp) if (tal is not None and opp is not None) else None,
                      "moved": ros_now.get(pid) is not None and ros_prior.get(pid) is not None
                               and ros_now.get(pid) != ros_prior.get(pid),
@@ -646,6 +682,14 @@ hit_contrast(lambda r: r["ceil_base"] + (6 if r["window"] else 0), "C4 breakout-
 hit_contrast(lambda r: r["ceiling"], "C5 combo [SHIPPED]")
 hit_contrast(lambda r: 0.85 * r["ceiling"] + 0.15 * nz(r["peak_p"]), "C6 +career-peak pedigree .15")
 hit_contrast(lambda r: 0.90 * r["ceiling"] + 0.10 * nz(r["peak_p"]), "C7 +career-peak pedigree .10")
+print("-- research round 2: predictive-stat candidates (on top of shipped ceiling) --")
+hit_contrast(lambda r: 0.88 * r["ceiling"] + 0.12 * nz(r["tsd_p"]), "E1 +target-share growth .12")
+hit_contrast(lambda r: 0.88 * r["ceiling"] + 0.12 * nz(r["lg_p"]), "E2 +December role growth .12")
+hit_contrast(lambda r: 0.88 * r["ceiling"] + 0.12 * nz(r["ug_p"]), "E3 +usage-vs-output gap .12")
+hit_contrast(lambda r: 0.90 * r["ceiling"] + 0.10 * nz(r["un_p"]) if r["pos"] == "WR" else r["ceiling"],
+             "E4 +WR unrealized air yds .10")
+hit_contrast(lambda r: 0.80 * r["ceiling"] + 0.08 * nz(r["tsd_p"]) + 0.06 * nz(r["lg_p"]) + 0.06 * nz(r["ug_p"]),
+             "E5 combo E1+E2+E3")
 
 print("\n================ MISS AUTOPSY: what is the model missing? ================")
 gp_out = {}  # outcome-season games played (to separate injury from wrongness)
@@ -769,6 +813,13 @@ print("-- CEILING weights: hit gap (higher = sharper), train | holdout --")
 for label, w in C_CANDS.items():
     print(f"  {label:32} train {hit_gap(lambda r: ceiling_of(r, w), TRAIN):+.1f}"
           f"   holdout {hit_gap(lambda r: ceiling_of(r, w), HOLDOUT):+.1f}")
+print("-- round-2 candidates, train | holdout robustness --")
+nzt = lambda v: 50.0 if v is None else v
+for label, fn in (("shipped ceiling", lambda r: r["ceiling"]),
+                  ("E1 +ts-growth .12", lambda r: 0.88 * r["ceiling"] + 0.12 * nzt(r["tsd_p"])),
+                  ("E3 +usage-gap .12", lambda r: 0.88 * r["ceiling"] + 0.12 * nzt(r["ug_p"])),
+                  ("E5 combo", lambda r: 0.80 * r["ceiling"] + 0.08 * nzt(r["tsd_p"]) + 0.06 * nzt(r["lg_p"]) + 0.06 * nzt(r["ug_p"]))):
+    print(f"  {label:32} train {hit_gap(fn, TRAIN):+.1f}   holdout {hit_gap(fn, HOLDOUT):+.1f}")
 
 print("\n-- wc ramp calibration: mean within-position Spearman of the blend --")
 RAMPS = [("(adp-24)/96  [current]", 24, 96), ("(adp-12)/72", 12, 72),
