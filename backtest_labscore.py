@@ -95,6 +95,19 @@ for yr in range(2015, 2026):
     rosters[yr] = {r["sleeper_id"]: (r["team"] or "").replace("LA", "LAR") if r["team"] == "LA" else r["team"]
                    for r in rows if r.get("sleeper_id") and r.get("team")}
 
+# historical positional finishes (for the career-peak pedigree signal)
+fin_hist = {}
+for yy, S_ in stats.items():
+    ranks = {}
+    for pos_ in POS:
+        scored_ = sorted(((st_.get("pts_half_ppr") or 0), pid_) for pid_, st_ in S_.items()
+                         if isinstance(st_, dict)
+                         and (players_db.get(pid_) or {}).get("position") == pos_)
+        scored_.reverse()
+        for i_, (_, pid_) in enumerate(scored_):
+            ranks[pid_] = i_ + 1
+    fin_hist[yy] = ranks
+
 DC_VAL = {1: 1.0, 2: 0.8, 3: 0.65, 4: 0.5, 5: 0.4, 6: 0.32, 7: 0.25}
 AGE_CURVE = {
     "RB": [(21, 0.85), (23, 1.0), (26, 0.97), (27, 0.83), (28, 0.76),
@@ -321,6 +334,10 @@ def build_season(Y):
             so = (stats.get(yy) or {}).get(pid) or {}
             odo += (so.get("rush_att") or 0) + (so.get("rec") or 0)
         m["odo"] = -odo  # inverted: fresher legs -> higher percentile
+        # career-peak pedigree: best positional finish on record before Y
+        peak = min((fin_hist.get(yy, {}).get(pid, 999) for yy in range(2015, Y)), default=999)
+        if peak < 999:
+            m["peak"] = -peak  # inverted: better best-ever finish -> higher pct
         # TD-dependency: share of last-year points that came from TDs
         pts_prior = st.get("pts_half_ppr") or 0
         if pts_prior >= 60:
@@ -463,6 +480,11 @@ def build_season(Y):
                    + 0.08 * ((ad_p if ad_p is not None else 50) if pos == "WR" else 50))
         if window_v:
             ceiling += 4
+        # career-peak pedigree (validated: bounce-back vets are the largest
+        # missed-breakout bucket -- Engram/Pitts/Wilson/Gronk pattern)
+        peak_p_v = pct(pos, m, "peak")
+        if peak_p_v is not None:
+            ceiling = 0.90 * ceiling + 0.10 * peak_p_v
         wc = max(0.15, min(0.85, (m["adp"] - 24) / 96))
         fin = (1 - wc) * safety + wc * ceiling
         if est:
@@ -479,6 +501,7 @@ def build_season(Y):
                      # candidate hone signals (percentiles / flags)
                      "odo_p": pct(pos, m, "odo"), "tddep_p": pct(pos, m, "tddep"),
                      "rzsh_p": pct(pos, m, "rzsh"), "adot_p": pct(pos, m, "adot"),
+                     "peak_p": pct(pos, m, "peak"),
                      "gap": (tal - opp) if (tal is not None and opp is not None) else None,
                      "moved": ros_now.get(pid) is not None and ros_prior.get(pid) is not None
                               and ros_now.get(pid) != ros_prior.get(pid),
@@ -621,6 +644,71 @@ hit_contrast(lambda r: 0.88 * r["ceil_base"] + 0.12 * nz(r["adot_p"]) if r["pos"
              "C3 +WR aDOT .12")
 hit_contrast(lambda r: r["ceil_base"] + (6 if r["window"] else 0), "C4 breakout-window +6")
 hit_contrast(lambda r: r["ceiling"], "C5 combo [SHIPPED]")
+hit_contrast(lambda r: 0.85 * r["ceiling"] + 0.15 * nz(r["peak_p"]), "C6 +career-peak pedigree .15")
+hit_contrast(lambda r: 0.90 * r["ceiling"] + 0.10 * nz(r["peak_p"]), "C7 +career-peak pedigree .10")
+
+print("\n================ MISS AUTOPSY: what is the model missing? ================")
+gp_out = {}  # outcome-season games played (to separate injury from wrongness)
+for r in all_rows:
+    gp_out[(r["season"], r["pid"])] = (stats[r["season"]].get(r["pid"]) or {}).get("gp") or 0
+
+def traits(rows_):
+    if not rows_:
+        return "none"
+    n = len(rows_)
+    posc = {}
+    for r in rows_:
+        posc[r["pos"]] = posc.get(r["pos"], 0) + 1
+    return (" ".join(f"{p}:{c}" for p, c in sorted(posc.items(), key=lambda x: -x[1]))
+            + f" | est {100*sum(r['est'] for r in rows_)//n}%"
+            + f" | moved {100*sum(bool(r['moved']) for r in rows_)//n}%"
+            + f" | window {100*sum(bool(r['window']) for r in rows_)//n}%")
+
+late_a = [r for r in all_rows if 84 <= r["adp"] <= 240 and r["outcome"]]
+late_a.sort(key=lambda r: -r["ceiling"])
+half_a = len(late_a) // 2
+bot_c = late_a[half_a:]
+
+print("\n-- A. BREAKOUTS THE MODEL MISSED (late hits in the BOTTOM half of ceiling) --")
+fn = [r for r in bot_c if hit(r)]
+allhits = [r for r in late_a if hit(r)]
+print(f"   caught {len(allhits)-len(fn)}/{len(allhits)} of all late hits; missed {len(fn)}:  {traits(fn)}")
+for r in sorted(fn, key=lambda r: r["outcome"])[:10]:
+    c = r["comp"]
+    weak = min((("opp", c["opp"]), ("tal", c["tal"]), ("sit", c["sit"])), key=lambda x: x[1] if x[1] is not None else 99)
+    print(f"   {r['season']} {name(r):22} {r['pos']} adp {r['adp']:.0f} ceil {r['ceiling']:.0f}"
+          f" -> {r['pos']}{r['outcome']}  (weakest: {weak[0]} {weak[1]:.0f}{', EST' if r['est'] else ''}{', moved' if r['moved'] else ''})")
+
+print("\n-- B. FALSE ALARMS (top-QUARTILE ceiling, played 10+ games, still missed) --")
+q_a = len(late_a) // 4
+fp = [r for r in late_a[:q_a] if not hit(r) and gp_out[(r["season"], r["pid"])] >= 10]
+print(f"   {len(fp)} of top-quartile {q_a} were healthy non-hits:  {traits(fp)}")
+for r in sorted(fp, key=lambda r: -r["ceiling"])[:8]:
+    print(f"   {r['season']} {name(r):22} {r['pos']} adp {r['adp']:.0f} ceil {r['ceiling']:.0f}"
+          f" -> {r['pos']}{r['outcome']}{' EST' if r['est'] else ''}{' moved' if r['moved'] else ''}")
+
+print("\n-- C. EARLY BUSTS: injury vs the model being wrong --")
+early_a = [r for r in all_rows if r["adp"] <= 36 and r["outcome"]]
+early_a.sort(key=lambda r: -r["safety"])
+h2 = len(early_a) // 2
+for label, grp in (("high-safety half", early_a[:h2]), ("low-safety half", early_a[h2:])):
+    b = [r for r in grp if bust(r)]
+    inj = [r for r in b if gp_out[(r["season"], r["pid"])] < 9]
+    print(f"   {label}: {len(b)} busts -> {len(inj)} injury (<9 gms), {len(b)-len(inj)} played-and-failed")
+hs_perf = [r for r in early_a[:h2] if bust(r) and gp_out[(r["season"], r["pid"])] >= 9]
+print("   high-safety PLAYED-AND-FAILED (true safety misses):")
+for r in sorted(hs_perf, key=lambda r: -r["safety"])[:8]:
+    print(f"   {r['season']} {name(r):22} {r['pos']} adp {r['adp']:.0f} safety {r['safety']:.0f}"
+          f" -> {r['pos']}{r['outcome']}{' moved' if r['moved'] else ''}")
+
+print("\n-- D. TOO PESSIMISTIC EARLY (bottom-half safety, finished top-5) --")
+dz = [r for r in early_a[h2:] if r["outcome"] <= 5]
+print(f"   {len(dz)} low-safety early picks finished top-5:  {traits(dz)}")
+for r in sorted(dz, key=lambda r: r["outcome"])[:8]:
+    c = r["comp"]
+    weak = min((("opp", c["opp_role"]), ("tal", c["tal"]), ("sit", c["sit"]), ("dur", c["dur"])), key=lambda x: x[1] if x[1] is not None else 99)
+    print(f"   {r['season']} {name(r):22} {r['pos']} adp {r['adp']:.0f} safety {r['safety']:.0f}"
+          f" -> {r['pos']}{r['outcome']}  (weakest: {weak[0]} {weak[1]:.0f}{', EST' if r['est'] else ''}{', moved' if r['moved'] else ''})")
 
 print("\n================ WEIGHT TUNING (train 2017-2022, holdout 2023-2025) ================")
 

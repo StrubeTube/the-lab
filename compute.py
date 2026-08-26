@@ -957,6 +957,13 @@ print(f"  lab inputs on {n_lab} players; "
 # VORP distribution so equal scores mean equal value across positions.
 print("Lab Score pillars...")
 
+# career-best positional finishes 2015-2024 (static; regenerate yearly from
+# the backtest cache — see backtest_labscore.py's fin_hist)
+try:
+    CAREER_BEST = json.loads((ROOT / "data" / "career_finish_hist.json").read_text(encoding="utf-8"))
+except (OSError, ValueError):
+    CAREER_BEST = {}
+
 # live OTC contracts: how much a team has committed to a player, for how long
 otc = load_opt("otc_contracts.json", [])
 otc_by = {norm(c["n"]) + "|" + c["p"]: c for c in otc if c.get("n")}
@@ -1067,6 +1074,16 @@ for e in players_out:
     m["dur"] = (gp + gp2) / 34 if m2 is not None else (gp / 17 if gp else None)
     if lab.get("xtd") is not None:
         m["tdluck"] = -(lab["td"] - lab["xtd"])  # inverted: under-scorers up
+    # career-peak pedigree: best positional finish ever (static 2015-2024
+    # file, refreshed yearly, merged with the live 2024/2025 pos ranks) —
+    # bounce-back veterans were the largest missed-breakout bucket
+    peak = CAREER_BEST.get(e["id"], 999)
+    for src_st in (st, st2):
+        r_now = src_st.get("pos_rank_half_ppr")
+        if r_now and r_now < peak:
+            peak = int(r_now)
+    if peak < 999:
+        m["peak"] = -peak
     # ceiling hone signals (backtest-validated combo): red-zone role share
     # of the 2025 team's rz opportunities + WR air yards per target
     tt25 = team_opp.get(team_last.get(e["id"]))
@@ -1224,6 +1241,11 @@ for e in players_out:
                + 0.08 * ((ad_p if ad_p is not None else 50) if e["pos"] == "WR" else 50))
     if window_v:
         ceiling += 4
+    # career-peak pedigree (validated): a former top-5 finisher priced late
+    # carries bounce-back equity the 2-year stat lookback can't see
+    peak_p = pct(e["id"], "peak")
+    if peak_p is not None:
+        ceiling = 0.90 * ceiling + 0.10 * peak_p
     # depth-chart guard (live Sleeper depth charts, unbacktestable but
     # cheap insurance): a player listed 3rd+ at his position doesn't get to
     # keep a full stats-based grade — new signings over him show up here
