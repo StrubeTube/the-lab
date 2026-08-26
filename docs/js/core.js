@@ -517,20 +517,20 @@
           L2.moved ? line('Moved', `part of ${L2.moved}'s vacated pool`, 'muted', 'he changed teams — his old usage is what someone else inherits') : '',
           (L2.injL || L2.injc) ? el('div', { style: 'margin-top:9px' },
             el('div', { class: 't-label', style: 'color:var(--ink-3);font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;font-weight:700' }, 'Injury context'),
-            L2.injL ? (() => {
-              const c = injCoh[L2.injL[0]] || {};
-              return el('div', { class: 'bad', style: 'margin-top:3px;font-size:12.5px;font-weight:600' },
-                `NOW: ${L2.injL[0]} — ${L2.injL[1]}${L2.injL[2] ? ' (since ' + L2.injL[2] + ')' : ''}`,
-                c.n ? el('span', { class: 'muted', style: 'font-weight:400' },
-                  ` · cohort of ${c.n}: ${c.retPct != null ? c.retPct + '% of baseline output on return' : ''}${c.recurPct != null ? ', recurs within a year ' + c.recurPct + '%' : ''}`) : '');
-            })() : '',
+            L2.injL ? el('div', { class: 'bad', style: 'margin-top:3px;font-size:12.5px;font-weight:600' },
+              `NOW: ${L2.injL[0]} — ${L2.injL[1]}${L2.injL[2] ? ' (since ' + L2.injL[2] + ')' : ''}`,
+              L2.injL[3] ? el('div', { class: 'muted', style: 'font-weight:400;font-size:12px' }, L2.injL[3]) : '') : '',
             ...(L2.injc || []).map(ep => {
-              const c = injCoh[ep.p] || {};
+              // severity tier proxies the actual diagnosis: a played-through
+              // ankle and a 4-games-missed ankle are different injuries
+              const TIER_LBL = { 'played-through': 'played through it', short: 'short absence', long: 'major — 3+ games missed' };
+              const coh = injCoh[ep.p] || {};
+              const c = (coh.tiers || {})[ep.t] || coh;
               return el('div', { style: 'margin-top:3px;font-size:12.5px' },
-                el('span', { class: 'warn', style: 'font-weight:600' }, `'${String(ep.y).slice(2)} ${ep.p}`),
-                el('span', { class: 'dim' }, ` — listed ${ep.n} wk${ep.n > 1 ? 's' : ''}, ${ep.o} game${ep.o === 1 ? '' : 's'} out`),
+                el('span', { class: ep.t === 'long' ? 'bad' : 'warn', style: 'font-weight:600' }, `'${String(ep.y).slice(2)} ${ep.p}`),
+                el('span', { class: 'dim' }, ` (${TIER_LBL[ep.t] || ep.t}${ep.o ? ', ' + ep.o + ' games' : ''})`),
                 c.n ? el('span', { class: 'muted' },
-                  ` · cohort of ${c.n}: ${c.retPct != null ? c.retPct + '% output on return' : ''}${c.recurPct != null ? ', ' + c.recurPct + '% recur within a year' : ''}`) : '');
+                  ` · ${c.n} similar: ${c.retPct != null ? c.retPct + '% output on return' : 'n/a on return'}${c.recurPct != null ? ', ' + c.recurPct + '% recur within a year' : ''}`) : '');
             })) : '');
       })() : '',
       el('hr', { class: 'hr' }),

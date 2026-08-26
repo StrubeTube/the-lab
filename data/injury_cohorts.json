@@ -1,128 +1,386 @@
 {
  "Knee": {
   "n": 590,
-  "avgOut": 0.47,
+  "avgMissed": 0.95,
   "retPct": 99.0,
   "retN": 156,
-  "recurPct": 23.9
+  "recurPct": 23.9,
+  "tiers": {
+   "short": {
+    "n": 87,
+    "avgMissed": 1.3,
+    "retPct": 91.1,
+    "recurPct": 31.0
+   },
+   "played-through": {
+    "n": 428,
+    "avgMissed": 0.0,
+    "retPct": 101.3,
+    "recurPct": 23.4
+   },
+   "long": {
+    "n": 75,
+    "avgMissed": 5.95,
+    "retPct": 70.7,
+    "recurPct": 18.7
+   }
+  }
  },
  "Ankle": {
   "n": 517,
-  "avgOut": 0.43,
+  "avgMissed": 0.69,
   "retPct": 93.5,
   "retN": 175,
-  "recurPct": 20.1
+  "recurPct": 20.1,
+  "tiers": {
+   "played-through": {
+    "n": 397,
+    "avgMissed": 0.0,
+    "retPct": 93.5,
+    "recurPct": 20.4
+   },
+   "long": {
+    "n": 48,
+    "avgMissed": 5.42,
+    "retPct": 79.2,
+    "recurPct": 25.0
+   },
+   "short": {
+    "n": 72,
+    "avgMissed": 1.36,
+    "retPct": 97.6,
+    "recurPct": 15.3
+   }
+  }
  },
  "Hamstring": {
   "n": 361,
-  "avgOut": 0.67,
+  "avgMissed": 0.92,
   "retPct": 100.9,
   "retN": 86,
-  "recurPct": 20.5
+  "recurPct": 20.5,
+  "tiers": {
+   "short": {
+    "n": 85,
+    "avgMissed": 1.35,
+    "retPct": 113.3,
+    "recurPct": 21.2
+   },
+   "played-through": {
+    "n": 231,
+    "avgMissed": 0.0,
+    "retPct": 98.8,
+    "recurPct": 20.3
+   },
+   "long": {
+    "n": 45,
+    "avgMissed": 4.8,
+    "retPct": 91.5,
+    "recurPct": 20.0
+   }
+  }
  },
  "Shoulder": {
   "n": 263,
-  "avgOut": 0.2,
+  "avgMissed": 0.37,
   "retPct": 97.9,
   "retN": 69,
-  "recurPct": 12.9
+  "recurPct": 12.9,
+  "tiers": {
+   "played-through": {
+    "n": 227,
+    "avgMissed": 0.0,
+    "retPct": 98.7,
+    "recurPct": 12.3
+   },
+   "short": {
+    "n": 26,
+    "avgMissed": 1.35,
+    "retPct": 89.1,
+    "recurPct": 11.5
+   }
+  }
  },
  "Foot": {
   "n": 222,
-  "avgOut": 0.46,
+  "avgMissed": 1.03,
   "retPct": 99.9,
   "retN": 76,
-  "recurPct": 14.9
+  "recurPct": 14.9,
+  "tiers": {
+   "played-through": {
+    "n": 169,
+    "avgMissed": 0.0,
+    "retPct": 102.2,
+    "recurPct": 14.2
+   },
+   "long": {
+    "n": 28,
+    "avgMissed": 7.04,
+    "retPct": null,
+    "recurPct": 21.4
+   },
+   "short": {
+    "n": 25,
+    "avgMissed": 1.28,
+    "retPct": 76.9,
+    "recurPct": 12.0
+   }
+  }
  },
  "Concussion": {
   "n": 213,
-  "avgOut": 0.87,
+  "avgMissed": 1.44,
   "retPct": 102.7,
   "retN": 63,
-  "recurPct": 11.3
+  "recurPct": 11.3,
+  "tiers": {
+   "played-through": {
+    "n": 96,
+    "avgMissed": 0.0,
+    "retPct": 103.8,
+    "recurPct": 11.5
+   },
+   "short": {
+    "n": 84,
+    "avgMissed": 1.2,
+    "retPct": 101.3,
+    "recurPct": 9.5
+   },
+   "long": {
+    "n": 33,
+    "avgMissed": 6.21,
+    "retPct": 84.8,
+    "recurPct": 15.2
+   }
+  }
  },
  "Hip": {
   "n": 174,
-  "avgOut": 0.26,
+  "avgMissed": 0.64,
   "retPct": 90.1,
   "retN": 67,
-  "recurPct": 12.1
+  "recurPct": 12.1,
+  "tiers": {
+   "played-through": {
+    "n": 150,
+    "avgMissed": 0.0,
+    "retPct": 90.6,
+    "recurPct": 11.3
+   },
+   "short": {
+    "n": 14,
+    "avgMissed": 1.36,
+    "retPct": 79.6,
+    "recurPct": 14.3
+   }
+  }
  },
  "Ribs": {
   "n": 163,
-  "avgOut": 0.33,
+  "avgMissed": 0.59,
   "retPct": 97.5,
   "retN": 59,
-  "recurPct": 6.1
+  "recurPct": 6.1,
+  "tiers": {
+   "short": {
+    "n": 24,
+    "avgMissed": 1.38,
+    "retPct": 96.7,
+    "recurPct": 0.0
+   },
+   "played-through": {
+    "n": 127,
+    "avgMissed": 0.0,
+    "retPct": 98.9,
+    "recurPct": 5.5
+   },
+   "long": {
+    "n": 12,
+    "avgMissed": 5.25,
+    "retPct": 28.3,
+    "recurPct": 25.0
+   }
+  }
  },
  "Back": {
   "n": 151,
-  "avgOut": 0.17,
+  "avgMissed": 0.33,
   "retPct": 102.3,
   "retN": 45,
-  "recurPct": 9.9
+  "recurPct": 9.9,
+  "tiers": {
+   "played-through": {
+    "n": 131,
+    "avgMissed": 0.0,
+    "retPct": 99.2,
+    "recurPct": 11.5
+   },
+   "short": {
+    "n": 17,
+    "avgMissed": 1.18,
+    "retPct": 134.4,
+    "recurPct": 0.0
+   }
+  }
  },
  "Quad": {
   "n": 151,
-  "avgOut": 0.32,
+  "avgMissed": 0.45,
   "retPct": 87.7,
   "retN": 53,
-  "recurPct": 8.6
+  "recurPct": 8.6,
+  "tiers": {
+   "played-through": {
+    "n": 126,
+    "avgMissed": 0.0,
+    "retPct": 86.6,
+    "recurPct": 7.9
+   },
+   "short": {
+    "n": 17,
+    "avgMissed": 1.35,
+    "retPct": 90.8,
+    "recurPct": 11.8
+   }
+  }
  },
  "Groin": {
   "n": 138,
-  "avgOut": 0.35,
+  "avgMissed": 0.77,
   "retPct": 103.2,
   "retN": 41,
-  "recurPct": 9.4
+  "recurPct": 9.4,
+  "tiers": {
+   "played-through": {
+    "n": 108,
+    "avgMissed": 0.0,
+    "retPct": 98.1,
+    "recurPct": 10.2
+   },
+   "short": {
+    "n": 23,
+    "avgMissed": 1.22,
+    "retPct": 116.8,
+    "recurPct": 4.3
+   }
+  }
  },
  "Hand": {
   "n": 137,
-  "avgOut": 0.34,
+  "avgMissed": 0.6,
   "retPct": 107.6,
   "retN": 50,
-  "recurPct": 12.4
+  "recurPct": 12.4,
+  "tiers": {
+   "played-through": {
+    "n": 110,
+    "avgMissed": 0.0,
+    "retPct": 107.6,
+    "recurPct": 10.9
+   },
+   "short": {
+    "n": 17,
+    "avgMissed": 1.47,
+    "retPct": 107.4,
+    "recurPct": 5.9
+   }
+  }
  },
  "Calf": {
   "n": 130,
-  "avgOut": 0.4,
+  "avgMissed": 0.85,
   "retPct": 88.3,
   "retN": 29,
-  "recurPct": 12.3
+  "recurPct": 12.3,
+  "tiers": {
+   "played-through": {
+    "n": 96,
+    "avgMissed": 0.0,
+    "retPct": 84.7,
+    "recurPct": 8.3
+   },
+   "short": {
+    "n": 23,
+    "avgMissed": 1.48,
+    "retPct": 94.2,
+    "recurPct": 13.0
+   }
+  }
  },
  "Neck": {
   "n": 93,
-  "avgOut": 0.33,
+  "avgMissed": 0.87,
   "retPct": 103.3,
   "retN": 28,
-  "recurPct": 8.6
+  "recurPct": 8.6,
+  "tiers": {
+   "played-through": {
+    "n": 74,
+    "avgMissed": 0.0,
+    "retPct": 103.3,
+    "recurPct": 10.8
+   }
+  }
  },
  "Toe": {
   "n": 79,
-  "avgOut": 0.18,
+  "avgMissed": 0.22,
   "retPct": 86.9,
   "retN": 30,
-  "recurPct": 10.1
+  "recurPct": 10.1,
+  "tiers": {
+   "played-through": {
+    "n": 70,
+    "avgMissed": 0.0,
+    "retPct": 84.4,
+    "recurPct": 10.0
+   }
+  }
  },
  "Oblique": {
   "n": 56,
-  "avgOut": 0.38,
+  "avgMissed": 0.73,
   "retPct": 90.2,
   "retN": 17,
-  "recurPct": 3.6
+  "recurPct": 3.6,
+  "tiers": {
+   "played-through": {
+    "n": 43,
+    "avgMissed": 0.0,
+    "retPct": 88.3,
+    "recurPct": 2.3
+   }
+  }
  },
  "Arm": {
   "n": 35,
-  "avgOut": 0.2,
+  "avgMissed": 0.4,
   "retPct": 114.2,
   "retN": 15,
-  "recurPct": 5.7
+  "recurPct": 5.7,
+  "tiers": {
+   "played-through": {
+    "n": 30,
+    "avgMissed": 0.0,
+    "retPct": 116.3,
+    "recurPct": 6.7
+   }
+  }
  },
  "Achilles": {
   "n": 31,
-  "avgOut": 0.45,
+  "avgMissed": 1.35,
   "retPct": 106.9,
   "retN": 2,
-  "recurPct": 3.2
+  "recurPct": 3.2,
+  "tiers": {
+   "played-through": {
+    "n": 24,
+    "avgMissed": 0.0,
+    "retPct": 106.9,
+    "recurPct": 0.0
+   }
+  }
  }
 }

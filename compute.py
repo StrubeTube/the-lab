@@ -957,11 +957,14 @@ for e in players_out:
     rec = INJ_REC.get(e["id"])
     if rec:
         lab["injc"] = sorted(rec, key=lambda x: -x["y"])[:3]
-    if pdb.get("injury_status"):
+    # live line only for SERIOUS statuses — an August "Questionable" is noise
+    # (per Alex); recent episode history above carries the real signal
+    if pdb.get("injury_status") in ("Out", "Doubtful", "IR", "PUP", "Sus", "COV", "DNR", "NA"):
         lab["injL"] = [INJ_PART_MAP.get((pdb.get("injury_body_part") or "").strip(),
                                         (pdb.get("injury_body_part") or "?").strip()),
                        pdb["injury_status"],
-                       (pdb.get("injury_start_date") or "")[:10]]
+                       (pdb.get("injury_start_date") or "")[:10],
+                       (pdb.get("injury_notes") or "")[:110]]
     if lab:
         e["lab"] = lab
         n_lab += 1

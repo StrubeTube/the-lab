@@ -113,10 +113,30 @@ for (pid, yr), weeks in listed.items():
         if run:
             episodes.append({"pid": pid, "yr": yr, "part": part, "wk0": run[0], "wk1": run[-1],
                              "out": sum(1 for x in run if weeks[x][1] == "Out"), "n": len(run)})
+
+# true games missed: listed-Out weeks plus the IR tail (players on IR drop
+# off weekly reports, so trail zero-point weeks after an episode that ended
+# in Out until scoring resumes). Severity tier proxies the actual diagnosis:
+# a played-through ankle is a different injury than a 4-games-missed ankle.
+last_wk = {yr: (17 if yr < 2021 else 18) for yr in YEARS}
+for e in episodes:
+    missed = e["out"]
+    ended_out = False
+    wkmap = listed.get((e["pid"], e["yr"]), {})
+    if wkmap.get(e["wk1"], ("", ""))[1] == "Out":
+        ended_out = True
+    if ended_out:
+        for w in range(e["wk1"] + 1, last_wk[e["yr"]] + 1):
+            if wk_pts.get((e["yr"], w), {}).get(e["pid"]):
+                break
+            missed += 1
+    e["missed"] = missed
+    e["tier"] = "played-through" if missed == 0 else ("short" if missed <= 2 else "long")
 print(f"  {len(episodes)} episodes across {len(YEARS)} seasons")
 
 print("Building cohorts...")
-coh = defaultdict(lambda: {"n": 0, "out": [], "ret": [], "recur": 0, "recur_n": 0})
+coh = defaultdict(lambda: {"n": 0, "out": [], "ret": [], "recur": 0, "recur_n": 0,
+                           "tiers": defaultdict(lambda: {"n": 0, "out": [], "ret": [], "recur": 0})})
 by_player_part = defaultdict(list)
 for e in episodes:
     by_player_part[(e["pid"], e["part"])].append(e)
@@ -133,12 +153,16 @@ def ppg(pid, yr, w0, w1):
 for e in episodes:
     c = coh[e["part"]]
     c["n"] += 1
-    c["out"].append(e["out"])
+    c["out"].append(e["missed"])
+    tc = c["tiers"][e["tier"]]
+    tc["n"] += 1
+    tc["out"].append(e["missed"])
     # return trajectory: 3 games after the episode vs the pre-injury baseline
     base = ppg(e["pid"], e["yr"], e["wk0"] - 6, e["wk0"] - 1)
     ret = ppg(e["pid"], e["yr"], e["wk1"] + 1, e["wk1"] + 3)
     if base and ret and base >= 5:
         c["ret"].append(ret / base)
+        tc["ret"].append(ret / base)
     # recurrence: same part, new episode within ~1 year
     c["recur_n"] += 1
     for e2 in by_player_part[(e["pid"], e["part"])]:
@@ -148,6 +172,7 @@ for e in episodes:
                 (e2["yr"] == e["yr"] + 1 and e2["wk0"] <= e["wk0"])
         if later:
             c["recur"] += 1
+            tc["recur"] += 1
             break
 
 out = {}
@@ -156,14 +181,24 @@ for part, c in sorted(coh.items(), key=lambda x: -x[1]["n"]):
         continue
     out[part] = {
         "n": c["n"],
-        "avgOut": round(sum(c["out"]) / len(c["out"]), 2),
+        "avgMissed": round(sum(c["out"]) / len(c["out"]), 2),
         "retPct": round(100 * sum(c["ret"]) / len(c["ret"]), 1) if c["ret"] else None,
         "retN": len(c["ret"]),
         "recurPct": round(100 * c["recur"] / c["recur_n"], 1) if c["recur_n"] else None,
+        "tiers": {},
     }
-    print(f"  {part:11} n={out[part]['n']:4}  avg games Out {out[part]['avgOut']:>5}  "
-          f"return output {out[part]['retPct']}% of baseline (n={out[part]['retN']})  "
-          f"recurs within a year {out[part]['recurPct']}%")
+    for tier, tc in c["tiers"].items():
+        if tc["n"] < 12:
+            continue
+        out[part]["tiers"][tier] = {
+            "n": tc["n"],
+            "avgMissed": round(sum(tc["out"]) / len(tc["out"]), 2),
+            "retPct": round(100 * sum(tc["ret"]) / len(tc["ret"]), 1) if tc["ret"] else None,
+            "recurPct": round(100 * tc["recur"] / tc["n"], 1),
+        }
+    t_str = "  ".join(f"{t}: n={v['n']} ret {v['retPct']}% recur {v['recurPct']}%"
+                      for t, v in out[part]["tiers"].items())
+    print(f"  {part:11} n={out[part]['n']:4}  [{t_str}]")
 
 dest = ROOT / "data" / "injury_cohorts.json"
 dest.write_text(json.dumps(out, indent=1), encoding="utf-8")
@@ -178,7 +213,8 @@ print(f"wrote {epi_dest} ({len(episodes)} episodes)")
 recent = {}
 for e in episodes:
     if e["yr"] >= 2024:
-        recent.setdefault(e["pid"], []).append({"y": e["yr"], "p": e["part"], "n": e["n"], "o": e["out"]})
+        recent.setdefault(e["pid"], []).append({"y": e["yr"], "p": e["part"], "n": e["n"],
+                                                "o": e["missed"], "t": e["tier"]})
 rec_dest = ROOT / "data" / "injury_recent.json"
 rec_dest.write_text(json.dumps(recent), encoding="utf-8")
 print(f"wrote {rec_dest} ({len(recent)} players)")
