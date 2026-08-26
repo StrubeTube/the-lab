@@ -955,6 +955,72 @@ print(f"  SAFETY  per-pos  train {bust_gap(pp_s, TRAIN):+.1f}   holdout {bust_ga
 print(f"  CEILING global   train {hit_gap(glob_c, TRAIN):+.1f}   holdout {hit_gap(glob_c, HOLDOUT):+.1f}")
 print(f"  CEILING per-pos  train {hit_gap(pp_c, TRAIN):+.1f}   holdout {hit_gap(pp_c, HOLDOUT):+.1f}")
 
+print("\n================ CONFIDENCE: how much should we trust these numbers? ================")
+import random
+rng = random.Random(42)
+
+def gap_of(rows_, key_fn, flag_fn, top_good):
+    rows_ = [r for r in rows_ if key_fn(r) is not None]
+    if len(rows_) < 20:
+        return None
+    rows_ = sorted(rows_, key=lambda r: -key_fn(r))
+    h = len(rows_) // 2
+    top = 100 * sum(map(flag_fn, rows_[:h])) / h
+    bot = 100 * sum(map(flag_fn, rows_[h:])) / (len(rows_) - h)
+    return (bot - top) if not top_good else (top - bot)
+
+early_all = [r for r in all_rows if r["adp"] <= 36 and r["outcome"]]
+late_all = [r for r in all_rows if 84 <= r["adp"] <= 240 and r["outcome"]]
+
+print("-- bootstrap 90% confidence intervals (1000 resamples of players) --")
+for label, pool2, key_fn, flag_fn, top_good in (
+        ("safety bust-gap", early_all, lambda r: r["safety"], bust, False),
+        ("ceiling hit-gap", late_all, lambda r: r["ceiling"], hit, True)):
+    point = gap_of(pool2, key_fn, flag_fn, top_good)
+    sims = []
+    for _ in range(1000):
+        sample = [pool2[rng.randrange(len(pool2))] for _ in range(len(pool2))]
+        g = gap_of(sample, key_fn, flag_fn, top_good)
+        if g is not None:
+            sims.append(g)
+    sims.sort()
+    lo5, hi95 = sims[int(0.05 * len(sims))], sims[int(0.95 * len(sims))]
+    print(f"  {label:18} point {point:+5.1f}   90% CI [{lo5:+5.1f}, {hi95:+5.1f}]"
+          f"   {'EXCLUDES zero' if lo5 > 0 else 'includes zero — could be noise'}")
+
+print("-- per-season sign consistency (does the effect show up season by season?) --")
+for label, pool2, key_fn, flag_fn, top_good in (
+        ("safety bust-gap", early_all, lambda r: r["safety"], bust, False),
+        ("ceiling hit-gap", late_all, lambda r: r["ceiling"], hit, True)):
+    signs = []
+    line = []
+    for Y in SEASONS:
+        g = gap_of([r for r in pool2 if r["season"] == Y], key_fn, flag_fn, top_good)
+        if g is None:
+            continue
+        signs.append(g > 0)
+        line.append(f"{Y}:{g:+.0f}")
+    print(f"  {label:18} positive in {sum(signs)}/{len(signs)} seasons   " + " ".join(line))
+
+print("-- leave-one-season-out: does the WEIGHT-TUNING PROCEDURE itself hold up? --")
+picks_count = {}
+loso_tuned, loso_current = [], []
+for hold in SEASONS:
+    rest = set(SEASONS) - {hold}
+    best = max(S_CANDS.items(),
+               key=lambda kv: bust_gap(lambda r: safety_of(r, kv[1]), rest))
+    picks_count[best[0]] = picks_count.get(best[0], 0) + 1
+    g_t = gap_of([r for r in early_all if r["season"] == hold],
+                 lambda r: safety_of(r, best[1]), bust, False)
+    g_c = gap_of([r for r in early_all if r["season"] == hold],
+                 lambda r: safety_of(r, (.50, .15, .15, .10, .10)), bust, False)
+    if g_t is not None and g_c is not None:
+        loso_tuned.append(g_t)
+        loso_current.append(g_c)
+print(f"  fold-tuned safety mean bust-gap {sum(loso_tuned)/len(loso_tuned):+.1f} vs"
+      f" shipped-weights mean {sum(loso_current)/len(loso_current):+.1f} across {len(loso_tuned)} folds")
+print(f"  weight set chosen per fold: {picks_count}")
+
 print("\n================ WHERE DOES EACH SIGNAL PAY? (ramp audit) ================")
 print("bust gap by SAFETY and hit gap by CEILING, per ADP band — does the wc")
 print("ramp give each band the lens that actually discriminates there?\n")
