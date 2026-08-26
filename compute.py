@@ -972,6 +972,61 @@ for e in players_out:
         d["wrte"] += pr
 
 DC_VAL = {1: 1.0, 2: 0.8, 3: 0.65, 4: 0.5, 5: 0.4, 6: 0.32, 7: 0.25}
+
+# 2-year lookback (backtest-validated: 2-season 0.65/0.35 per-game blend
+# beats single-season at every position; durability feeds the safety score)
+stats24 = load_opt("stats_prior2.json", {})
+nv_roster2 = load_opt("nflverse_roster_prior2.json", {})
+team_last2 = {sid: NV_TEAM.get(r["team"], r["team"]) for sid, r in nv_roster2.items()}
+team_opp2 = {}
+for spid, st in stats24.items():
+    pdb = players_db.get(spid)
+    if not isinstance(pdb, dict) or pdb.get("position") not in POS:
+        continue
+    t24 = team_last2.get(spid)
+    if not t24:
+        continue
+    d = team_opp2.setdefault(t24, {"tgt": 0, "att": 0, "ay": 0})
+    d["tgt"] += st.get("rec_tgt") or 0
+    d["att"] += st.get("rush_att") or 0
+    d["ay"] += st.get("rec_air_yd") or 0
+
+PERF_KEYS = ("wo", "snp", "tshare", "ayshare", "yptpa", "tpg", "rypg",
+             "ypt", "yac", "tprr", "qrypg", "papg", "qrza", "pypg", "ypa")
+
+def perf_season(st, tt, pos):
+    """One season's per-game performance metrics (None if he didn't play)."""
+    gp = st.get("gp") or 0
+    if gp < 1:
+        return None
+    g = max(gp, 1)
+    tgt, rzt = st.get("rec_tgt") or 0, st.get("rec_rz_tgt") or 0
+    att, rza = st.get("rush_att") or 0, st.get("rush_rz_att") or 0
+    m = {}
+    m["wo"] = (0.55 * (att - rza) + 1.25 * rza + 1.45 * (tgt - rzt) + 2.25 * rzt) / g
+    if st.get("tm_off_snp"):
+        m["snp"] = (st.get("off_snp") or 0) / st["tm_off_snp"]
+    if tt and tt["tgt"]:
+        m["tshare"] = tgt / tt["tgt"]
+        m["yptpa"] = (st.get("rec_yd") or 0) / tt["tgt"]
+    if tt and tt["ay"]:
+        m["ayshare"] = (st.get("rec_air_yd") or 0) / tt["ay"]
+    m["tpg"] = tgt / g
+    m["rypg"] = (st.get("rec_yd") or 0) / g
+    if tgt >= 15:
+        m["ypt"] = (st.get("rec_yd") or 0) / tgt
+    if att >= 25:
+        m["yac"] = (st.get("rush_yac") or 0) / att
+    if (st.get("off_snp") or 0) >= 100:
+        m["tprr"] = tgt / st["off_snp"]
+    if pos == "QB":
+        m["qrypg"] = (st.get("rush_yd") or 0) / g
+        m["papg"] = (st.get("pass_att") or 0) / g
+        m["qrza"] = (st.get("rush_rz_att") or 0) / g
+        m["pypg"] = (st.get("pass_yd") or 0) / g
+        m["ypa"] = st.get("pass_ypa")
+    return m
+
 raw = {}  # pid -> raw metric dict
 for e in players_out:
     if e["pos"] not in POS:
@@ -979,37 +1034,23 @@ for e in players_out:
     st = stats25.get(e["id"]) or {}
     lab = e.get("lab") or {}
     gp = st.get("gp") or 0
-    t25 = team_last.get(e["id"])
-    tt = team_opp.get(t25)
-    g = max(gp, 1)
-    tgt = st.get("rec_tgt") or 0
-    rzt = st.get("rec_rz_tgt") or 0
-    att = st.get("rush_att") or 0
-    rza = st.get("rush_rz_att") or 0
     m = {"gp": gp}
-    if gp >= 1:
-        m["wo"] = (0.55 * (att - rza) + 1.25 * rza + 1.45 * (tgt - rzt) + 2.25 * rzt) / g
-        if st.get("tm_off_snp"):
-            m["snp"] = (st.get("off_snp") or 0) / st["tm_off_snp"]
-        if tt and tt["tgt"]:
-            m["tshare"] = tgt / tt["tgt"]
-            m["yptpa"] = (st.get("rec_yd") or 0) / tt["tgt"]
-        if tt and tt["ay"]:
-            m["ayshare"] = (st.get("rec_air_yd") or 0) / tt["ay"]
-        m["tpg"] = tgt / g
-        m["rypg"] = (st.get("rec_yd") or 0) / g
-        if tgt >= 15:
-            m["ypt"] = (st.get("rec_yd") or 0) / tgt
-        if att >= 25:
-            m["yac"] = (st.get("rush_yac") or 0) / att
-        if (st.get("off_snp") or 0) >= 100:
-            m["tprr"] = tgt / st["off_snp"]
-        if e["pos"] == "QB":
-            m["qrypg"] = (st.get("rush_yd") or 0) / g
-            m["papg"] = (st.get("pass_att") or 0) / g
-            m["qrza"] = (st.get("rush_rz_att") or 0) / g
-            m["pypg"] = (st.get("pass_yd") or 0) / g
-            m["ypa"] = st.get("pass_ypa")
+    m1 = perf_season(st, team_opp.get(team_last.get(e["id"])), e["pos"])
+    st2 = stats24.get(e["id"]) or {}
+    m2 = perf_season(st2, team_opp2.get(team_last2.get(e["id"])), e["pos"]) \
+        if (st2.get("gp") or 0) >= 4 else None
+    if m1:
+        for k in PERF_KEYS:
+            v1 = m1.get(k)
+            v2 = m2.get(k) if m2 else None
+            if v1 is not None and v2 is not None:
+                m[k] = 0.65 * v1 + 0.35 * v2
+            elif v1 is not None:
+                m[k] = v1
+            elif v2 is not None:
+                m[k] = v2
+    gp2 = st2.get("gp") or 0
+    m["dur"] = (gp + gp2) / 34 if m2 is not None else (gp / 17 if gp else None)
     if lab.get("xtd") is not None:
         m["tdluck"] = -(lab["td"] - lab["xtd"])  # inverted: under-scorers up
     ta = team_agg.get(e.get("team")) or {}
@@ -1064,8 +1105,8 @@ PILLARS = {
     "TE": {"opp": [("yptpa", .40), ("tshare", .35), ("tpg", .25)],
            "tal": [("rypg", .50), ("ypt", .30), ("tdluck", .20)],
            "sit": [("vac", .30), ("offq", .35), ("qbq", .35)]},
-    "QB": {"opp": [("qrypg", .45), ("papg", .25), ("qrza", .30)],
-           "tal": [("pypg", .45), ("ypa", .40), ("tdluck", .15)],
+    "QB": {"opp": [("qrypg", .50), ("papg", .20), ("qrza", .30)],
+           "tal": [("pypg", .60), ("ypa", .20), ("tdluck", .20)],
            "sit": [("weapons", .55), ("offq", .45)]},
 }
 
@@ -1102,10 +1143,11 @@ for e in players_out:
             opp = 50 + (opp - 50) * shrink
         if tal is not None:
             tal = 50 + (tal - 50) * shrink
-    parts = {"o": opp, "t": tal, "s": sit, "y": trS, "c": trC}
     if any(v is None for v in (opp, tal, sit, trS, trC)):
         continue
-    safety = .45 * opp + .20 * tal + .20 * sit + .15 * trS
+    # durability (2-yr games-played rate) is a backtest-validated safety input
+    dur_p = pct(e["id"], "dur")
+    safety = mix([(opp, .40), (tal, .20), (sit, .18), (trS, .12), (dur_p, .10)])
     ceiling = .15 * opp + .30 * tal + .25 * sit + .30 * trC
     adp = e.get("adp") or 200
     wc = max(0.15, min(0.85, (adp - 24) / 96))

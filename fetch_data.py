@@ -60,6 +60,8 @@ def fetch_sleeper_core():
     save("proj_2026.json", get_json(f"https://api.sleeper.app/v1/projections/nfl/regular/{SEASON}"))
     print("Sleeper: 2025 season stats")
     save("stats_2025.json", get_json(f"https://api.sleeper.app/v1/stats/nfl/regular/{PREV_SEASON}"))
+    print("Sleeper: 2024 season stats (Lab Score 2-year blend)")
+    save("stats_prior2.json", get_json(f"https://api.sleeper.app/v1/stats/nfl/regular/{int(PREV_SEASON) - 1}"))
     print("Sleeper: 2025 weekly stats (for SoS)")
     weekly = {}
     for wk in range(1, 19):
@@ -230,18 +232,19 @@ def fetch_nflverse():
         print("  FAIL draft_picks")
     save("nflverse_draft.json", draft)
 
-    last = int(SEASON) - 1
-    b = get(f"{base}/rosters/roster_{last}.csv")
-    roster = {}
-    if b:
-        for row in csv.DictReader(io.StringIO(b.decode("utf-8", "replace"))):
-            sid = row.get("sleeper_id")
-            if sid and row.get("team"):
-                roster[sid] = {"team": row["team"], "gsis_id": row.get("gsis_id") or ""}
-        print(f"  roster_{last}: {len(roster)} players with sleeper ids")
-    else:
-        print(f"  FAIL roster_{last}")
-    save("nflverse_roster_last.json", roster)
+    for yr, name in ((int(SEASON) - 1, "nflverse_roster_last.json"),
+                     (int(SEASON) - 2, "nflverse_roster_prior2.json")):
+        b = get(f"{base}/rosters/roster_{yr}.csv")
+        roster = {}
+        if b:
+            for row in csv.DictReader(io.StringIO(b.decode("utf-8", "replace"))):
+                sid = row.get("sleeper_id")
+                if sid and row.get("team"):
+                    roster[sid] = {"team": row["team"], "gsis_id": row.get("gsis_id") or ""}
+            print(f"  roster_{yr}: {len(roster)} players with sleeper ids")
+        else:
+            print(f"  FAIL roster_{yr}")
+        save(name, roster)
 
 
 if __name__ == "__main__":
