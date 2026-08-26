@@ -127,8 +127,9 @@
     if (d == null || d === 0) return '';
     const u = Math.min(1, Math.abs(d) / (overallMode ? 24 : 10)); // full color at ±24 ovr / ±10 pos
     const c = d > 0 ? '70,214,140' : '242,109,109';
-    return `;background:linear-gradient(90deg,rgba(${c},${(0.22 * u).toFixed(3)}),rgba(${c},${(0.05 * u).toFixed(3)}))`
-      + `;box-shadow:inset 3px 0 0 rgba(${c},${(0.25 + 0.75 * u).toFixed(3)})`;
+    // alpha floor so even ±1 visibly glows; ramps hard from there
+    return `;background:linear-gradient(90deg,rgba(${c},${(0.12 + 0.38 * u).toFixed(3)}),rgba(${c},${(0.03 + 0.12 * u).toFixed(3)}))`
+      + `;box-shadow:inset 4px 0 0 rgb(${c}),inset 0 0 0 1px rgba(${c},${(0.25 + 0.55 * u).toFixed(3)})`;
   }
 
   // dynasty lens slider (view-only blend, never writes the board)
