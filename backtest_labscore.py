@@ -123,6 +123,56 @@ for yy, S_ in stats.items():
             ranks[pid_] = i_ + 1
     fin_hist[yy] = ranks
 
+# situation-change data (research round 3): player trades + OC history
+_tr_f = CACHE / "player_trades.csv"
+if not _tr_f.exists():
+    print("  fetching player_trades.csv...")
+    _req = urllib.request.Request(
+        "https://raw.githubusercontent.com/leesharpe/nfldata/master/data/trades.csv", headers=UA)
+    with urllib.request.urlopen(_req, timeout=120) as _r:
+        _tr_f.write_bytes(_r.read())
+TRADED = {}  # season -> set of norm(player name) traded before the season
+for row in csv.DictReader(io.StringIO(_tr_f.read_text(encoding="utf-8", errors="replace"))):
+    nm = row.get("pfr_name")
+    if not nm:
+        continue
+    try:
+        yr_ = int(row["season"])
+    except (ValueError, KeyError):
+        continue
+    dt = row.get("trade_date") or ""
+    if dt and dt[5:7] in ("09", "10", "11", "12"):
+        continue  # in-season trade: post-draft, not August-knowable
+    TRADED.setdefault(yr_, set()).add(norm(nm))
+
+try:
+    OC_HIST = json.loads((CACHE / "oc_history.json").read_text(encoding="utf-8"))
+except (OSError, ValueError):
+    OC_HIST = {}
+
+# head-coach history (nfldata games; new HC = strongest free proxy for a
+# play-caller change — true OC history has no free structured source)
+try:
+    _hc_raw = json.loads((CACHE / "hc_history.json").read_text(encoding="utf-8"))
+except (OSError, ValueError):
+    _hc_raw = {}
+_TC = {"LA": "LAR", "OAK": "LV", "SD": "LAC", "STL": "LAR"}
+HC_HIST = {y: {_TC.get(t, t): c for t, c in v.items()} for y, v in _hc_raw.items()}
+
+def hc_changed(team, Y):
+    a2 = (HC_HIST.get(str(Y)) or {}).get(team)
+    b2 = (HC_HIST.get(str(Y - 1)) or {}).get(team)
+    if not a2 or not b2:
+        return None
+    return a2 != b2
+
+def oc_changed(team, Y):
+    a = (OC_HIST.get(str(Y)) or {}).get(team)
+    b = (OC_HIST.get(str(Y - 1)) or {}).get(team)
+    if not a or not b:
+        return None
+    return a != b
+
 # late-season weekly touches (weeks 13-18) for the December-role signal
 weekly_late = {}  # (year, pid) -> {"tgt","att","wks"}
 for yr in range(2017, 2025):
@@ -321,6 +371,27 @@ def build_season(Y):
         if t2:
             grp_pts.setdefault((t2, p2["position"]), {})[spid2] = \
                 (prior.get(spid2) or {}).get("pts_half_ppr") or 0
+
+    # situation-change context (round 3): each team's primary passer last
+    # year, whether he is still there, and the best QB now in the building
+    prim_qb = {}   # team -> (pid, prior pass_att, prior pts)
+    for spid, st in prior.items():
+        p = players_db.get(spid)
+        if not isinstance(p, dict) or p.get("position") != "QB":
+            continue
+        t = ros_prior.get(spid)
+        att_ = st.get("pass_att") or 0
+        if t and att_ > (prim_qb.get(t) or (None, 0, 0))[1]:
+            prim_qb[t] = (spid, att_, st.get("pts_half_ppr") or 0)
+    best_qb_now = {}  # team -> best prior-season pts among QBs on the roster NOW
+    for spid, p in players_db.items():
+        if not isinstance(p, dict) or p.get("position") != "QB":
+            continue
+        t = ros_now.get(spid)
+        if t:
+            pts_ = (prior.get(spid) or {}).get("pts_half_ppr") or 0
+            if pts_ > best_qb_now.get(t, 0):
+                best_qb_now[t] = pts_
 
     # Y-2 team totals (for the 2-year metric blend's share denominators)
     prior2 = stats.get(Y - 2) or {}
@@ -588,6 +659,24 @@ def build_season(Y):
                      "gap": (tal - opp) if (tal is not None and opp is not None) else None,
                      "moved": ros_now.get(pid) is not None and ros_prior.get(pid) is not None
                               and ros_now.get(pid) != ros_prior.get(pid),
+                     # -- situation-change fields (round 3) --
+                     # traded (vs walked in free agency / was cut)
+                     "traded": (ros_now.get(pid) is not None and ros_prior.get(pid) is not None
+                                and ros_now.get(pid) != ros_prior.get(pid)
+                                and norm((players_db.get(pid) or {}).get("full_name")) in TRADED.get(Y, set())),
+                     # his CURRENT team's primary passer departed + up/downgrade size
+                     "qbchg": (lambda t: t is not None and t in prim_qb
+                               and ros_now.get(prim_qb[t][0]) != t)(ros_now.get(pid)),
+                     "qbdelta": (lambda t: (best_qb_now.get(t, 0) - prim_qb[t][2])
+                                 if (t is not None and t in prim_qb and ros_now.get(prim_qb[t][0]) != t)
+                                 else None)(ros_now.get(pid)),
+                     # his CURRENT team's pass-rate delta Y-1 vs Y-2 (scheme drift)
+                     "prd": (lambda t: ((lambda a, b: (a["tgt"] / max(1, a["tgt"] + a["att"])
+                                                      - b["tgt"] / max(1, b["tgt"] + b["att"]))
+                                        if (a and b and a["tgt"] and b["tgt"]) else None)(
+                         team_opp.get(t), team_opp2.get(t))))(ros_now.get(pid)),
+                     "occhg": oc_changed(ros_now.get(pid), Y) if ros_now.get(pid) else None,
+                     "hcchg": hc_changed(ros_now.get(pid), Y) if ros_now.get(pid) else None,
                      "window": dcr_ok and ((pos in ("WR", "TE") and 1 <= m.get("exp", 0) <= 3)
                                            or (pos == "RB" and m.get("exp", 0) <= 2))})
     return rows
@@ -1271,3 +1360,93 @@ if "audit" in sys.argv:
         picks[best] = picks.get(best, 0) + 1
     for w, n in sorted(picks.items(), key=lambda x: -x[1]):
         print(f"   {w}: {n}/12 folds")
+
+
+# ============ SITUATION-CHANGE TESTS (python backtest_labscore.py sittest) ==
+# Research round 3 (Alex): QB change + destination quality, pass-rate drift,
+# trade-vs-FA typing, OC changes (when the PFR scrape has run). Same
+# pre-registered rule as the grand audit: mean delta > +1.5 AND >=4/5 schemes.
+if "sittest" in sys.argv:
+    print("\n" + "=" * 18 + " SITUATION-CHANGE TESTS (round 3) " + "=" * 18)
+    ODD3 = {y for y in SEASONS if y % 2 == 1}
+    EVEN3 = {y for y in SEASONS if y % 2 == 0}
+    SCH3 = [("FWD", set(range(2022, 2026))), ("REV", set(range(2014, 2022))),
+            ("ODD", ODD3), ("EVEN", EVEN3)]
+
+    def bust3(fn, years):
+        grp = [r for r in all_rows if r["adp"] <= 36 and r["outcome"]
+               and r["season"] in years and fn(r) is not None]
+        if len(grp) < 16:
+            return None
+        grp.sort(key=lambda r: -fn(r))
+        h = len(grp) // 2
+        return (100 * sum(map(bust, grp[h:])) / (len(grp) - h)
+                - 100 * sum(map(bust, grp[:h])) / h)
+
+    def hit3(fn, years):
+        grp = [r for r in all_rows if 84 <= r["adp"] <= 240 and r["outcome"]
+               and r["season"] in years and fn(r) is not None]
+        if len(grp) < 30:
+            return None
+        grp.sort(key=lambda r: -fn(r))
+        h = len(grp) // 2
+        return (100 * sum(map(hit, grp[:h])) / h
+                - 100 * sum(map(hit, grp[h:])) / (len(grp) - h))
+
+    def evalrow(metric, fn):
+        vals = [metric(fn, test) for _, test in SCH3]
+        loso = [metric(fn, {y}) for y in SEASONS]
+        loso = [v for v in loso if v is not None]
+        vals.append(sum(loso) / len(loso))
+        return vals
+
+    def show(title, base_vals, variants):
+        print("\n-- " + title + " --")
+        print(f"   {'variant':36} {'FWD':>6} {'REV':>6} {'ODD':>6} {'EVEN':>6} {'LOSO':>6}   mean-d  verdict")
+        print(f"   {'baseline (shipped)':36} " + " ".join(f"{v:+6.1f}" for v in base_vals))
+        for label, vals in variants:
+            ds = [v - b for v, b in zip(vals, base_vals)]
+            mean = sum(ds) / len(ds)
+            ok = mean > 1.5 and sum(1 for d in ds if d > 0) >= 4
+            print(f"   {label:36} " + " ".join(f"{x:+6.1f}" for x in vals)
+                  + f"   {mean:+6.1f}  {'PASSES RULE <<<' if ok else 'no'}")
+
+    clampv = lambda v, lo, hi: max(lo, min(hi, v))
+    n_qb = sum(1 for r in all_rows if r["qbchg"])
+    n_tr = sum(1 for r in all_rows if r["traded"])
+    n_mv = sum(1 for r in all_rows if r["moved"])
+    n_oc = sum(1 for r in all_rows if r["occhg"] is not None)
+    n_occ = sum(1 for r in all_rows if r["occhg"])
+    n_hc = sum(1 for r in all_rows if r.get("hcchg"))
+    print(f"coverage: qb-change rows {n_qb}, moved {n_mv} (traded {n_tr}), "
+          f"OC data on {n_oc} rows ({n_occ} with a new OC), "
+          f"new-HC rows {n_hc}")
+
+    S_SHIP3 = (.50, .15, .15, .20, .0)
+    S3 = lambda r: safety_of(r, S_SHIP3)
+    C3 = lambda r: ceiling_of(r, (.35, .25, .15, .25))
+    wrte = lambda r: r["pos"] in ("WR", "TE")
+
+    base_s3 = evalrow(bust3, S3)
+    sv3 = [
+        ("Q1 QB-departed -6 (WR/TE)", evalrow(bust3, lambda r: S3(r) - (6 if r["qbchg"] and wrte(r) else 0))),
+        ("Q2 QB up/downgrade scaled (WR/TE)", evalrow(bust3, lambda r: S3(r) + (clampv((r["qbdelta"] or 0) / 40, -8, 8) if r["qbchg"] and wrte(r) else 0))),
+        ("I1 pass-rate instability penalty", evalrow(bust3, lambda r: S3(r) - min(10, 250 * abs(r["prd"] or 0)))),
+        ("F1 FA/cut mover -6 (traded exempt)", evalrow(bust3, lambda r: S3(r) - (6 if r["moved"] and not r["traded"] else 0))),
+        ("T1 traded-for +4 (role secured)", evalrow(bust3, lambda r: S3(r) + (4 if r["traded"] else 0))),
+        ("O1 new-OC -5", evalrow(bust3, lambda r: S3(r) - (5 if r["occhg"] else 0))),
+        ("H1 new-HEAD-COACH -5", evalrow(bust3, lambda r: S3(r) - (5 if r["hcchg"] else 0))),
+    ]
+    show("SAFETY variants (bust gap, ADP<=36)", base_s3, sv3)
+
+    base_c3 = evalrow(hit3, C3)
+    cv3 = [
+        ("Q3 QB up/downgrade scaled (WR/TE)", evalrow(hit3, lambda r: C3(r) + (clampv((r["qbdelta"] or 0) / 40, -8, 8) if r["qbchg"] and wrte(r) else 0))),
+        ("P1 pass-rate-rise boost (WR/TE)", evalrow(hit3, lambda r: C3(r) + (clampv((r["prd"] or 0) * 150, -6, 6) if wrte(r) else 0))),
+        ("T2 traded-for +5", evalrow(hit3, lambda r: C3(r) + (5 if r["traded"] else 0))),
+        ("O2 new-OC +5 (upheaval = upside)", evalrow(hit3, lambda r: C3(r) + (5 if r["occhg"] else 0))),
+        ("O3 new-OC -5 (continuity = upside)", evalrow(hit3, lambda r: C3(r) - (5 if r["occhg"] else 0))),
+        ("H2 new-HEAD-COACH +5", evalrow(hit3, lambda r: C3(r) + (5 if r["hcchg"] else 0))),
+        ("H3 new-HEAD-COACH -5", evalrow(hit3, lambda r: C3(r) - (5 if r["hcchg"] else 0))),
+    ]
+    show("CEILING variants (hit gap, ADP 84-240)", base_c3, cv3)
