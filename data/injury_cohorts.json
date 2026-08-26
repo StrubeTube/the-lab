@@ -1,0 +1,128 @@
+{
+ "Knee": {
+  "n": 590,
+  "avgOut": 0.47,
+  "retPct": 99.0,
+  "retN": 156,
+  "recurPct": 23.9
+ },
+ "Ankle": {
+  "n": 517,
+  "avgOut": 0.43,
+  "retPct": 93.5,
+  "retN": 175,
+  "recurPct": 20.1
+ },
+ "Hamstring": {
+  "n": 361,
+  "avgOut": 0.67,
+  "retPct": 100.9,
+  "retN": 86,
+  "recurPct": 20.5
+ },
+ "Shoulder": {
+  "n": 263,
+  "avgOut": 0.2,
+  "retPct": 97.9,
+  "retN": 69,
+  "recurPct": 12.9
+ },
+ "Foot": {
+  "n": 222,
+  "avgOut": 0.46,
+  "retPct": 99.9,
+  "retN": 76,
+  "recurPct": 14.9
+ },
+ "Concussion": {
+  "n": 213,
+  "avgOut": 0.87,
+  "retPct": 102.7,
+  "retN": 63,
+  "recurPct": 11.3
+ },
+ "Hip": {
+  "n": 174,
+  "avgOut": 0.26,
+  "retPct": 90.1,
+  "retN": 67,
+  "recurPct": 12.1
+ },
+ "Ribs": {
+  "n": 163,
+  "avgOut": 0.33,
+  "retPct": 97.5,
+  "retN": 59,
+  "recurPct": 6.1
+ },
+ "Back": {
+  "n": 151,
+  "avgOut": 0.17,
+  "retPct": 102.3,
+  "retN": 45,
+  "recurPct": 9.9
+ },
+ "Quad": {
+  "n": 151,
+  "avgOut": 0.32,
+  "retPct": 87.7,
+  "retN": 53,
+  "recurPct": 8.6
+ },
+ "Groin": {
+  "n": 138,
+  "avgOut": 0.35,
+  "retPct": 103.2,
+  "retN": 41,
+  "recurPct": 9.4
+ },
+ "Hand": {
+  "n": 137,
+  "avgOut": 0.34,
+  "retPct": 107.6,
+  "retN": 50,
+  "recurPct": 12.4
+ },
+ "Calf": {
+  "n": 130,
+  "avgOut": 0.4,
+  "retPct": 88.3,
+  "retN": 29,
+  "recurPct": 12.3
+ },
+ "Neck": {
+  "n": 93,
+  "avgOut": 0.33,
+  "retPct": 103.3,
+  "retN": 28,
+  "recurPct": 8.6
+ },
+ "Toe": {
+  "n": 79,
+  "avgOut": 0.18,
+  "retPct": 86.9,
+  "retN": 30,
+  "recurPct": 10.1
+ },
+ "Oblique": {
+  "n": 56,
+  "avgOut": 0.38,
+  "retPct": 90.2,
+  "retN": 17,
+  "recurPct": 3.6
+ },
+ "Arm": {
+  "n": 35,
+  "avgOut": 0.2,
+  "retPct": 114.2,
+  "retN": 15,
+  "recurPct": 5.7
+ },
+ "Achilles": {
+  "n": 31,
+  "avgOut": 0.45,
+  "retPct": 106.9,
+  "retN": 2,
+  "recurPct": 3.2
+ }
+}

@@ -125,6 +125,29 @@ for yr in range(2017, 2025):
                 e["att"] += att
                 e["wks"] += 1
 
+# injury episodes + cohorts (built by build_injury_cohorts.py)
+try:
+    INJ_EPISODES = json.loads((CACHE / "injury_episodes.json").read_text(encoding="utf-8"))
+    INJ_COHORTS = json.loads((ROOT / "data" / "injury_cohorts.json").read_text(encoding="utf-8"))
+except (OSError, ValueError):
+    INJ_EPISODES, INJ_COHORTS = [], {}
+inj_by_py = defaultdict_inj = {}
+for e_ in INJ_EPISODES:
+    inj_by_py.setdefault((e_["pid"], e_["yr"]), []).append(e_)
+
+def injury_burden(pid, Y):
+    """Prior-2-season injury load, weighted by each body part's cohort
+    recurrence rate and lingering-output deficit."""
+    b = 0.0
+    for yy in (Y - 1, Y - 2):
+        for e_ in inj_by_py.get((pid, yy), []):
+            c_ = INJ_COHORTS.get(e_["part"]) or {}
+            recur = (c_.get("recurPct") or 10) / 100
+            deficit = max(0.0, 1 - (c_.get("retPct") or 100) / 100)
+            w_ = 1.0 if yy == Y - 1 else 0.5
+            b += w_ * e_["n"] * (recur + deficit + 0.15 * e_["out"])
+    return b
+
 DC_VAL = {1: 1.0, 2: 0.8, 3: 0.65, 4: 0.5, 5: 0.4, 6: 0.32, 7: 0.25}
 AGE_CURVE = {
     "RB": [(21, 0.85), (23, 1.0), (26, 0.97), (27, 0.83), (28, 0.76),
@@ -389,6 +412,8 @@ def build_season(Y):
         # unrealized air yards (WR): deep usage that hasn't converted yet
         if pos == "WR" and gp >= 6 and tgt >= 40:
             m["unrl"] = ((st.get("rec_air_yd") or 0) - (st.get("rec_yd") or 0)) / gp
+        # injury burden: cohort-weighted 2-year injury load (inverted)
+        m["injb"] = -injury_burden(pid, Y)
         if gp >= 1:
             a, b = RATES["rec"]
             exp = a * rzt + b * max(0, tgt - rzt)
@@ -541,6 +566,7 @@ def build_season(Y):
                      "peak_p": pct(pos, m, "peak"),
                      "tsd_p": pct(pos, m, "tsdelta"), "lg_p": pct(pos, m, "lategrow"),
                      "ug_p": pct(pos, m, "ugap"), "un_p": pct(pos, m, "unrl"),
+                     "inj_p": pct(pos, m, "injb"),
                      "gap": (tal - opp) if (tal is not None and opp is not None) else None,
                      "moved": ros_now.get(pid) is not None and ros_prior.get(pid) is not None
                               and ros_now.get(pid) != ros_prior.get(pid),
@@ -854,6 +880,16 @@ for label, kw in (("full ceiling [SHIPPED]", {}), ("+ re-add tal-over-usage gap"
                   ("- breakout window", {"no_win": True}), ("- career-peak pedigree", {"no_peak": True})):
     fn = (lambda kw2: lambda r: ceil_ab(r, **kw2))(kw)
     print(f"     {label:28} train {hit_gap(fn, TRAIN):+.1f}   holdout {hit_gap(fn, HOLDOUT):+.1f}")
+
+print("   injury-burden candidates (cohort-weighted 2yr load):")
+for label, fn in (("S +inj .10 (from dur)", lambda r: safety_ab(r) if r["comp"]["dur"] is None else
+                   mixw([(r["comp"]["opp_role"], .50), (r["comp"]["tal"], .15), (r["comp"]["sit"], .15),
+                         (r["comp"]["trS"], .10), (r["comp"]["dur"], .05), (nz(r["inj_p"]), .05)])),
+                  ("S +inj .10 (from opp)", lambda r: mixw([(r["comp"]["opp_role"], .40), (r["comp"]["tal"], .15),
+                         (r["comp"]["sit"], .15), (r["comp"]["trS"], .10), (r["comp"]["dur"], .10), (nz(r["inj_p"]), .10)])),
+                  ("S +inj replace dur", lambda r: mixw([(r["comp"]["opp_role"], .50), (r["comp"]["tal"], .15),
+                         (r["comp"]["sit"], .15), (r["comp"]["trS"], .10), (nz(r["inj_p"]), .10)]))):
+    print(f"     {label:28} train {bust_gap(fn, TRAIN):+.1f}   holdout {bust_gap(fn, HOLDOUT):+.1f}")
 
 print("-- round-2 candidates, train | holdout robustness --")
 nzt = lambda v: 50.0 if v is None else v
