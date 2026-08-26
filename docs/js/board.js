@@ -387,6 +387,7 @@
   // ---------- overall (tier-block) view ----------
   function renderOverall(root, ovl) {
     const ranks = LAB.overallRanks(board);
+    root.append(colHeads({ adpPosMode: false }));  // sticky column headers
     const wrap = LAB.el('div', { id: 'blockList' });
     board.overall.forEach(ref => {
       const tiers = board.pos[ref.pos].tiers;
@@ -710,11 +711,20 @@
     const grid = LAB.el('div', { style: `width:${totalW}px` });
     const outer = LAB.el('div', { style: 'overflow-x:auto' }, grid);
     const colStyle = `flex:none;width:${colW}px`;
-    // header row (✎ marks a column you have corrected locally)
-    grid.append(LAB.el('div', { style: 'display:flex;gap:12px' },
+    // STICKY header row (✎ marks a column you have corrected locally) —
+    // lives outside the horizontal scroller (sticky doesn't survive inside
+    // an overflow-x container) and is sync-scrolled with it, so the column
+    // names stay visible all the way down the board
+    const headInner = LAB.el('div', { style: `display:flex;gap:12px;width:${totalW}px` },
       [['', 'My board'], ...srcs].map(([key, label], i) => LAB.el('div', {
-        style: colStyle + ';font-family:var(--font-display);font-weight:700;text-transform:uppercase;letter-spacing:.05em;font-size:14px;color:var(--ink-2);padding:2px 7px',
-      }, i === 0 ? 'My board' : label + (aEdits[scopeOf(key)] ? ' ✎' : '')))));
+        style: colStyle + ';font-family:var(--font-display);font-weight:700;text-transform:uppercase;letter-spacing:.05em;font-size:14px;color:var(--ink-2);padding:4px 7px',
+      }, i === 0 ? 'My board' : label + (aEdits[scopeOf(key)] ? ' ✎' : ''))));
+    root.append(LAB.el('div', {
+      style: 'position:sticky;top:46px;z-index:6;background:var(--bg);overflow:hidden;border-bottom:1px solid var(--border)',
+    }, headInner));
+    outer.addEventListener('scroll', () => {
+      headInner.style.transform = `translateX(-${outer.scrollLeft}px)`;
+    });
 
     // in edit mode every fragment of an analyst's column is one shared drag
     // group, so a player can move anywhere within that analyst's list
