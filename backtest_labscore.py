@@ -509,7 +509,10 @@ def build_season(Y):
         ad_p = pct(pos, m, "adot")
         window_v = m["dc"] >= 0.65 and ((pos in ("WR", "TE") and 1 <= m.get("exp", 0) <= 3)
                                         or (pos == "RB" and m.get("exp", 0) <= 2))
-        ceiling = (0.82 * (ceil_base + 0.18 * gap_v)
+        # (talent-over-usage gap REMOVED by ablation 08-26: after the ceiling
+        # retune to opp .25 it fought the opportunity weight — dropping it
+        # improved train +11.8->+13.7 AND holdout +9.3->+11.1)
+        ceiling = (0.82 * ceil_base
                    + 0.10 * (rz_p if rz_p is not None else 50)
                    + 0.08 * ((ad_p if ad_p is not None else 50) if pos == "WR" else 50))
         if window_v:
@@ -813,6 +816,42 @@ print("-- CEILING weights: hit gap (higher = sharper), train | holdout --")
 for label, w in C_CANDS.items():
     print(f"  {label:32} train {hit_gap(lambda r: ceiling_of(r, w), TRAIN):+.1f}"
           f"   holdout {hit_gap(lambda r: ceiling_of(r, w), HOLDOUT):+.1f}")
+print("\n-- ABLATIONS: does REMOVING any component help? (train | holdout) --")
+print("   safety leave-one-out (weights renormalize):")
+S_W = (.50, .15, .15, .10, .10)
+def safety_ab(r, drop=None, no_role=False):
+    c = r["comp"]
+    parts = [(c["opp"] if no_role else c["opp_role"], S_W[0]), (c["tal"], S_W[1]),
+             (c["sit"], S_W[2]), (c["trS"], S_W[3]), (c["dur"], S_W[4])]
+    if drop is not None:
+        parts[drop] = (None, 0)
+    return mixw(parts)
+for label, kw in (("full safety [SHIPPED]", {}), ("- projected-role blend", {"no_role": True}),
+                  ("- talent", {"drop": 1}), ("- situation", {"drop": 2}),
+                  ("- trajectory", {"drop": 3}), ("- durability", {"drop": 4})):
+    fn = (lambda kw2: lambda r: safety_ab(r, **kw2))(kw)
+    print(f"     {label:28} train {bust_gap(fn, TRAIN):+.1f}   holdout {bust_gap(fn, HOLDOUT):+.1f}")
+
+print("   ceiling leave-one-out:")
+def ceil_ab(r, add_gap=False, no_rz=False, no_ad=False, no_win=False, no_peak=False):
+    c = r["comp"]
+    if any(v is None for v in (c["opp"], c["tal"], c["sit"], c["trC"])):
+        return None
+    base = .25 * c["opp"] + .30 * c["tal"] + .20 * c["sit"] + .25 * c["trC"]
+    v = (0.82 * (base + (0.18 * (c["gapv"] or 0) if add_gap else 0))
+         + 0.10 * (50 if no_rz else (c["rz"] if c["rz"] is not None else 50))
+         + 0.08 * (50 if (no_ad or r["pos"] != "WR") else (c["ad"] if c["ad"] is not None else 50)))
+    if c["win"] and not no_win:
+        v += 4
+    if not no_peak and r.get("peak_p") is not None:
+        v = 0.90 * v + 0.10 * r["peak_p"]
+    return v
+for label, kw in (("full ceiling [SHIPPED]", {}), ("+ re-add tal-over-usage gap", {"add_gap": True}),
+                  ("- red-zone role", {"no_rz": True}), ("- WR aDOT", {"no_ad": True}),
+                  ("- breakout window", {"no_win": True}), ("- career-peak pedigree", {"no_peak": True})):
+    fn = (lambda kw2: lambda r: ceil_ab(r, **kw2))(kw)
+    print(f"     {label:28} train {hit_gap(fn, TRAIN):+.1f}   holdout {hit_gap(fn, HOLDOUT):+.1f}")
+
 print("-- round-2 candidates, train | holdout robustness --")
 nzt = lambda v: 50.0 if v is None else v
 for label, fn in (("shipped ceiling", lambda r: r["ceiling"]),

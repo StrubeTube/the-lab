@@ -1226,17 +1226,17 @@ for e in players_out:
     # safety leans harder on locked-in role, ceiling keeps some real usage
     safety = mix([(opp_role, .50), (tal, .15), (sit, .15), (trS, .10), (dur_p, .10)])
     ceil_base = .25 * opp + .30 * tal + .20 * sit + .25 * trC
-    # ceiling hone combo (backtest: top-quartile hit gap +3 -> +8): the
-    # talent-over-usage GAP (efficiency before volume = the pre-breakout
-    # shape), red-zone role share (cheap TD equity), WR air-yards depth
-    # (spike-week profile), and the capital-gated year-2/3 breakout window
-    gap_v = max(0, tal - opp)
+    # ceiling hone combo: red-zone role share (cheap TD equity), WR air-yards
+    # depth (spike-week profile), the capital-gated year-2/3 breakout window,
+    # and career-peak pedigree below. (The talent-over-usage gap was REMOVED
+    # by ablation 08-26 — after the ceiling retune to opp .25 it fought the
+    # opportunity weight; dropping it improved train AND holdout.)
     rz_p = pct(e["id"], "rzsh")
     ad_p = pct(e["id"], "adot")
     window_v = (lab.get("dcr") or 9) <= 3 and (
         (e["pos"] in ("WR", "TE") and 1 <= (e.get("exp") or 0) <= 3)
         or (e["pos"] == "RB" and (e.get("exp") or 0) <= 2))
-    ceiling = (0.82 * (ceil_base + 0.18 * gap_v)
+    ceiling = (0.82 * ceil_base
                + 0.10 * (rz_p if rz_p is not None else 50)
                + 0.08 * ((ad_p if ad_p is not None else 50) if e["pos"] == "WR" else 50))
     if window_v:
