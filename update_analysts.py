@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
-"""THE LAB - scripted analyst refresh (FantasyPros + Flock).
+"""THE LAB - scripted analyst refresh (Flock).
 
-Fetches the two machine-readable sources and rewrites their sections of
+Fetches the machine-readable source and rewrites its section of
 data/analyst_lists.json, then prints a per-source change summary:
 
-  - FantasyPros half-PPR ECR: embedded `ecrData` JSON on the cheatsheet page
-    -> positional lists (dense, by pos rank) + overall [[rank_ecr, name]]
-    with K/DST rows skipped but their rank numbers kept.
   - Flock Fantasy: public API, Corey Buschlen's board -> positional lists +
     dense overall list (his ranks number skill players 1..N, no K/DST).
+
+(FantasyPros was removed from the consensus 2026-08-25 per Alex.)
 
 Joel Smyth (Yahoo article) and The Fantasy Footballers (rendered pages) are
 JS-rendered and updated by Claude via the `update-analysts` skill, which
@@ -32,21 +31,6 @@ def get(url):
     req = urllib.request.Request(url, headers=UA)
     with urllib.request.urlopen(req, timeout=60) as r:
         return r.read().decode("utf-8", "replace")
-
-
-def fetch_fp():
-    html = get("https://www.fantasypros.com/nfl/rankings/half-point-ppr-cheatsheets.php")
-    m = re.search(r"var ecrData = (\{.*?\});", html, re.S)
-    d = json.loads(m.group(1))
-    players = d["players"]
-    positional = {}
-    for pos in POS:
-        mine = [p for p in players if p.get("player_position_id") == pos]
-        mine.sort(key=lambda p: p["rank_ecr"])
-        positional[pos] = [p["player_name"] for p in mine[: POS_CAP[pos]]]
-    overall = [[p["rank_ecr"], p["player_name"]] for p in sorted(players, key=lambda p: p["rank_ecr"])
-               if p.get("player_position_id") in POS and p["rank_ecr"] <= OVR_CAP]
-    return positional, overall, d.get("last_updated", "")
 
 
 def fetch_flock():
@@ -76,7 +60,7 @@ def diff(old, new, label):
 def main():
     lists = json.loads(LISTS.read_text(encoding="utf-8"))
     total = 0
-    for src, fetch in (("fp", fetch_fp), ("flock", fetch_flock)):
+    for src, fetch in (("flock", fetch_flock),):
         print(f"{src}: fetching...")
         try:
             positional, overall, stamp = fetch()

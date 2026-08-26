@@ -5,12 +5,12 @@ Reads the analyst lists from data/analyst_lists.json and averages them into
 data/consensus_ranks.json, which compute.py merges into players.json
 (positional -> `cr`/`crs`, overall "OVR" -> `ocr`/`ocrs`).
 
-Sources: Joel Smyth (Yahoo), FantasyPros ECR (half-PPR), Flock Fantasy
-(Corey Buschlen), The Fantasy Footballers. A fifth "vegas" source is computed
-live in compute.py from BettingPros prop lines and never appears here.
+Sources: Joel Smyth (Yahoo), Flock Fantasy (Corey Buschlen), The Fantasy
+Footballers. A "vegas" source is computed live in compute.py from BettingPros
+prop lines and never appears here. (FantasyPros removed 2026-08-25 per Alex.)
 
-To update the lists, run the `update-analysts` skill (fetches FantasyPros and
-Flock automatically; Joel and the Footballers are read from their pages), or
+To update the lists, run the `update-analysts` skill (fetches Flock
+automatically; Joel and the Footballers are read from their pages), or
 edit data/analyst_lists.json by hand, then rerun:
     python build_consensus.py && python compute.py
 

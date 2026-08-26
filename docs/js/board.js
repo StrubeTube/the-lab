@@ -103,6 +103,34 @@
     render();
   }));
 
+  // vs-ADP lens (view-only): tint rows by my rank vs Sleeper ADP
+  state.adpLens = !!LAB.prefs.adpLens;
+  const adpLensBtn = LAB.$('#adpLensBtn');
+  const syncAdpLensBtn = () => {
+    adpLensBtn.style.background = state.adpLens ? 'var(--accent-soft)' : '';
+    adpLensBtn.style.borderColor = state.adpLens ? 'var(--accent)' : '';
+    adpLensBtn.style.color = state.adpLens ? 'var(--accent)' : '';
+  };
+  syncAdpLensBtn();
+  adpLensBtn.addEventListener('click', () => {
+    state.adpLens = !state.adpLens;
+    LAB.prefs.adpLens = state.adpLens; LAB.savePrefs();
+    syncAdpLensBtn(); render();
+  });
+  // delta = market ADP − my rank: positive = I'm higher on him than ADP (green)
+  function adpDelta(p, rankNo, overallMode) {
+    const mkt = overallMode ? p.adp : p.adp_pos;
+    if (mkt == null || rankNo == null) return null;
+    return Math.round(mkt - rankNo);
+  }
+  function adpLensStyle(d, overallMode) {
+    if (d == null || d === 0) return '';
+    const u = Math.min(1, Math.abs(d) / (overallMode ? 24 : 10)); // full color at ±24 ovr / ±10 pos
+    const c = d > 0 ? '70,214,140' : '242,109,109';
+    return `;background:linear-gradient(90deg,rgba(${c},${(0.22 * u).toFixed(3)}),rgba(${c},${(0.05 * u).toFixed(3)}))`
+      + `;box-shadow:inset 3px 0 0 rgba(${c},${(0.25 + 0.75 * u).toFixed(3)})`;
+  }
+
   // dynasty lens slider (view-only blend, never writes the board)
   state.dynW = 0;
   const dynSlider = LAB.$('#dynSlider');
@@ -192,7 +220,11 @@
     const holder = ovl && ovl.rostered[pid];
     const isKeeper = ovl && ovl.keepers.has(pid);
     const mine = ovl && ovl.mine.has(pid);
-    const row = LAB.el('div', { class: 'prow', 'data-pid': pid },
+    const lensD = state.adpLens ? adpDelta(p, rankNo, opts.showPos) : null;
+    const row = LAB.el('div', {
+      class: 'prow', 'data-pid': pid,
+      style: state.adpLens ? adpLensStyle(lensD, opts.showPos).replace(/^;/, '') : '',
+    },
       LAB.el('span', { class: 'rank' }, rankNo),
       LAB.headshot(pid),
       LAB.el('div', { class: 'pmeta' },
@@ -211,6 +243,12 @@
           LAB.el('span', { class: 'adp-dot', style: 'background:' + LAB.adpColor(rankNo, opts.adpPosMode ? p.adp_pos : p.adp) }),
           (opts.adpPosMode ? (p.adp_pos ?? '–') : (p.adp != null ? p.adp.toFixed(1) : '–'))),
         LAB.el('span', { class: 'stat w40', title: 'ADP as a 10-team round.pick' }, LAB.adpRound(p.adp) || '–'),
+        state.adpLens ? LAB.el('span', {
+          class: 'stat w40',
+          style: 'font-weight:600;color:' + (lensD > 0 ? 'var(--good)' : lensD < 0 ? 'var(--bad)' : 'var(--ink-3)'),
+          title: lensD == null ? 'no Sleeper ADP for this comparison'
+            : (opts.showPos ? 'overall' : 'positional') + ` gap: your rank ${rankNo} vs ADP ${opts.showPos ? p.adp?.toFixed(1) : p.adp_pos}` + (lensD > 0 ? ' — you are higher than the market' : lensD < 0 ? ' — you are lower than the market' : ''),
+        }, lensD == null ? '–' : lensD > 0 ? '+' + lensD : String(lensD)) : '',
         kSim ? LAB.el('span', { class: 'stat w40', title: 'projected round in the ' + (ovl ? ovl.name : '') + ' KEEPER draft — predicted keepers consume their cost-round slots, everyone else falls to the open picks' },
           kSim.rounds[pid] ? 'R' + kSim.rounds[pid] : kSim.keptSet.has(pid) ? 'kept' : '–') : '',
         LAB.el('span', { class: 'stat hide-m', title: "2026 projection (your scoring)" }, LAB.fmt0(p.proj)),
@@ -232,6 +270,7 @@
         LAB.el('span', { class: 'stat w40' }, 'Bye'),
         LAB.el('span', { class: 'stat' }, opts.adpPosMode ? 'PosADP' : 'ADP'),
         LAB.el('span', { class: 'stat w40' }, 'Rd'),
+        state.adpLens ? LAB.el('span', { class: 'stat w40', title: 'your rank vs Sleeper ADP (positional on this tab)' }, 'Δ ADP') : '',
         kSim ? LAB.el('span', { class: 'stat w40', title: 'keeper-draft round' }, 'K Rd') : '',
         LAB.el('span', { class: 'stat hide-m' }, "'26 Proj"),
         LAB.el('span', { class: 'stat hide-m' }, "'25 Fin"),
@@ -385,7 +424,7 @@
   // ---------- analyst compare view ----------
   // Rows align by rank; my tier breaks run as full-width bars across every
   // column; my column stays drag-editable (writes the real board).
-  const SRC_META = [['joel', 'Joel Smyth'], ['fp', 'FantasyPros'], ['flock', 'Flock'], ['fb', 'Footballers'], ['vegas', 'Vegas']];
+  const SRC_META = [['joel', 'Joel Smyth'], ['flock', 'Flock'], ['fb', 'Footballers'], ['vegas', 'Vegas']];
   function diffColor(myRank, theirRank, span) {
     if (myRank == null || theirRank == null) return null;
     const t = Math.max(-1, Math.min(1, (theirRank - myRank) / (span || 6)));
