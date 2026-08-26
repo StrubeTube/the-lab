@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
-"""THE LAB - injury cohort builder (Alex's spec, Fantasy-Footballers style).
+"""THE LAB - injury cohort builder. ARCHIVED RESEARCH, NOT SHIPPED.
+
+Cut from the site 2026-08-26 per Alex: public injury data only reaches
+body-part granularity (plus our severity-tier proxy), and without true
+diagnosis-level specificity (high-ankle vs low sprain, ACL vs scope) the
+cohorts are not trustworthy enough to display. Revive only if a
+diagnosis-level source becomes available.
 
 From nflverse weekly injury reports (2018-2024) + Sleeper weekly scoring:
   1. Detect injury EPISODES per skill player: consecutive weeks listed with

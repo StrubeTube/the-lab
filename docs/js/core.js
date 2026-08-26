@@ -406,8 +406,6 @@
   // ---------- player card ----------
   LAB.playerCard = async function (pid) {
     const { players, leagues, meta } = await LAB.loadData(['players', 'leagues', 'meta']);
-    let injCoh = {};
-    try { injCoh = (await LAB.loadData(['injury_cohorts'])).injury_cohorts || {}; } catch (e) { /* optional */ }
     const p = LAB.playersById(players)[pid];
     if (!p) return;
     const board = LAB.loadBoard();
@@ -514,24 +512,7 @@
           line('TD luck \'25', tdD != null ? `${L2.td} TD vs ${L2.xtd} expected (${tdD > 0 ? '+' : ''}${tdD})` : null,
             tdD > 2 ? 'bad' : tdD < -2 ? 'good' : '',
             'actual TDs vs what league-average conversion of his red-zone + volume opportunity would score. Over = fade risk, under = positive regression'),
-          L2.moved ? line('Moved', `part of ${L2.moved}'s vacated pool`, 'muted', 'he changed teams — his old usage is what someone else inherits') : '',
-          (L2.injL || L2.injc) ? el('div', { style: 'margin-top:9px' },
-            el('div', { class: 't-label', style: 'color:var(--ink-3);font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;font-weight:700' }, 'Injury context'),
-            L2.injL ? el('div', { class: 'bad', style: 'margin-top:3px;font-size:12.5px;font-weight:600' },
-              `NOW: ${L2.injL[0]} — ${L2.injL[1]}${L2.injL[2] ? ' (since ' + L2.injL[2] + ')' : ''}`,
-              L2.injL[3] ? el('div', { class: 'muted', style: 'font-weight:400;font-size:12px' }, L2.injL[3]) : '') : '',
-            ...(L2.injc || []).map(ep => {
-              // severity tier proxies the actual diagnosis: a played-through
-              // ankle and a 4-games-missed ankle are different injuries
-              const TIER_LBL = { 'played-through': 'played through it', short: 'short absence', long: 'major — 3+ games missed' };
-              const coh = injCoh[ep.p] || {};
-              const c = (coh.tiers || {})[ep.t] || coh;
-              return el('div', { style: 'margin-top:3px;font-size:12.5px' },
-                el('span', { class: ep.t === 'long' ? 'bad' : 'warn', style: 'font-weight:600' }, `'${String(ep.y).slice(2)} ${ep.p}`),
-                el('span', { class: 'dim' }, ` (${TIER_LBL[ep.t] || ep.t}${ep.o ? ', ' + ep.o + ' games' : ''})`),
-                c.n ? el('span', { class: 'muted' },
-                  ` · ${c.n} similar: ${c.retPct != null ? c.retPct + '% output on return' : 'n/a on return'}${c.recurPct != null ? ', ' + c.recurPct + '% recur within a year' : ''}`) : '');
-            })) : '');
+          L2.moved ? line('Moved', `part of ${L2.moved}'s vacated pool`, 'muted', 'he changed teams — his old usage is what someone else inherits') : '');
       })() : '',
       el('hr', { class: 'hr' }),
       ...leagueRows,

@@ -781,20 +781,11 @@ trades_out = {t: build_trades(t) for t in ("ggg", "lob")}
 # at 27+ (57% of RB1 seasons at ages 23-26); WR peaks 24-28; TE ramps to a
 # late 25-28 peak; QB is flat into the mid-30s.
 print("Lab Score data layer...")
-# injury cohorts + recent episodes (build_injury_cohorts.py, Alex's spec):
-# per-body-part recovery/recurrence context, shown on the player card
-try:
-    INJ_COH = json.loads((ROOT / "data" / "injury_cohorts.json").read_text(encoding="utf-8"))
-    INJ_REC = json.loads((ROOT / "data" / "injury_recent.json").read_text(encoding="utf-8"))
-except (OSError, ValueError):
-    INJ_COH, INJ_REC = {}, {}
-INJ_PART_MAP = {"Hamstring": "Hamstring", "Knee": "Knee", "Ankle": "Ankle",
-                "Shoulder": "Shoulder", "Concussion": "Concussion", "Groin": "Groin",
-                "Calf": "Calf", "Foot": "Foot", "Back": "Back", "Hip": "Hip",
-                "Quadricep": "Quad", "Quad": "Quad", "Thigh": "Quad", "Toe": "Toe",
-                "Wrist": "Hand", "Hand": "Hand", "Finger": "Hand", "Thumb": "Hand",
-                "Ribs": "Ribs", "Rib": "Ribs", "Chest": "Ribs", "Achilles": "Achilles",
-                "Oblique": "Oblique", "Heel": "Foot", "Neck": "Neck"}
+# NOTE: the injury-cohort context feature (body part + severity tiers) was
+# CUT 2026-08-26 per Alex — public data only reaches body-part granularity,
+# and without diagnosis-level specificity (high-ankle vs low sprain, ACL vs
+# scope) the cohorts aren't trustworthy enough to display. The research
+# lives on in build_injury_cohorts.py if a diagnosis-level source appears.
 nv_draft_rows = load_opt("nflverse_draft.json", [])  # [{g,n,p,s,r,pk}]
 nv_roster = load_opt("nflverse_roster_last.json", {})  # sleeper_id -> {team, gsis_id}
 nv_by_gsis, nv_by_name = {}, {}
@@ -952,19 +943,6 @@ for e in players_out:
         act = (st.get("rec_td") or 0) + (st.get("rush_td") or 0) + (st.get("pass_td") or 0)
         lab["td"] = int(act)
         lab["xtd"] = round(exp, 1)
-    # injury context (Alex's spec): recent typed episodes + the live Sleeper
-    # injury line, each matched to its body-part cohort on the front-end
-    rec = INJ_REC.get(e["id"])
-    if rec:
-        lab["injc"] = sorted(rec, key=lambda x: -x["y"])[:3]
-    # live line only for SERIOUS statuses — an August "Questionable" is noise
-    # (per Alex); recent episode history above carries the real signal
-    if pdb.get("injury_status") in ("Out", "Doubtful", "IR", "PUP", "Sus", "COV", "DNR", "NA"):
-        lab["injL"] = [INJ_PART_MAP.get((pdb.get("injury_body_part") or "").strip(),
-                                        (pdb.get("injury_body_part") or "?").strip()),
-                       pdb["injury_status"],
-                       (pdb.get("injury_start_date") or "")[:10],
-                       (pdb.get("injury_notes") or "")[:110]]
     if lab:
         e["lab"] = lab
         n_lab += 1
@@ -990,10 +968,6 @@ try:
     CAREER_BEST = json.loads((ROOT / "data" / "career_finish_hist.json").read_text(encoding="utf-8"))
 except (OSError, ValueError):
     CAREER_BEST = {}
-
-# ship the injury cohort table to the front-end for the player card
-if INJ_COH:
-    dump("injury_cohorts.json", INJ_COH)
 
 # live OTC contracts: how much a team has committed to a player, for how long
 otc = load_opt("otc_contracts.json", [])
