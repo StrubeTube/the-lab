@@ -105,18 +105,54 @@
 
   // vs-ADP lens (view-only): tint rows by my rank vs Sleeper ADP
   state.adpLens = !!LAB.prefs.adpLens;
+  // vs-Lab lens: tint rows by where the LAB SCORE ranks him vs where MY
+  // board does — for reordering players within tiers (mutually exclusive
+  // with the ADP lens so the colors always mean one thing)
+  state.labLens = !!LAB.prefs.labLens && !LAB.prefs.adpLens;
   const adpLensBtn = LAB.$('#adpLensBtn');
-  const syncAdpLensBtn = () => {
-    adpLensBtn.style.background = state.adpLens ? 'var(--accent-soft)' : '';
-    adpLensBtn.style.borderColor = state.adpLens ? 'var(--accent)' : '';
-    adpLensBtn.style.color = state.adpLens ? 'var(--accent)' : '';
+  const labLensBtn = LAB.$('#labLensBtn');
+  const syncLensBtns = () => {
+    for (const [btn, on] of [[adpLensBtn, state.adpLens], [labLensBtn, state.labLens]]) {
+      btn.style.background = on ? 'var(--accent-soft)' : '';
+      btn.style.borderColor = on ? 'var(--accent)' : '';
+      btn.style.color = on ? 'var(--accent)' : '';
+    }
   };
-  syncAdpLensBtn();
+  syncLensBtns();
   adpLensBtn.addEventListener('click', () => {
     state.adpLens = !state.adpLens;
-    LAB.prefs.adpLens = state.adpLens; LAB.savePrefs();
-    syncAdpLensBtn(); render();
+    if (state.adpLens) state.labLens = false;
+    LAB.prefs.adpLens = state.adpLens; LAB.prefs.labLens = state.labLens; LAB.savePrefs();
+    syncLensBtns(); render();
   });
+  labLensBtn.addEventListener('click', () => {
+    state.labLens = !state.labLens;
+    if (state.labLens) state.adpLens = false;
+    LAB.prefs.adpLens = state.adpLens; LAB.prefs.labLens = state.labLens; LAB.savePrefs();
+    syncLensBtns(); render();
+  });
+  // Lab-rank deltas for the current view: + = the Lab Score says he should
+  // sit N spots HIGHER than my board has him (green), − = lower (red)
+  function buildLabLens() {
+    state._labD = null;
+    if (!state.labLens) return;
+    const pids = [];
+    if (state.tab === 'OVR') {
+      board.overall.forEach(ref => {
+        const t = (board.pos[ref.pos] || {}).tiers?.find(x => x.id === ref.tierId);
+        if (t) pids.push(...t.players);
+      });
+    } else {
+      (board.pos[state.tab] || { tiers: [] }).tiers.forEach(t => pids.push(...t.players));
+    }
+    const withSc = pids.filter(pid => ((byId[pid] || {}).lab || {}).sc != null);
+    const bySc = withSc.slice().sort((a, b) =>
+      (byId[b].lab.sc - byId[a].lab.sc) || (withSc.indexOf(a) - withSc.indexOf(b)));
+    const labRank = {};
+    bySc.forEach((pid, i) => (labRank[pid] = i + 1));
+    state._labD = {};
+    withSc.forEach((pid, i) => (state._labD[pid] = (i + 1) - labRank[pid]));
+  }
   // delta = market ADP − my rank: positive = I'm higher on him than ADP (green)
   function adpDelta(p, rankNo, overallMode) {
     const mkt = overallMode ? p.adp : p.adp_pos;
@@ -221,10 +257,12 @@
     const holder = ovl && ovl.rostered[pid];
     const isKeeper = ovl && ovl.keepers.has(pid);
     const mine = ovl && ovl.mine.has(pid);
-    const lensD = state.adpLens ? adpDelta(p, rankNo, opts.showPos) : null;
+    const lensD = state.adpLens ? adpDelta(p, rankNo, opts.showPos)
+      : state.labLens ? ((state._labD || {})[pid] ?? null) : null;
+    const lensOn = state.adpLens || state.labLens;
     const row = LAB.el('div', {
       class: 'prow', 'data-pid': pid,
-      style: state.adpLens ? adpLensStyle(lensD, opts.showPos).replace(/^;/, '') : '',
+      style: lensOn ? adpLensStyle(lensD, opts.showPos).replace(/^;/, '') : '',
     },
       LAB.el('span', { class: 'rank' }, rankNo),
       LAB.headshot(pid),
@@ -246,11 +284,16 @@
           LAB.el('span', { class: 'adp-dot', style: 'background:' + LAB.adpColor(rankNo, opts.adpPosMode ? p.adp_pos : p.adp) }),
           (opts.adpPosMode ? (p.adp_pos ?? '–') : (p.adp != null ? p.adp.toFixed(1) : '–'))),
         LAB.el('span', { class: 'stat w40', title: 'ADP as a 10-team round.pick' }, LAB.adpRound(p.adp) || '–'),
-        state.adpLens ? LAB.el('span', {
+        lensOn ? LAB.el('span', {
           class: 'stat w40',
           style: 'font-weight:600;color:' + (lensD > 0 ? 'var(--good)' : lensD < 0 ? 'var(--bad)' : 'var(--ink-3)'),
-          title: lensD == null ? 'no Sleeper ADP for this comparison'
-            : (opts.showPos ? 'overall' : 'positional') + ` gap: your rank ${rankNo} vs ADP ${opts.showPos ? p.adp?.toFixed(1) : p.adp_pos}` + (lensD > 0 ? ' — you are higher than the market' : lensD < 0 ? ' — you are lower than the market' : ''),
+          title: state.adpLens
+            ? (lensD == null ? 'no Sleeper ADP for this comparison'
+              : (opts.showPos ? 'overall' : 'positional') + ` gap: your rank ${rankNo} vs ADP ${opts.showPos ? p.adp?.toFixed(1) : p.adp_pos}` + (lensD > 0 ? ' — you are higher than the market' : lensD < 0 ? ' — you are lower than the market' : ''))
+            : (lensD == null ? 'no Lab Score for this comparison'
+              : lensD > 0 ? `the Lab Score ranks him ${lensD} spot${lensD > 1 ? 's' : ''} HIGHER than your board — candidate to move up`
+                : lensD < 0 ? `the Lab Score ranks him ${-lensD} spot${lensD < -1 ? 's' : ''} LOWER than your board — candidate to move down`
+                  : 'your board and the Lab Score agree on his spot'),
         }, lensD == null ? '–' : lensD > 0 ? '+' + lensD : String(lensD)) : '',
         kSim ? LAB.el('span', { class: 'stat w40', title: 'projected round in the ' + (ovl ? ovl.name : '') + ' KEEPER draft — predicted keepers consume their cost-round slots, everyone else falls to the open picks' },
           kSim.rounds[pid] ? 'R' + kSim.rounds[pid] : kSim.keptSet.has(pid) ? 'kept' : '–') : '',
@@ -275,6 +318,7 @@
         LAB.el('span', { class: 'stat' }, opts.adpPosMode ? 'PosADP' : 'ADP'),
         LAB.el('span', { class: 'stat w40' }, 'Rd'),
         state.adpLens ? LAB.el('span', { class: 'stat w40', title: 'your rank vs Sleeper ADP (positional on this tab)' }, 'Δ ADP') : '',
+        state.labLens ? LAB.el('span', { class: 'stat w40', title: 'spots the Lab Score would move him on your board — green = move up, red = move down' }, 'Δ Lab') : '',
         kSim ? LAB.el('span', { class: 'stat w40', title: 'keeper-draft round' }, 'K Rd') : '',
         LAB.el('span', { class: 'stat hide-m' }, "'26 Proj"),
         LAB.el('span', { class: 'stat hide-m' }, "'25 Fin"),
@@ -884,6 +928,7 @@
     root.innerHTML = '';
     const ovl = overlayInfo();
     kSim = ovl ? LAB.keeperSim(players, leagues[ovl.tag], board) : null;
+    buildLabLens();
     const dynActive = state.dynW > 0 && state.view === 'list';
     LAB.$('#addTierBtn').style.display =
       (state.tab === 'OVR' || state.view !== 'list' || dynActive) ? 'none' : '';
