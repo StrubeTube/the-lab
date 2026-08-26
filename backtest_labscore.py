@@ -955,6 +955,53 @@ print(f"  SAFETY  per-pos  train {bust_gap(pp_s, TRAIN):+.1f}   holdout {bust_ga
 print(f"  CEILING global   train {hit_gap(glob_c, TRAIN):+.1f}   holdout {hit_gap(glob_c, HOLDOUT):+.1f}")
 print(f"  CEILING per-pos  train {hit_gap(pp_c, TRAIN):+.1f}   holdout {hit_gap(pp_c, HOLDOUT):+.1f}")
 
+print("\n================ WHERE DOES EACH SIGNAL PAY? (ramp audit) ================")
+print("bust gap by SAFETY and hit gap by CEILING, per ADP band — does the wc")
+print("ramp give each band the lens that actually discriminates there?\n")
+BANDS = [(1, 24), (25, 48), (49, 84), (85, 140), (141, 240)]
+for lo, hi in BANDS:
+    grp = [r for r in all_rows if lo <= r["adp"] <= hi and r["outcome"]]
+    if len(grp) < 60:
+        continue
+    gs = sorted(grp, key=lambda r: -r["safety"])
+    h = len(gs) // 2
+    bg = (100 * sum(map(bust, gs[h:])) / (len(gs) - h) - 100 * sum(map(bust, gs[:h])) / h)
+    gc = sorted(grp, key=lambda r: -r["ceiling"])
+    hg = (100 * sum(map(hit, gc[:h])) / h - 100 * sum(map(hit, gc[h:])) / (len(gc) - h))
+    wc_lo = max(0.15, min(0.85, (lo - 24) / 96))
+    wc_hi = max(0.15, min(0.85, (hi - 24) / 96))
+    print(f"  ADP {lo:3}-{hi:3} (n={len(grp):3}): safety bust-gap {bg:+5.1f}   ceiling hit-gap {hg:+5.1f}"
+          f"   [current wc {wc_lo:.2f}-{wc_hi:.2f}]")
+
+print("\n-- ramp variants judged by LEAGUE-VALUE objective (train | holdout):")
+print("   early bust gap (blend, ADP<=36) + mid+late hit gap (blend, 25-240)")
+def blend_of(r, a0, span, flat=None):
+    wcv = flat if flat is not None else max(0.15, min(0.85, (r["adp"] - a0) / span))
+    return (1 - wcv) * r["safety"] + wcv * r["ceiling"]
+def league_value(a0, span, years, flat=None):
+    fn = lambda r: blend_of(r, a0, span, flat)
+    early_g = [r for r in all_rows if r["adp"] <= 36 and r["outcome"] and r["season"] in years]
+    early_g.sort(key=lambda r: -fn(r))
+    h = len(early_g) // 2
+    bg = (100 * sum(map(bust, early_g[h:])) / (len(early_g) - h)
+          - 100 * sum(map(bust, early_g[:h])) / h)
+    mid_g = [r for r in all_rows if 25 <= r["adp"] <= 240 and r["outcome"] and r["season"] in years]
+    mid_g.sort(key=lambda r: -fn(r))
+    h2 = len(mid_g) // 2
+    hg = (100 * sum(map(hit, mid_g[:h2])) / h2 - 100 * sum(map(hit, mid_g[h2:])) / (len(mid_g) - h2))
+    return bg, hg
+RAMP_V = [("current (adp-24)/96, .5@72", 24, 96, None),
+          ("earlier  (adp-12)/60, .5@42", 12, 60, None),
+          ("mid      (adp-24)/60, .5@54", 24, 60, None),
+          ("steep    (adp-24)/48, .5@48", 24, 48, None),
+          ("later    (adp-48)/96, .5@96", 48, 96, None),
+          ("flat 0.5 everywhere", 0, 1, 0.5)]
+for label, a0, span, flat in RAMP_V:
+    tb, th = league_value(a0, span, TRAIN, flat)
+    hb, hh = league_value(a0, span, HOLDOUT, flat)
+    print(f"  {label:28} train bust {tb:+5.1f} hit {th:+5.1f} (sum {tb+th:+5.1f})"
+          f"   holdout bust {hb:+5.1f} hit {hh:+5.1f} (sum {hb+hh:+5.1f})")
+
 print("\n-- wc ramp calibration: mean within-position Spearman of the blend --")
 RAMPS = [("(adp-24)/96  [current]", 24, 96), ("(adp-12)/72", 12, 72),
          ("(adp-36)/120", 36, 120), ("(adp-0)/120", 0, 120),
