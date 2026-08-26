@@ -543,8 +543,8 @@ def build_season(Y):
         # weights tuned on 2018-2022, validated on 2023-2025 holdout:
         # safety opp-heavy (+19.3 holdout bust gap vs +12.3 for the old
         # .40/.20/.18/.12/.10), ceiling opp-back (+9.3 holdout hit gap)
-        safety = mix([(opp_role, .50), (tal, .15), (sit, .15), (trS, .10), (dur_p, .10)])
-        ceil_base = .25 * opp + .30 * tal + .20 * sit + .25 * trC
+        safety = mix([(opp_role, .50), (tal, .15), (sit, .15), (trS, .20)])  # dur dropped by grand audit A6
+        ceil_base = .35 * opp + .25 * tal + .15 * sit + .25 * trC  # grand-audit T2, 12/12 folds
         # shipped ceiling (hone combo C5): talent-over-usage gap, red-zone
         # role share, WR air-yards depth, capital-gated breakout window
         gap_v = max(0, (tal - opp)) if (tal is not None and opp is not None) else 0
@@ -884,7 +884,7 @@ def ceil_ab(r, add_gap=False, no_rz=False, no_ad=False, no_win=False, no_peak=Fa
     c = r["comp"]
     if any(v is None for v in (c["opp"], c["tal"], c["sit"], c["trC"])):
         return None
-    base = .25 * c["opp"] + .30 * c["tal"] + .20 * c["sit"] + .25 * c["trC"]
+    base = .35 * c["opp"] + .25 * c["tal"] + .15 * c["sit"] + .25 * c["trC"]
     v = (0.82 * (base + (0.18 * (c["gapv"] or 0) if add_gap else 0))
          + 0.10 * (50 if no_rz else (c["rz"] if c["rz"] is not None else 50))
          + 0.08 * (50 if (no_ad or r["pos"] != "WR") else (c["ad"] if c["ad"] is not None else 50)))
@@ -966,7 +966,7 @@ for pos in POS:
 print("\n-- pooled verdict: per-position mixes vs global (train | holdout) --")
 glob_s = lambda r: safety_of(r, (.50, .15, .15, .10, .10))
 pp_s = lambda r: safety_of(r, best_s[r["pos"]])
-glob_c = lambda r: ceiling_of(r, (.25, .30, .20, .25))
+glob_c = lambda r: ceiling_of(r, (.35, .25, .15, .25))
 pp_c = lambda r: ceiling_of(r, best_c[r["pos"]])
 print(f"  SAFETY  global   train {bust_gap(glob_s, TRAIN):+.1f}   holdout {bust_gap(glob_s, HOLDOUT):+.1f}")
 print(f"  SAFETY  per-pos  train {bust_gap(pp_s, TRAIN):+.1f}   holdout {bust_gap(pp_s, HOLDOUT):+.1f}")
@@ -1104,3 +1104,170 @@ for label, a0, span in RAMPS:
         rs.append(spearman([-f for f in fins], [r["outcome"] for r in grp]))
     print(f"  {label:26} mean r={sum(rs)/len(rs):.3f}   " +
           " ".join(f"{p}={v:.3f}" for p, v in zip(POS, rs)))
+
+
+# ================= GRAND AUDIT (run: python backtest_labscore.py audit) ====
+# Re-tests EVERYTHING ever considered, on all 12 seasons, under five
+# validation schemes. Decision rule (pre-registered in GRAND_AUDIT.md):
+# change the shipped model only if mean delta > +1.5 AND positive in >=4/5
+# schemes. See GRAND_AUDIT.md for the full inventory.
+import sys
+if "audit" in sys.argv:
+    print("\n" + "=" * 22 + " GRAND AUDIT (see GRAND_AUDIT.md) " + "=" * 22)
+    ODD = {y for y in SEASONS if y % 2 == 1}
+    EVEN = {y for y in SEASONS if y % 2 == 0}
+    SCHEMES = [("FWD", set(range(2014, 2022)), set(range(2022, 2026))),
+               ("REV", set(range(2022, 2026)), set(range(2014, 2022))),
+               ("ODD", EVEN, ODD), ("EVEN", ODD, EVEN)]
+
+    def eval_fixed(metric_fn, fn):
+        """metric on each scheme's TEST side + LOSO mean, for a fixed rule."""
+        vals = [metric_fn(fn, test) for _, _, test in SCHEMES]
+        loso = [metric_fn(fn, {y}) for y in SEASONS]
+        loso = [v for v in loso if v is not None]
+        vals.append(sum(loso) / len(loso))
+        return vals
+
+    def eval_tuned(metric_fn, cands, of_fn):
+        """per scheme: pick best cand on TRAIN, evaluate on TEST; LOSO same."""
+        vals = []
+        for _, train, test in SCHEMES:
+            best = max(cands, key=lambda w: metric_fn(lambda r: of_fn(r, w), train) or -99)
+            vals.append(metric_fn(lambda r: of_fn(r, best), test))
+        loso = []
+        for y in SEASONS:
+            rest = set(SEASONS) - {y}
+            best = max(cands, key=lambda w: metric_fn(lambda r: of_fn(r, w), rest) or -99)
+            v = metric_fn(lambda r: of_fn(r, best), {y})
+            if v is not None:
+                loso.append(v)
+        vals.append(sum(loso) / len(loso))
+        return vals
+
+    def eval_tuned_perpos(metric_fn, cands, of_fn):
+        """per scheme: pick best cand PER POSITION on train, apply combined."""
+        vals = []
+
+        def make_fn(bp):
+            return lambda r: of_fn(r, bp[r["pos"]])
+
+        def pos_metric(metric_fn, w, pos, years, of_fn):
+            return metric_fn(lambda r: of_fn(r, w) if r["pos"] == pos else None, years)
+
+        for _, train, test in SCHEMES:
+            bp = {}
+            for pos in POS:
+                bp[pos] = max(cands, key=lambda w: pos_metric(metric_fn, w, pos, train, of_fn) or -99)
+            vals.append(metric_fn(make_fn(bp), test))
+        loso = []
+        for y in SEASONS:
+            rest = set(SEASONS) - {y}
+            bp = {}
+            for pos in POS:
+                bp[pos] = max(cands, key=lambda w: pos_metric(metric_fn, w, pos, rest, of_fn) or -99)
+            v = metric_fn(make_fn(bp), {y})
+            if v is not None:
+                loso.append(v)
+        vals.append(sum(loso) / len(loso))
+        return vals
+
+    def bust_metric(fn, years):
+        grp = [r for r in all_rows if r["adp"] <= 36 and r["outcome"]
+               and r["season"] in years and fn(r) is not None]
+        if len(grp) < 16:
+            return None
+        grp.sort(key=lambda r: -fn(r))
+        h = len(grp) // 2
+        return (100 * sum(map(bust, grp[h:])) / (len(grp) - h)
+                - 100 * sum(map(bust, grp[:h])) / h)
+
+    def hit_metric(fn, years):
+        grp = [r for r in all_rows if 84 <= r["adp"] <= 240 and r["outcome"]
+               and r["season"] in years and fn(r) is not None]
+        if len(grp) < 30:
+            return None
+        grp.sort(key=lambda r: -fn(r))
+        h = len(grp) // 2
+        return (100 * sum(map(hit, grp[:h])) / h
+                - 100 * sum(map(hit, grp[h:])) / (len(grp) - h))
+
+    def verdict(deltas, base_row):
+        ds = [v - b for v, b in zip(deltas, base_row)]
+        mean = sum(ds) / len(ds)
+        pos_n = sum(1 for d in ds if d > 0)
+        ok = mean > 1.5 and pos_n >= 4
+        return mean, pos_n, ok
+
+    def report(title, base_label, base_vals, variants):
+        print("\n-- " + title + " --")
+        hdr = "variant"
+        print(f"   {hdr:34} {'FWD':>6} {'REV':>6} {'ODD':>6} {'EVEN':>6} {'LOSO':>6}   mean-d  verdict")
+        print(f"   {base_label:34} " + " ".join(f"{v:+6.1f}" for v in base_vals) + "   (baseline)")
+        for label, vals in variants:
+            mean, pos_n, ok = verdict(vals, base_vals)
+            v = "CHANGE MODEL <<<" if ok else "no change"
+            print(f"   {label:34} " + " ".join(f"{x:+6.1f}" for x in vals)
+                  + f"   {mean:+6.1f}  {v}")
+
+    nzA = lambda v: 50.0 if v is None else v
+    S_SHIP = (.50, .15, .15, .20, .0)
+
+    # ---------- SAFETY family ----------
+    base_s = eval_fixed(bust_metric, lambda r: safety_of(r, S_SHIP))
+    sv = []
+    sv.append(("A1 remove role-blend", eval_fixed(bust_metric, lambda r: safety_ab(r, no_role=True))))
+    for lbl, di in (("A2 remove talent", 1), ("A3 remove situation", 2),
+                    ("A4 remove trajectory", 3), ("A5 remove durability", 4)):
+        sv.append((lbl, eval_fixed(bust_metric, (lambda d: lambda r: safety_ab(r, drop=d))(di))))
+    sv.append(("A6 dur weight -> trajectory", eval_fixed(bust_metric, lambda r: safety_of(r, (.50, .15, .15, .20, .0)))))
+    sv.append(("A7 +TD-dependency .15", eval_fixed(bust_metric, lambda r: 0.85 * safety_of(r, S_SHIP) + 0.15 * nzA(r["tddep_p"]))))
+    sv.append(("A8 +RB odometer .15", eval_fixed(bust_metric, lambda r: 0.85 * safety_of(r, S_SHIP) + 0.15 * nzA(r["odo_p"]) if r["pos"] == "RB" else safety_of(r, S_SHIP))))
+    sv.append(("A9 moved-team -6", eval_fixed(bust_metric, lambda r: safety_of(r, S_SHIP) - (6 if r["moved"] else 0))))
+    sv.append(("A10 +injury burden .10", eval_fixed(bust_metric, lambda r: 0.90 * safety_of(r, S_SHIP) + 0.10 * nzA(r["inj_p"]))))
+    sv.append(("A11 injury replaces durability", eval_fixed(bust_metric, lambda r: mixw([(r["comp"]["opp_role"], .50), (r["comp"]["tal"], .15), (r["comp"]["sit"], .15), (r["comp"]["trS"], .10), (nzA(r["inj_p"]), .10)]))))
+    sv.append(("T1 grid-tuned per split", eval_tuned(bust_metric, list(S_CANDS.values()), safety_of)))
+    sv.append(("P1 per-position tuned", eval_tuned_perpos(bust_metric, list(S_CANDS.values()), safety_of)))
+    report("SAFETY (bust gap, ADP<=36)", "B0 shipped safety", base_s, sv)
+
+    # ---------- CEILING family ----------
+    cship = lambda r: ceiling_of(r, (.35, .25, .15, .25))
+    base_c = eval_fixed(hit_metric, cship)
+    cv = []
+    cv.append(("D1 re-add tal-over-usage gap", eval_fixed(hit_metric, lambda r: ceil_ab(r, add_gap=True))))
+    cv.append(("D2 remove red-zone role", eval_fixed(hit_metric, lambda r: ceil_ab(r, no_rz=True))))
+    cv.append(("D3 remove WR aDOT", eval_fixed(hit_metric, lambda r: ceil_ab(r, no_ad=True))))
+    cv.append(("D4 remove breakout window", eval_fixed(hit_metric, lambda r: ceil_ab(r, no_win=True))))
+    cv.append(("D5 remove pedigree", eval_fixed(hit_metric, lambda r: ceil_ab(r, no_peak=True))))
+    cv.append(("D6 +ts-growth .12", eval_fixed(hit_metric, lambda r: 0.88 * cship(r) + 0.12 * nzA(r["tsd_p"]))))
+    cv.append(("D7 +December role .12", eval_fixed(hit_metric, lambda r: 0.88 * cship(r) + 0.12 * nzA(r["lg_p"]))))
+    cv.append(("D8 +usage-gap .12", eval_fixed(hit_metric, lambda r: 0.88 * cship(r) + 0.12 * nzA(r["ug_p"]))))
+    cv.append(("D9 +WR unrealized air .10", eval_fixed(hit_metric, lambda r: 0.90 * cship(r) + 0.10 * nzA(r["un_p"]) if r["pos"] == "WR" else cship(r))))
+    cv.append(("D10 round-2 combo", eval_fixed(hit_metric, lambda r: 0.80 * cship(r) + 0.08 * nzA(r["tsd_p"]) + 0.06 * nzA(r["lg_p"]) + 0.06 * nzA(r["ug_p"]))))
+    cv.append(("T2 grid-tuned per split", eval_tuned(hit_metric, C_GRID, ceiling_of)))
+    cv.append(("P2 per-position tuned", eval_tuned_perpos(hit_metric, C_GRID, ceiling_of)))
+    report("CEILING (hit gap, ADP 84-240)", "C0 shipped ceiling", base_c, cv)
+
+    # ---------- RAMP family ----------
+    def lv_metric(params, years):
+        a0, span, flat = params
+        b, h = league_value(a0, span, years, flat)
+        return b + h
+    base_r = [lv_metric((24, 96, None), test) for _, _, test in SCHEMES]
+    base_r.append(sum(lv_metric((24, 96, None), {y}) for y in SEASONS) / len(SEASONS))
+    rv = []
+    for label, a0, span, flat in [("R1 .5@42", 12, 60, None), ("R2 .5@54", 24, 60, None),
+                                  ("R3 steep .5@48", 24, 48, None), ("R4 later .5@96", 48, 96, None),
+                                  ("R5 flat 0.5", 0, 1, 0.5)]:
+        vals = [lv_metric((a0, span, flat), test) for _, _, test in SCHEMES]
+        vals.append(sum(lv_metric((a0, span, flat), {y}) for y in SEASONS) / len(SEASONS))
+        rv.append((label, vals))
+    report("RAMP (league-value = early bust gap + 25-240 hit gap)", "R0 shipped (adp-24)/96", base_r, rv)
+
+    print("\n-- which ceiling base weights does tuning pick per LOSO fold? --")
+    picks = {}
+    for y in SEASONS:
+        rest = set(SEASONS) - {y}
+        best = max(C_GRID, key=lambda w: hit_metric(lambda r: ceiling_of(r, w), rest) or -99)
+        picks[best] = picks.get(best, 0) + 1
+    for w, n in sorted(picks.items(), key=lambda x: -x[1]):
+        print(f"   {w}: {n}/12 folds")

@@ -1225,12 +1225,13 @@ for e in players_out:
     opp_role = opp
     if not est and proj_p is not None:
         opp_role = 0.70 * opp + 0.30 * proj_p
-    # durability (2-yr games-played rate) is a backtest-validated safety input
-    dur_p = pct(e["id"], "dur")
-    # weights tuned on 2018-2022 and validated on the 2023-2025 holdout:
-    # safety leans harder on locked-in role, ceiling keeps some real usage
-    safety = mix([(opp_role, .50), (tal, .15), (sit, .15), (trS, .10), (dur_p, .10)])
-    ceil_base = .25 * opp + .30 * tal + .20 * sit + .25 * trC
+    # GRAND AUDIT 2026-08-26 (12 seasons, 5 validation schemes, pre-registered
+    # rule — see GRAND_AUDIT.md): durability DROPPED from safety with its
+    # weight moved to trajectory (Alex's age-covers-durability theory won on
+    # the full sample, 4/5 schemes +2.5 mean), and the ceiling base reweighted
+    # (.35/.25/.15/.25 — chosen by 12/12 LOSO folds). Nothing else passed.
+    safety = mix([(opp_role, .50), (tal, .15), (sit, .15), (trS, .20)])
+    ceil_base = .35 * opp + .25 * tal + .15 * sit + .25 * trC
     # ceiling hone combo: red-zone role share (cheap TD equity), WR air-yards
     # depth (spike-week profile), the capital-gated year-2/3 breakout window,
     # and career-peak pedigree below. (The talent-over-usage gap was REMOVED
