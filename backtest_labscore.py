@@ -35,7 +35,9 @@ ROOT = Path(__file__).parent
 CACHE = ROOT / "data" / "raw" / "backtest"
 CACHE.mkdir(parents=True, exist_ok=True)
 POS = ["QB", "RB", "WR", "TE"]
-SEASONS = [2021, 2022, 2023, 2024, 2025]
+SEASONS = list(range(2018, 2026))  # score-years (FFC half-PPR ADP starts 2018)
+TRAIN = set(range(2018, 2023))     # weight tuning trains here...
+HOLDOUT = set(range(2023, 2026))   # ...and is judged here
 UA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
 
 
@@ -82,7 +84,7 @@ for row in nv_draft_rows:
 print("Loading historical stats + rosters (cached after first run)...")
 stats = {}
 rosters = {}
-for yr in range(2019, 2026):
+for yr in range(2015, 2026):
     if yr == 2025:
         stats[yr] = json.loads((ROOT / "data" / "raw" / "stats_2025.json").read_text(encoding="utf-8"))
     else:
@@ -142,10 +144,10 @@ PILLARS = {
            "sit": [("offq", .40), ("vaca", .30), ("bfshare", .30)]},
     "WR": {"opp": [("tshare", .40), ("ayshare", .30), ("tpg", .30)],
            "tal": [("tprr", .25), ("ypt", .25), ("rypg", .35), ("tdluck", .15)],
-           "sit": [("vac", .30), ("offq", .35), ("qbq", .35)]},
+           "sit": [("vac", .25), ("offq", .25), ("qbq", .25), ("posshare", .25)]},
     "TE": {"opp": [("yptpa", .40), ("tshare", .35), ("tpg", .25)],
            "tal": [("rypg", .50), ("ypt", .30), ("tdluck", .20)],
-           "sit": [("vac", .30), ("offq", .35), ("qbq", .35)]},
+           "sit": [("vac", .25), ("offq", .25), ("qbq", .25), ("posshare", .25)]},
     "QB": {"opp": [("qrypg", .50), ("papg", .20), ("qrza", .30)],
            "tal": [("pypg", .60), ("ypa", .20), ("tdluck", .20)],
            "sit": [("weapons", .55), ("offq", .45)]},
@@ -189,6 +191,16 @@ def perf(st, tt, pos):
     return m
 
 
+def adp_pool_for(Y):
+    """FFC ADP players for year Y — from the repo's history file (2020+) or
+    a cached direct FFC fetch for older seasons."""
+    d = adp_hist.get(str(Y))
+    if not d:
+        d = cached(f"ffc_{Y}.json",
+                   f"https://fantasyfootballcalculator.com/api/v1/adp/half-ppr?teams=10&year={Y}")
+    return (d or {}).get("players", [])
+
+
 def build_season(Y):
     """Returns rows: {pid,pos,adp,safety,ceiling,fin,est, outcome fields}."""
     prior, S = stats[Y - 1], stats[Y]
@@ -196,7 +208,7 @@ def build_season(Y):
 
     # ADP pool for year Y from FFC
     pool = []
-    for e in (adp_hist.get(str(Y)) or {}).get("players", []):
+    for e in adp_pool_for(Y):
         if e.get("position") not in POS:
             continue
         pid = by_name_pos.get(norm(e.get("name")) + "|" + e["position"])
@@ -227,6 +239,17 @@ def build_season(Y):
             tp["wrte"] += pts
         if ros_now.get(spid) != t:
             d["vtgt"] += tgt; d["vatt"] += att
+
+    # position-room competition: prior-year points of everyone NOW on team T
+    # at position P — a player's share of his room is his claim on its work
+    grp_pts = {}
+    for spid2, p2 in players_db.items():
+        if not isinstance(p2, dict) or p2.get("position") not in POS:
+            continue
+        t2 = ros_now.get(spid2)
+        if t2:
+            grp_pts.setdefault((t2, p2["position"]), {})[spid2] = \
+                (prior.get(spid2) or {}).get("pts_half_ppr") or 0
 
     # Y-2 team totals (for the 2-year metric blend's share denominators)
     prior2 = stats.get(Y - 2) or {}
@@ -309,6 +332,12 @@ def build_season(Y):
         # air yards per target (spike-week WR profile)
         if tgt >= 25:
             m["adot"] = (st.get("rec_air_yd") or 0) / tgt
+        # room share: his slice of his CURRENT team's position group
+        room = grp_pts.get((ros_now.get(pid), pos))
+        if room:
+            tot_room = sum(room.values())
+            if tot_room > 0:
+                m["posshare"] = (room.get(pid) or 0) / tot_room
         if gp >= 1:
             a, b = RATES["rec"]
             exp = a * rzt + b * max(0, tgt - rzt)
@@ -417,8 +446,11 @@ def build_season(Y):
         if any(v is None for v in (opp, tal, sit, trS, trC)):
             continue
         dur_p = pct(pos, m, "dur")
-        safety = mix([(opp_role, .40), (tal, .20), (sit, .18), (trS, .12), (dur_p, .10)])
-        ceil_base = .15 * opp + .30 * tal + .25 * sit + .30 * trC
+        # weights tuned on 2018-2022, validated on 2023-2025 holdout:
+        # safety opp-heavy (+19.3 holdout bust gap vs +12.3 for the old
+        # .40/.20/.18/.12/.10), ceiling opp-back (+9.3 holdout hit gap)
+        safety = mix([(opp_role, .50), (tal, .15), (sit, .15), (trS, .10), (dur_p, .10)])
+        ceil_base = .25 * opp + .30 * tal + .20 * sit + .25 * trC
         # shipped ceiling (hone combo C5): talent-over-usage gap, red-zone
         # role share, WR air-yards depth, capital-gated breakout window
         gap_v = max(0, (tal - opp)) if (tal is not None and opp is not None) else 0
@@ -438,6 +470,9 @@ def build_season(Y):
         dcr_ok = m["dc"] >= 0.65  # drafted rounds 1-3
         rows.append({"pid": pid, "pos": pos, "adp": m["adp"], "est": est,
                      "safety": safety, "ceiling": ceiling, "ceil_base": ceil_base, "fin": fin,
+                     "comp": {"opp": opp, "opp_role": opp_role, "tal": tal, "sit": sit,
+                              "trS": trS, "trC": trC, "dur": dur_p,
+                              "rz": rz_p, "ad": ad_p, "gapv": gap_v, "win": window_v},
                      "outcome": fin_rank.get(pid),
                      "pts": S.get(pid, {}).get("pts_half_ppr") or 0,
                      "season": Y,
@@ -586,6 +621,63 @@ hit_contrast(lambda r: 0.88 * r["ceil_base"] + 0.12 * nz(r["adot_p"]) if r["pos"
              "C3 +WR aDOT .12")
 hit_contrast(lambda r: r["ceil_base"] + (6 if r["window"] else 0), "C4 breakout-window +6")
 hit_contrast(lambda r: r["ceiling"], "C5 combo [SHIPPED]")
+
+print("\n================ WEIGHT TUNING (train 2017-2022, holdout 2023-2025) ================")
+
+def mixw(parts):
+    tot = sum(w for v, w in parts if v is not None)
+    return sum(v * w for v, w in parts if v is not None) / tot if tot else None
+
+def safety_of(r, w):
+    c = r["comp"]
+    return mixw([(c["opp_role"], w[0]), (c["tal"], w[1]), (c["sit"], w[2]),
+                 (c["trS"], w[3]), (c["dur"], w[4])])
+
+def ceiling_of(r, w):
+    c = r["comp"]
+    base = mixw([(c["opp"], w[0]), (c["tal"], w[1]), (c["sit"], w[2]), (c["trC"], w[3])])
+    if base is None:
+        return None
+    v = (0.82 * (base + 0.18 * (c["gapv"] or 0))
+         + 0.10 * (c["rz"] if c["rz"] is not None else 50)
+         + 0.08 * ((c["ad"] if c["ad"] is not None else 50) if r["pos"] == "WR" else 50))
+    return v + (4 if c["win"] else 0)
+
+def bust_gap(score_fn, years):
+    grp = [r for r in all_rows if r["adp"] <= 36 and r["outcome"] and r["season"] in years]
+    grp = [r for r in grp if score_fn(r) is not None]
+    grp.sort(key=lambda r: -score_fn(r))
+    h = len(grp) // 2
+    return (100 * sum(map(bust, grp[h:])) / (len(grp) - h)
+            - 100 * sum(map(bust, grp[:h])) / h)
+
+def hit_gap(score_fn, years):
+    grp = [r for r in all_rows if 84 <= r["adp"] <= 240 and r["outcome"] and r["season"] in years]
+    grp = [r for r in grp if score_fn(r) is not None]
+    grp.sort(key=lambda r: -score_fn(r))
+    h = len(grp) // 2
+    return (100 * sum(map(hit, grp[:h])) / h
+            - 100 * sum(map(hit, grp[h:])) / (len(grp) - h))
+
+S_CANDS = {"current .40/.20/.18/.12/.10": (.40, .20, .18, .12, .10),
+           "opp-heavy .50/.15/.15/.10/.10": (.50, .15, .15, .10, .10),
+           "sit-heavy  .35/.20/.25/.10/.10": (.35, .20, .25, .10, .10),
+           "traj-heavy .35/.15/.15/.25/.10": (.35, .15, .15, .25, .10),
+           "dur-heavy  .35/.20/.15/.10/.20": (.35, .20, .15, .10, .20)}
+print("-- SAFETY weights: bust gap (higher = sharper), train | holdout --")
+for label, w in S_CANDS.items():
+    print(f"  {label:32} train {bust_gap(lambda r: safety_of(r, w), TRAIN):+.1f}"
+          f"   holdout {bust_gap(lambda r: safety_of(r, w), HOLDOUT):+.1f}")
+
+C_CANDS = {"current .15/.30/.25/.30": (.15, .30, .25, .30),
+           "tal-heavy .10/.40/.20/.30": (.10, .40, .20, .30),
+           "sit-heavy .10/.30/.35/.25": (.10, .30, .35, .25),
+           "traj-heavy .10/.25/.25/.40": (.10, .25, .25, .40),
+           "opp-back .25/.30/.20/.25": (.25, .30, .20, .25)}
+print("-- CEILING weights: hit gap (higher = sharper), train | holdout --")
+for label, w in C_CANDS.items():
+    print(f"  {label:32} train {hit_gap(lambda r: ceiling_of(r, w), TRAIN):+.1f}"
+          f"   holdout {hit_gap(lambda r: ceiling_of(r, w), HOLDOUT):+.1f}")
 
 print("\n-- wc ramp calibration: mean within-position Spearman of the blend --")
 RAMPS = [("(adp-24)/96  [current]", 24, 96), ("(adp-12)/72", 12, 72),

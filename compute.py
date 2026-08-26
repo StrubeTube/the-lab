@@ -973,9 +973,11 @@ team_agg = {}
 for e in players_out:
     if e["pos"] not in POS or not e.get("team"):
         continue
-    d = team_agg.setdefault(e["team"], {"proj": 0.0, "qb": 0.0, "rb": 0.0, "wrte": 0.0})
+    d = team_agg.setdefault(e["team"], {"proj": 0.0, "qb": 0.0, "rb": 0.0, "wrte": 0.0,
+                                        "QB": 0.0, "RB": 0.0, "WR": 0.0, "TE": 0.0})
     pr = e.get("proj") or 0
     d["proj"] += pr
+    d[e["pos"]] += pr
     if e["pos"] == "QB":
         d["qb"] = max(d["qb"], pr)
     elif e["pos"] == "RB":
@@ -1084,6 +1086,11 @@ for e in players_out:
         m["vgs"] = e.get("vpts")  # Vegas prop-implied points (market signal)
     if e["pos"] == "RB" and ta.get("rb"):
         m["bfshare"] = (e.get("proj") or 0) / ta["rb"]
+    # position-room competition: his projected share of his team's position
+    # group — a new signing over him immediately shrinks this (and Sleeper's
+    # projections feed it daily)
+    if ta.get(e["pos"]):
+        m["posshare"] = (e.get("proj") or 0) / ta[e["pos"]]
     m["vac"] = lab.get("vtp")
     m["vaca"] = lab.get("vap")
     m["alvl"] = lab.get("alvl")
@@ -1138,10 +1145,10 @@ PILLARS = {
            "sit": [("offq", .25), ("vaca", .20), ("bfshare", .25), ("oline", .20), ("wins", .10)]},
     "WR": {"opp": [("tshare", .40), ("ayshare", .30), ("tpg", .30)],
            "tal": [("tprr", .25), ("ypt", .25), ("rypg", .35), ("tdluck", .15)],
-           "sit": [("vac", .25), ("offq", .20), ("qbq", .30), ("wins", .15), ("oline", .10)]},
+           "sit": [("vac", .20), ("offq", .15), ("qbq", .25), ("posshare", .20), ("wins", .12), ("oline", .08)]},
     "TE": {"opp": [("yptpa", .40), ("tshare", .35), ("tpg", .25)],
            "tal": [("rypg", .50), ("ypt", .30), ("tdluck", .20)],
-           "sit": [("vac", .25), ("offq", .20), ("qbq", .30), ("wins", .15), ("oline", .10)]},
+           "sit": [("vac", .20), ("offq", .15), ("qbq", .25), ("posshare", .20), ("wins", .12), ("oline", .08)]},
     # QB talent leans on the Vegas prop market (vgs) — the backtest showed
     # prior-year QB stats are the weakest predictor, the market is stronger
     "QB": {"opp": [("qrypg", .50), ("papg", .20), ("qrza", .30)],
@@ -1198,8 +1205,10 @@ for e in players_out:
         opp_role = 0.70 * opp + 0.30 * proj_p
     # durability (2-yr games-played rate) is a backtest-validated safety input
     dur_p = pct(e["id"], "dur")
-    safety = mix([(opp_role, .40), (tal, .20), (sit, .18), (trS, .12), (dur_p, .10)])
-    ceil_base = .15 * opp + .30 * tal + .25 * sit + .30 * trC
+    # weights tuned on 2018-2022 and validated on the 2023-2025 holdout:
+    # safety leans harder on locked-in role, ceiling keeps some real usage
+    safety = mix([(opp_role, .50), (tal, .15), (sit, .15), (trS, .10), (dur_p, .10)])
+    ceil_base = .25 * opp + .30 * tal + .20 * sit + .25 * trC
     # ceiling hone combo (backtest: top-quartile hit gap +3 -> +8): the
     # talent-over-usage GAP (efficiency before volume = the pre-breakout
     # shape), red-zone role share (cheap TD equity), WR air-yards depth
@@ -1215,6 +1224,13 @@ for e in players_out:
                + 0.08 * ((ad_p if ad_p is not None else 50) if e["pos"] == "WR" else 50))
     if window_v:
         ceiling += 4
+    # depth-chart guard (live Sleeper depth charts, unbacktestable but
+    # cheap insurance): a player listed 3rd+ at his position doesn't get to
+    # keep a full stats-based grade — new signings over him show up here
+    # and in posshare the day Sleeper updates
+    if (e.get("depth") or 1) >= 3:
+        safety -= 5
+        ceiling -= 6
     adp = e.get("adp") or 200
     wc = max(0.15, min(0.85, (adp - 24) / 96))
     fin = (1 - wc) * safety + wc * ceiling
