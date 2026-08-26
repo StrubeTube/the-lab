@@ -772,6 +772,178 @@ def build_trades(tag):
 print("Building trade history...")
 trades_out = {t: build_trades(t) for t in ("ggg", "lob")}
 
+
+# ---- Lab Score data layer (phase 1) ------------------------------------
+# Per-player inputs for the coming 0-100 Lab Score: age-curve position,
+# real draft capital, team vacated opportunity, and TD-over-expected.
+# Backing research: actual TDs are near-noise year over year while expected
+# TDs are sticky (regression hit rates 66-94% by tier); RB production cliffs
+# at 27+ (57% of RB1 seasons at ages 23-26); WR peaks 24-28; TE ramps to a
+# late 25-28 peak; QB is flat into the mid-30s.
+print("Lab Score data layer...")
+nv_draft_rows = load_opt("nflverse_draft.json", [])  # [{g,n,p,s,r,pk}]
+nv_roster = load_opt("nflverse_roster_last.json", {})  # sleeper_id -> {team, gsis_id}
+nv_by_gsis, nv_by_name = {}, {}
+for row in (nv_draft_rows if isinstance(nv_draft_rows, list) else []):
+    dc_e = {"season": row["s"], "round": row["r"], "pick": row["pk"]}
+    if row["g"]:
+        nv_by_gsis[row["g"]] = dc_e
+    if row["n"]:
+        nv_by_name[norm(row["n"]) + "|" + row["p"]] = dc_e
+NV_TEAM = {"LA": "LAR"}  # nflverse codes Rams as LA; Sleeper uses LAR
+team_last = {sid: NV_TEAM.get(r["team"], r["team"]) for sid, r in nv_roster.items()}
+
+# team 2025 opportunity totals + what departed players took with them
+team_opp = {}
+for spid, st in stats25.items():
+    pdb = players_db.get(spid)
+    if not isinstance(pdb, dict) or pdb.get("position") not in POS:
+        continue
+    t25 = team_last.get(spid)
+    if not t25:
+        continue
+    d = team_opp.setdefault(t25, {"tgt": 0, "att": 0, "ay": 0,
+                                  "vtgt": 0, "vatt": 0, "vay": 0})
+    tgt = st.get("rec_tgt") or 0
+    att = st.get("rush_att") or 0
+    ay = st.get("rec_air_yd") or 0
+    d["tgt"] += tgt
+    d["att"] += att
+    d["ay"] += ay
+    if pdb.get("team") != t25:  # traded, cut, signed away, or retired
+        d["vtgt"] += tgt
+        d["vatt"] += att
+        d["vay"] += ay
+
+# expected TDs: league-pooled OLS on red-zone vs non-red-zone opportunity
+def ols2(rows):
+    """No-intercept 2-var least squares: y ~ a*x1 + b*x2 -> (a, b)."""
+    s11 = s12 = s22 = s1y = s2y = 0.0
+    for x1, x2, y in rows:
+        s11 += x1 * x1; s12 += x1 * x2; s22 += x2 * x2
+        s1y += x1 * y; s2y += x2 * y
+    det = s11 * s22 - s12 * s12
+    if abs(det) < 1e-9:
+        return (0.0, 0.0)
+    a = (s22 * s1y - s12 * s2y) / det
+    b = (s11 * s2y - s12 * s1y) / det
+    # a negative marginal rate would dock players for volume; refit 1-var
+    if b < 0:
+        return (s1y / s11 if s11 else 0.0, 0.0)
+    if a < 0:
+        return (0.0, s2y / s22 if s22 else 0.0)
+    return (a, b)
+
+rec_rows, rush_rows, pass_rows = [], [], []
+for spid, st in stats25.items():
+    pdb = players_db.get(spid)
+    if not isinstance(pdb, dict) or pdb.get("position") not in POS:
+        continue
+    tgt, rz_t = st.get("rec_tgt") or 0, st.get("rec_rz_tgt") or 0
+    att, rz_a = st.get("rush_att") or 0, st.get("rush_rz_att") or 0
+    pat, rz_p = st.get("pass_att") or 0, st.get("pass_rz_att") or 0
+    if tgt >= 15:
+        rec_rows.append((rz_t, tgt - rz_t, st.get("rec_td") or 0))
+    if att >= 25:
+        rush_rows.append((rz_a, att - rz_a, st.get("rush_td") or 0))
+    if pat >= 100:
+        pass_rows.append((rz_p, pat - rz_p, st.get("pass_td") or 0))
+TD_RATES = {"rec": ols2(rec_rows), "rush": ols2(rush_rows), "pass": ols2(pass_rows)}
+print("  xTD rates (rz, non-rz): " + "  ".join(
+    f"{k}={a:.3f}/{b:.4f}" for k, (a, b) in TD_RATES.items()))
+
+# age curves: (age, level) anchor points, linearly interpolated.
+AGE_CURVE = {
+    "RB": [(21, 0.85), (23, 1.0), (26, 0.97), (27, 0.83), (28, 0.76),
+           (29, 0.62), (30, 0.45), (32, 0.25), (35, 0.10)],
+    "WR": [(21, 0.70), (24, 1.0), (28, 1.0), (29, 0.93), (30, 0.85),
+           (31, 0.70), (33, 0.45), (36, 0.15)],
+    "TE": [(21, 0.45), (23, 0.75), (25, 1.0), (28, 1.0), (29, 0.92),
+           (31, 0.75), (33, 0.50), (36, 0.20)],
+    "QB": [(22, 0.85), (25, 1.0), (34, 1.0), (36, 0.85), (38, 0.70), (42, 0.40)],
+}
+
+def age_level(pos, age):
+    pts = AGE_CURVE.get(pos)
+    if not pts or age is None:
+        return None
+    if age <= pts[0][0]:
+        return pts[0][1]
+    if age >= pts[-1][0]:
+        return pts[-1][1]
+    for (a0, v0), (a1, v1) in zip(pts, pts[1:]):
+        if a0 <= age <= a1:
+            return v0 + (v1 - v0) * (age - a0) / (a1 - a0)
+    return None
+
+import datetime
+SEASON_START = datetime.date(int(meta["season"]) if isinstance(meta, dict) and meta.get("season") else 2026, 9, 1)
+
+n_lab = 0
+for e in players_out:
+    if e["pos"] not in POS:
+        continue
+    pdb = players_db.get(e["id"]) or {}
+    st = stats25.get(e["id"]) or {}
+    lab = {}
+    # decimal age at kickoff + curve position (level now, slope to next year)
+    bd = pdb.get("birth_date")
+    age = None
+    if bd:
+        try:
+            b = datetime.date(*map(int, bd.split("-")))
+            age = round((SEASON_START - b).days / 365.25, 1)
+        except ValueError:
+            age = e.get("age")
+    else:
+        age = e.get("age")
+    if age is not None:
+        lvl = age_level(e["pos"], age)
+        nxt = age_level(e["pos"], age + 1)
+        lab["age"] = age
+        if lvl is not None:
+            lab["alvl"] = round(lvl, 2)
+            lab["aslp"] = round(nxt - lvl, 2)
+    # draft capital: gsis join (roster file as fallback gsis), then name+pos
+    gid = ((pdb.get("gsis_id") or "").strip()
+           or ((nv_roster.get(e["id"]) or {}).get("gsis_id") or "").strip())
+    dc = (nv_by_gsis.get(gid) if gid else None) \
+        or nv_by_name.get(norm(e.get("name") or "") + "|" + e["pos"])
+    if dc:
+        lab["dcr"] = dc["round"]
+        lab["dcp"] = dc["pick"]
+        lab["dcy"] = dc["season"]
+    # team context: vacated opportunity on his CURRENT team
+    d = team_opp.get(e.get("team"))
+    if d and d["tgt"]:
+        lab["vt"] = int(d["vtgt"])
+        lab["vtp"] = round(100 * d["vtgt"] / d["tgt"], 1)
+        lab["va"] = int(d["vatt"])
+        lab["vap"] = round(100 * d["vatt"] / d["att"], 1) if d["att"] else 0
+        lab["vay"] = int(d["vay"])
+    if team_last.get(e["id"]) and team_last[e["id"]] != e.get("team"):
+        lab["moved"] = team_last[e["id"]]  # he IS part of a vacated pool elsewhere
+    # TD-over-expected from 2025 usage (positive delta = fade, negative = buy)
+    tgt, rz_t = st.get("rec_tgt") or 0, st.get("rec_rz_tgt") or 0
+    att, rz_a = st.get("rush_att") or 0, st.get("rush_rz_att") or 0
+    pat, rz_p = st.get("pass_att") or 0, st.get("pass_rz_att") or 0
+    if tgt or att or pat:
+        a, b2 = TD_RATES["rec"]
+        exp = a * rz_t + b2 * max(0, tgt - rz_t)
+        a, b2 = TD_RATES["rush"]
+        exp += a * rz_a + b2 * max(0, att - rz_a)
+        a, b2 = TD_RATES["pass"]
+        exp += a * rz_p + b2 * max(0, pat - rz_p)
+        act = (st.get("rec_td") or 0) + (st.get("rush_td") or 0) + (st.get("pass_td") or 0)
+        lab["td"] = int(act)
+        lab["xtd"] = round(exp, 1)
+    if lab:
+        e["lab"] = lab
+        n_lab += 1
+print(f"  lab inputs on {n_lab} players; "
+      f"top vacated tgt: " + ", ".join(f"{t} {d['vtgt']:.0f}" for t, d in
+      sorted(team_opp.items(), key=lambda x: -x[1]['vtgt'])[:3]))
+
 print("Writing outputs...")
 dump("meta.json", meta)
 dump("players.json", players_out)

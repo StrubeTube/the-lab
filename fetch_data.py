@@ -200,6 +200,50 @@ def fetch_vegas():
     save("vegas_offers.json", out)
 
 
+def fetch_nflverse():
+    """Free nflverse datasets for the Lab Score data layer (phase 1):
+
+    - draft_picks.csv: real draft capital (round + overall pick) per gsis_id.
+    - roster_{last season}.csv: which NFL team each player finished LAST
+      season on (has sleeper_id directly) — the input for vacated targets;
+      Sleeper's season stats carry no team, so this is the attribution source.
+    """
+    import csv
+    import io
+    print("nflverse (draft capital + last-season rosters)")
+    base = "https://github.com/nflverse/nflverse-data/releases/download"
+    b = get(f"{base}/draft_picks/draft_picks.csv")
+    draft = []
+    if b:
+        for row in csv.DictReader(io.StringIO(b.decode("utf-8", "replace"))):
+            if row.get("season") and int(row["season"]) >= 2000:
+                # keep name+position too: Sleeper gsis ids are spotty (format
+                # quirks; missing for fresh rookies) so compute.py joins by
+                # gsis first, then by normalized name+pos
+                draft.append({"g": (row.get("gsis_id") or "").strip(),
+                              "n": row.get("pfr_player_name") or "",
+                              "p": row.get("position") or "",
+                              "s": int(row["season"]), "r": int(row["round"]),
+                              "pk": int(row["pick"])})
+        print(f"  draft capital: {len(draft)} picks since 2000")
+    else:
+        print("  FAIL draft_picks")
+    save("nflverse_draft.json", draft)
+
+    last = int(SEASON) - 1
+    b = get(f"{base}/rosters/roster_{last}.csv")
+    roster = {}
+    if b:
+        for row in csv.DictReader(io.StringIO(b.decode("utf-8", "replace"))):
+            sid = row.get("sleeper_id")
+            if sid and row.get("team"):
+                roster[sid] = {"team": row["team"], "gsis_id": row.get("gsis_id") or ""}
+        print(f"  roster_{last}: {len(roster)} players with sleeper ids")
+    else:
+        print(f"  FAIL roster_{last}")
+    save("nflverse_roster_last.json", roster)
+
+
 if __name__ == "__main__":
     t0 = time.time()
     fetch_sleeper_core()
@@ -209,4 +253,5 @@ if __name__ == "__main__":
     fetch_adp()
     fetch_borischen()
     fetch_vegas()
+    fetch_nflverse()
     print(f"Done in {time.time()-t0:.0f}s")

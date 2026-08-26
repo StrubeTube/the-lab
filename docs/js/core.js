@@ -443,6 +443,28 @@
       p.wk25 ? el('div', { style: 'margin-top:12px' },
         el('div', { class: 't-label', style: 'color:var(--ink-3);font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;font-weight:700' }, '2025 week-by-week (your scoring)'),
         LAB.sparkline(p.wk25)) : '',
+      p.lab ? (() => {
+        const L2 = p.lab;
+        const line = (lbl, val, cls, tip) => val == null ? '' : el('div', { class: 'flex', style: 'margin-top:3px;font-size:12.5px', title: tip || '' },
+          el('span', { class: 'muted', style: 'width:104px;flex:none;font-size:11px;text-transform:uppercase;letter-spacing:.05em;font-weight:700' }, lbl),
+          el('span', { class: cls || '' }, val));
+        const tdD = L2.xtd != null && L2.td != null ? Math.round((L2.td - L2.xtd) * 10) / 10 : null;
+        return el('div', { style: 'margin-top:12px' },
+          el('div', { class: 't-label', style: 'color:var(--ink-3);font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;font-weight:700' }, 'Lab Score inputs'),
+          line('Age curve', L2.alvl != null ? `${L2.age}y — ${Math.round(L2.alvl * 100)}% of ${p.pos} peak, ${L2.aslp > 0 ? 'ascending ↗' : L2.aslp < -0.05 ? 'declining ↘' : 'holding →'}` : L2.age ? L2.age + 'y' : null,
+            L2.alvl >= 0.9 ? 'good' : L2.alvl < 0.6 ? 'bad' : 'warn',
+            'position on the historical age-production curve for his position, and which way next season points'),
+          line('Draft capital', L2.dcr ? `R${L2.dcr} · pick ${L2.dcp} (${L2.dcy})` : 'undrafted',
+            L2.dcr === 1 ? 'good' : !L2.dcr ? 'muted' : '',
+            'real NFL draft capital — teams keep giving early picks chances'),
+          line('Team opportunity', L2.vt != null ? `${L2.vt} vacated targets (${L2.vtp}% of team) · ${L2.va} vacated carries (${L2.vap}%)` : null,
+            L2.vtp >= 20 ? 'good' : '',
+            'work that left his CURRENT team this offseason — targets and carries with no incumbent owner'),
+          line('TD luck \'25', tdD != null ? `${L2.td} TD vs ${L2.xtd} expected (${tdD > 0 ? '+' : ''}${tdD})` : null,
+            tdD > 2 ? 'bad' : tdD < -2 ? 'good' : '',
+            'actual TDs vs what league-average conversion of his red-zone + volume opportunity would score. Over = fade risk, under = positive regression'),
+          L2.moved ? line('Moved', `part of ${L2.moved}'s vacated pool`, 'muted', 'he changed teams — his old usage is what someone else inherits') : '');
+      })() : '',
       el('hr', { class: 'hr' }),
       ...leagueRows,
       el('hr', { class: 'hr' }),
