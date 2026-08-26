@@ -944,6 +944,237 @@ print(f"  lab inputs on {n_lab} players; "
       f"top vacated tgt: " + ", ".join(f"{t} {d['vtgt']:.0f}" for t, d in
       sorted(team_opp.items(), key=lambda x: -x[1]['vtgt'])[:3]))
 
+
+# ---- Lab Score phase 2: pillars -> safety/ceiling -> 0-100 --------------
+# Four pillars per player (each a 0-100 percentile WITHIN his position):
+#   Opportunity  sticky usage (target share ~.70 y2y, weighted opp R^2 .82)
+#   Talent       sticky efficiency (YPRR/TPRR proxies, ypg; TD-luck inverted)
+#   Situation    team context (vacated work, offense quality, competition)
+#   Trajectory   age curve + draft capital (safety uses level, ceiling slope)
+# Then two composites blended by ADP: early picks graded on safety, late on
+# ceiling. Finally position-percentiles are anchored to the league-scored
+# VORP distribution so equal scores mean equal value across positions.
+print("Lab Score pillars...")
+
+# team aggregates from CURRENT rosters + 2026 league-scored projections
+team_agg = {}
+for e in players_out:
+    if e["pos"] not in POS or not e.get("team"):
+        continue
+    d = team_agg.setdefault(e["team"], {"proj": 0.0, "qb": 0.0, "rb": 0.0, "wrte": 0.0})
+    pr = e.get("proj") or 0
+    d["proj"] += pr
+    if e["pos"] == "QB":
+        d["qb"] = max(d["qb"], pr)
+    elif e["pos"] == "RB":
+        d["rb"] += pr
+    else:
+        d["wrte"] += pr
+
+DC_VAL = {1: 1.0, 2: 0.8, 3: 0.65, 4: 0.5, 5: 0.4, 6: 0.32, 7: 0.25}
+raw = {}  # pid -> raw metric dict
+for e in players_out:
+    if e["pos"] not in POS:
+        continue
+    st = stats25.get(e["id"]) or {}
+    lab = e.get("lab") or {}
+    gp = st.get("gp") or 0
+    t25 = team_last.get(e["id"])
+    tt = team_opp.get(t25)
+    g = max(gp, 1)
+    tgt = st.get("rec_tgt") or 0
+    rzt = st.get("rec_rz_tgt") or 0
+    att = st.get("rush_att") or 0
+    rza = st.get("rush_rz_att") or 0
+    m = {"gp": gp}
+    if gp >= 1:
+        m["wo"] = (0.55 * (att - rza) + 1.25 * rza + 1.45 * (tgt - rzt) + 2.25 * rzt) / g
+        if st.get("tm_off_snp"):
+            m["snp"] = (st.get("off_snp") or 0) / st["tm_off_snp"]
+        if tt and tt["tgt"]:
+            m["tshare"] = tgt / tt["tgt"]
+            m["yptpa"] = (st.get("rec_yd") or 0) / tt["tgt"]
+        if tt and tt["ay"]:
+            m["ayshare"] = (st.get("rec_air_yd") or 0) / tt["ay"]
+        m["tpg"] = tgt / g
+        m["rypg"] = (st.get("rec_yd") or 0) / g
+        if tgt >= 15:
+            m["ypt"] = (st.get("rec_yd") or 0) / tgt
+        if att >= 25:
+            m["yac"] = (st.get("rush_yac") or 0) / att
+        if (st.get("off_snp") or 0) >= 100:
+            m["tprr"] = tgt / st["off_snp"]
+        if e["pos"] == "QB":
+            m["qrypg"] = (st.get("rush_yd") or 0) / g
+            m["papg"] = (st.get("pass_att") or 0) / g
+            m["qrza"] = (st.get("rush_rz_att") or 0) / g
+            m["pypg"] = (st.get("pass_yd") or 0) / g
+            m["ypa"] = st.get("pass_ypa")
+    if lab.get("xtd") is not None:
+        m["tdluck"] = -(lab["td"] - lab["xtd"])  # inverted: under-scorers up
+    ta = team_agg.get(e.get("team")) or {}
+    m["offq"] = ta.get("proj")
+    m["qbq"] = ta.get("qb")
+    m["weapons"] = ta.get("wrte")
+    if e["pos"] == "RB" and ta.get("rb"):
+        m["bfshare"] = (e.get("proj") or 0) / ta["rb"]
+    m["vac"] = lab.get("vtp")
+    m["vaca"] = lab.get("vap")
+    m["alvl"] = lab.get("alvl")
+    m["aslp"] = lab.get("aslp")
+    m["dc"] = DC_VAL.get(lab.get("dcr"), 0.15)
+    m["youth"] = max(0.0, min(1.0, (27 - (lab.get("age") or 27)) / 6))
+    m["proj"] = e.get("proj") or 0
+    raw[e["id"]] = m
+
+# percentile helper: rank of value among position peers holding that metric
+pos_of = {e["id"]: e["pos"] for e in players_out if e["pos"] in POS}
+pools = {}
+for pid2, m in raw.items():
+    for k, v in m.items():
+        if v is not None and isinstance(v, (int, float)):
+            pools.setdefault((pos_of[pid2], k), []).append(v)
+for k in pools:
+    pools[k].sort()
+
+def pct(pid, key):
+    v = raw.get(pid, {}).get(key)
+    pool = pools.get((pos_of[pid], key))
+    if v is None or not pool or len(pool) < 5:
+        return None
+    import bisect
+    lo = bisect.bisect_left(pool, v)
+    hi = bisect.bisect_right(pool, v)
+    return 100.0 * ((lo + hi) / 2) / len(pool)
+
+def mix(parts):
+    """[(pct or None, weight)] -> weighted mean of available parts."""
+    tot = sum(w for p, w in parts if p is not None)
+    if not tot:
+        return None
+    return sum(p * w for p, w in parts if p is not None) / tot
+
+PILLARS = {
+    "RB": {"opp": [("wo", .60), ("snp", .25), ("tshare", .15)],
+           "tal": [("yac", .40), ("rypg", .35), ("tdluck", .25)],
+           "sit": [("offq", .40), ("vaca", .30), ("bfshare", .30)]},
+    "WR": {"opp": [("tshare", .40), ("ayshare", .30), ("tpg", .30)],
+           "tal": [("tprr", .25), ("ypt", .25), ("rypg", .35), ("tdluck", .15)],
+           "sit": [("vac", .30), ("offq", .35), ("qbq", .35)]},
+    "TE": {"opp": [("yptpa", .40), ("tshare", .35), ("tpg", .25)],
+           "tal": [("rypg", .50), ("ypt", .30), ("tdluck", .20)],
+           "sit": [("vac", .30), ("offq", .35), ("qbq", .35)]},
+    "QB": {"opp": [("qrypg", .45), ("papg", .25), ("qrza", .30)],
+           "tal": [("pypg", .45), ("ypa", .40), ("tdluck", .15)],
+           "sit": [("weapons", .55), ("offq", .45)]},
+}
+
+for e in players_out:
+    if e["pos"] not in POS or e["id"] not in raw:
+        continue
+    m = raw[e["id"]]
+    P2 = PILLARS[e["pos"]]
+    opp = mix([(pct(e["id"], k), w) for k, w in P2["opp"]])
+    tal = mix([(pct(e["id"], k), w) for k, w in P2["tal"]])
+    sit = mix([(pct(e["id"], k), w) for k, w in P2["sit"]])
+    dc_p = pct(e["id"], "dc")
+    trS = mix([(pct(e["id"], "alvl"), .60), (dc_p, .40)])
+    trC = mix([(pct(e["id"], "aslp"), .35), (pct(e["id"], "youth"), .25),
+               (dc_p, .25), (100.0 if 1 <= (e.get("exp") or 0) <= 3 else 30.0, .15)])
+    est = False
+    # small-sample shrinkage toward 50 on the stat pillars; full imputation
+    # for players with no 2025 season (rookies, redshirts)
+    shrink = min(1.0, m["gp"] / 10) if m["gp"] else 0.0
+    proj_p = pct(e["id"], "proj")
+    if m["gp"] < 4:
+        # no real 2025 sample: the projection (which carries the expected
+        # ROLE) leads; draft capital assists; then shrink hard toward the
+        # middle -- an unproven player never grades like a proven one
+        est = True
+        opp = mix([(proj_p, .75), (dc_p, .25)])
+        tal = mix([(proj_p, .55), (dc_p, .45)])
+        if opp is not None:
+            opp = 50 + (opp - 50) * 0.7
+        if tal is not None:
+            tal = 50 + (tal - 50) * 0.7
+    else:
+        if opp is not None:
+            opp = 50 + (opp - 50) * shrink
+        if tal is not None:
+            tal = 50 + (tal - 50) * shrink
+    parts = {"o": opp, "t": tal, "s": sit, "y": trS, "c": trC}
+    if any(v is None for v in (opp, tal, sit, trS, trC)):
+        continue
+    safety = .45 * opp + .20 * tal + .20 * sit + .15 * trS
+    ceiling = .15 * opp + .30 * tal + .25 * sit + .30 * trC
+    adp = e.get("adp") or 200
+    wc = max(0.15, min(0.85, (adp - 24) / 96))
+    fin = (1 - wc) * safety + wc * ceiling
+    if est:  # an unproven profile can't out-grade a proven one at the top
+        fin = 50 + (fin - 50) * 0.75
+    lab = e.setdefault("lab", {})
+    lab.update({"o": round(opp), "t": round(tal), "s": round(sit),
+                "ys": round(trS), "yc": round(trC),
+                "sfty": round(safety), "ceil": round(ceiling),
+                "wc": round(wc, 2), "fin": round(fin, 1)})
+    if est:
+        lab["est"] = 1
+
+# cross-position normalization: position-percentile of the blend, mapped to
+# the position's VORP-at-that-percentile (SIGNED, interpolated — a clamp at
+# zero would collapse every sub-baseline player into one tie), re-ranked
+# across all positions so equal score = equal value over replacement
+BASE_N = {"QB": 12, "RB": 26, "WR": 28, "TE": 12}
+vorp_dist = {}
+for pos2 in POS:
+    projs = sorted((e.get("proj") or 0 for e in players_out if e["pos"] == pos2
+                    and e.get("proj")), reverse=True)
+    base = projs[BASE_N[pos2] - 1] if len(projs) >= BASE_N[pos2] else 0
+    vorp_dist[pos2] = sorted(pr - base for pr in projs)
+
+fin_pools = {}
+for e in players_out:
+    if (e.get("lab") or {}).get("fin") is not None:
+        fin_pools.setdefault(e["pos"], []).append(e["lab"]["fin"])
+for k in fin_pools:
+    fin_pools[k].sort()
+
+import bisect
+def vquant(vd, cp):
+    """Linear-interpolated quantile of the sorted VORP list."""
+    if not vd:
+        return 0.0
+    x = cp * (len(vd) - 1)
+    i = int(x)
+    if i >= len(vd) - 1:
+        return vd[-1]
+    return vd[i] + (vd[i + 1] - vd[i]) * (x - i)
+
+all_vals = []
+for e in players_out:
+    lab = e.get("lab") or {}
+    if lab.get("fin") is None:
+        continue
+    pool = fin_pools[e["pos"]]
+    cp = (bisect.bisect_left(pool, lab["fin"]) + bisect.bisect_right(pool, lab["fin"])) / 2 / len(pool)
+    lab["_v"] = vquant(vorp_dist[e["pos"]], cp)
+    all_vals.append(lab["_v"])
+all_vals.sort()
+n_sc = 0
+for e in players_out:
+    lab = e.get("lab") or {}
+    if "_v" not in lab:
+        continue
+    v = lab.pop("_v")
+    lo = bisect.bisect_left(all_vals, v)
+    hi = bisect.bisect_right(all_vals, v)
+    lab["sc"] = round(100.0 * ((lo + hi) / 2) / len(all_vals))
+    n_sc += 1
+top = sorted((e for e in players_out if (e.get("lab") or {}).get("sc") is not None),
+             key=lambda x: -x["lab"]["sc"])[:5]
+print(f"  Lab Score on {n_sc} players; top: " +
+      ", ".join(f"{e['name']} {e['lab']['sc']}" for e in top))
+
 print("Writing outputs...")
 dump("meta.json", meta)
 dump("players.json", players_out)

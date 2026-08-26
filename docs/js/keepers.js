@@ -59,6 +59,8 @@
     { key: 'kRd', label: 'K rd', num: true, get: c => c.kRd,
       title: "projected round he'd go in THIS league's keeper draft (predicted keepers consume their cost rounds)" },
     { key: 'myRank', label: 'My rank', num: true, get: c => c.myRank },
+    { key: 'lab', label: 'Lab', num: true, get: c => (c.p.lab || {}).sc,
+      title: 'Lab Score 0-100: sticky-stat pillars (opportunity, talent, situation, trajectory) blended safety-vs-ceiling by ADP, normalized across positions by value over replacement. Hover a value for the breakdown; ~ = estimated (no real 2025 sample).' },
     { key: 'sBoard', label: 'Surplus (board)', num: true, get: c => c.sBoard,
       title: 'expected pick value of the cost round minus your board rank — positive = bargain. Sort here to grade by it.' },
     { key: 'sAdp', label: 'Surplus (ADP)', num: true, get: c => c.sAdp,
@@ -67,7 +69,7 @@
       title: 'the value-weighted blend: board surplus and keeper-ADP surplus both run through the convex draft-value curve (early slots worth far more) and averaged. Sort here to grade by it.' },
   ];
   // per-column natural direction: value columns default to best-first
-  const DEFAULT_DIR = { name: 1, lastRd: 1, costRd: 1, adp: 1, kRd: 1, myRank: 1, sBoard: -1, sAdp: -1, sTrue: -1 };
+  const DEFAULT_DIR = { name: 1, lastRd: 1, costRd: 1, adp: 1, kRd: 1, myRank: 1, lab: -1, sBoard: -1, sAdp: -1, sTrue: -1 };
   const SURPLUS_KEYS = ['sBoard', 'sAdp', 'sTrue'];
 
   for (const [tag, L] of Object.entries(leagues)) {
@@ -172,6 +174,7 @@
             ? LAB.el('span', { title: 'would fall to round ' + c.kRd + ' of the keeper draft' }, 'R' + c.kRd)
             : LAB.el('span', { class: 'muted', title: 'predicted to be KEPT — would go ~R' + c.wouldRd + ' if he entered the draft' }, 'kept')),
           LAB.el('td', { class: 'num' }, c.myRank ? '#' + c.myRank : '–'),
+          LAB.el('td', { class: 'num ' + LAB.labColor((c.p.lab || {}).sc), style: 'font-weight:700', title: LAB.labTitle(c.p) }, LAB.labFmt(c.p)),
           sCell('sBoard'),
           sCell('sAdp'),
           sCell('sTrue'),

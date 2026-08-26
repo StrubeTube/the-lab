@@ -48,6 +48,21 @@
   LAB.posBadge = pos => el('span', { class: 'badge pos-' + pos }, pos);
 
   // ADP-vs-rank dot color (green = value, red = reach), same spirit as v1 site
+  // ---------- Lab Score display helpers ----------
+  LAB.labFmt = p => {
+    const L = (p && p.lab) || {};
+    return L.sc == null ? '–' : (L.est ? '~' : '') + L.sc;
+  };
+  LAB.labColor = sc => sc == null ? 'muted' : sc >= 75 ? 'good' : sc >= 45 ? '' : sc >= 25 ? 'warn' : 'bad';
+  LAB.labTitle = p => {
+    const L = (p && p.lab) || {};
+    if (L.sc == null) return '';
+    return `Lab Score ${L.sc}${L.est ? ' — ESTIMATED (no real 2025 sample)' : ''}\n`
+      + `Opportunity ${L.o} · Talent ${L.t} · Situation ${L.s} · Trajectory ${L.ys}/${L.yc}\n`
+      + `Safety ${L.sfty} · Ceiling ${L.ceil} — graded ${Math.round((L.wc || 0) * 100)}% on ceiling at his ADP\n`
+      + `(0-100, sticky-stat pillars, cross-position value-normalized)`;
+  };
+
   LAB.adpColor = function (rank, adp, scale) {
     if (rank == null || adp == null) return '#3a4656';
     const diff = adp - rank;
@@ -449,8 +464,25 @@
           el('span', { class: 'muted', style: 'width:104px;flex:none;font-size:11px;text-transform:uppercase;letter-spacing:.05em;font-weight:700' }, lbl),
           el('span', { class: cls || '' }, val));
         const tdD = L2.xtd != null && L2.td != null ? Math.round((L2.td - L2.xtd) * 10) / 10 : null;
+        const bar = (lbl, v, tip) => v == null ? '' : el('div', { class: 'flex', style: 'margin-top:4px;gap:8px', title: tip || '' },
+          el('span', { class: 'muted', style: 'width:84px;flex:none;font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;font-weight:700' }, lbl),
+          el('div', { style: 'flex:1;height:9px;background:var(--raised);border-radius:5px;overflow:hidden' },
+            el('div', { style: `width:${v}%;height:100%;border-radius:5px;background:${v >= 75 ? 'var(--good)' : v >= 45 ? 'var(--accent)' : v >= 25 ? 'var(--warn)' : 'var(--bad)'}` })),
+          el('span', { class: 'mono', style: 'width:26px;text-align:right;font-size:11.5px' }, v));
+        const scoreBlock = L2.sc == null ? '' : el('div', { style: 'margin-top:12px;padding:11px 13px;border:1px solid var(--border-strong);border-radius:10px;background:var(--surface)' },
+          el('div', { class: 'flex' },
+            el('span', { class: 't-label', style: 'color:var(--ink-3);font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;font-weight:700' }, 'Lab Score'),
+            L2.est ? el('span', { class: 'badge status', title: 'no real 2025 sample — graded off projection + draft capital, shrunk toward the middle' }, 'EST') : '',
+            el('span', { class: 'mono ' + LAB.labColor(L2.sc), style: 'margin-left:auto;font-family:var(--font-display);font-size:26px;font-weight:700' }, L2.sc)),
+          bar('Opportunity', L2.o, 'sticky usage: shares of team work, weighted opportunity, snaps — the most predictive pillar'),
+          bar('Talent', L2.t, 'sticky efficiency: yards per chance, work earned per snap, TD luck inverted'),
+          bar('Situation', L2.s, 'team context: vacated work, offense quality, QB, backfield competition'),
+          bar('Trajectory', Math.round(((L2.ys ?? 0) + (L2.yc ?? 0)) / 2), 'age curve + draft capital (safety reads the level, ceiling reads the slope)'),
+          el('div', { class: 'muted', style: 'margin-top:7px;font-size:11.5px' },
+            `Safety ${L2.sfty} · Ceiling ${L2.ceil} — graded ${Math.round((L2.wc || 0) * 100)}% on ceiling at his ADP, then value-normalized across positions.`));
         return el('div', { style: 'margin-top:12px' },
-          el('div', { class: 't-label', style: 'color:var(--ink-3);font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;font-weight:700' }, 'Lab Score inputs'),
+          scoreBlock,
+          el('div', { class: 't-label', style: 'margin-top:12px;color:var(--ink-3);font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;font-weight:700' }, 'Lab Score inputs'),
           line('Age curve', L2.alvl != null ? `${L2.age}y — ${Math.round(L2.alvl * 100)}% of ${p.pos} peak, ${L2.aslp > 0 ? 'ascending ↗' : L2.aslp < -0.05 ? 'declining ↘' : 'holding →'}` : L2.age ? L2.age + 'y' : null,
             L2.alvl >= 0.9 ? 'good' : L2.alvl < 0.6 ? 'bad' : 'warn',
             'position on the historical age-production curve for his position, and which way next season points'),
