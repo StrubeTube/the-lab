@@ -956,6 +956,10 @@ print(f"  lab inputs on {n_lab} players; "
 # VORP distribution so equal scores mean equal value across positions.
 print("Lab Score pillars...")
 
+# live OTC contracts: how much a team has committed to a player, for how long
+otc = load_opt("otc_contracts.json", [])
+otc_by = {norm(c["n"]) + "|" + c["p"]: c for c in otc if c.get("n")}
+
 # phase 4 manual inputs: Vegas win totals + PFF O-line rank (data/team_context.json)
 try:
     TEAM_CTX = json.loads((ROOT / "data" / "team_context.json").read_text(encoding="utf-8"))["teams"]
@@ -1078,6 +1082,15 @@ for e in players_out:
     m["dc"] = DC_VAL.get(lab.get("dcr"), 0.15)
     m["youth"] = max(0.0, min(1.0, (27 - (lab.get("age") or 27)) / 6))
     m["proj"] = e.get("proj") or 0
+    # contract: APY = how seriously the team invests in the role; years of
+    # control = security. Rookie-deal stars score low on APY but high on dc.
+    ct = otc_by.get(norm(e.get("name") or "") + "|" + e["pos"])
+    if ct:
+        m["capy"] = ct["apy"]
+        m["cctl"] = max(0, (ct["fa"] or int(meta.get("season", 2026))) - int(meta.get("season", 2026)))
+        lab["apy"] = round(ct["apy"] / 1e6, 1)
+        lab["cfa"] = ct["fa"]
+        e["lab"] = lab
     raw[e["id"]] = m
 
 # percentile helper: rank of value among position peers holding that metric
@@ -1136,9 +1149,12 @@ for e in players_out:
     tal = mix([(pct(e["id"], k), w) for k, w in P2["tal"]])
     sit = mix([(pct(e["id"], k), w) for k, w in P2["sit"]])
     dc_p = pct(e["id"], "dc")
-    trS = mix([(pct(e["id"], "alvl"), .60), (dc_p, .40)])
-    trC = mix([(pct(e["id"], "aslp"), .35), (pct(e["id"], "youth"), .25),
-               (dc_p, .25), (100.0 if 1 <= (e.get("exp") or 0) <= 3 else 30.0, .15)])
+    capy_p = pct(e["id"], "capy")
+    cctl_p = pct(e["id"], "cctl")
+    trS = mix([(pct(e["id"], "alvl"), .45), (dc_p, .20), (capy_p, .25), (cctl_p, .10)])
+    trC = mix([(pct(e["id"], "aslp"), .30), (pct(e["id"], "youth"), .20),
+               (dc_p, .20), (capy_p, .15),
+               (100.0 if 1 <= (e.get("exp") or 0) <= 3 else 30.0, .15)])
     est = False
     # small-sample shrinkage toward 50 on the stat pillars; full imputation
     # for players with no 2025 season (rookies, redshirts)

@@ -232,9 +232,6 @@ def fetch_nflverse():
         print("  FAIL draft_picks")
     save("nflverse_draft.json", draft)
 
-    # NOTE: nflverse's contracts release (OverTheCap mirror) was evaluated
-    # for a contract-security signal on 2026-08-26 and found stale (no deals
-    # signed after 2022, ~99% of "active" rows already expired) — skipped.
     for yr, name in ((int(SEASON) - 1, "nflverse_roster_last.json"),
                      (int(SEASON) - 2, "nflverse_roster_prior2.json")):
         b = get(f"{base}/rosters/roster_{yr}.csv")
@@ -250,6 +247,40 @@ def fetch_nflverse():
         save(name, roster)
 
 
+def fetch_contracts():
+    """Live contracts from OverTheCap's position pages (server-rendered
+    tables; the nflverse contracts mirror is stale, the site itself is
+    current). Feeds the Lab Score's role-security signal: how much money a
+    team has committed to a player and for how long."""
+    import re as _re
+    print("OverTheCap contracts")
+    pages = {"QB": "quarterback", "RB": "running-back",
+             "WR": "wide-receiver", "TE": "tight-end"}
+    out = []
+    for pos, slug in pages.items():
+        b = get(f"https://overthecap.com/position/{slug}", retries=2)
+        if not b:
+            print(f"  FAIL {pos}")
+            continue
+        html = b.decode("utf-8", "replace")
+        n = 0
+        for tr in _re.findall(r"<tr><td><a href=\"/player/[^\"]+\">([^<]+)</a></td>(.*?)</tr>", html):
+            name, rest = tr
+            tds = _re.findall(r"<td[^>]*>(?:<a[^>]*>)?([^<]*)", rest)
+            # tds: team, age, total, avg/year, total gtd, fully gtd, FA year
+            if len(tds) < 7:
+                continue
+            money = lambda s: float(_re.sub(r"[^\d]", "", s) or 0)
+            fa = _re.search(r"(\d{4})", tds[6])
+            out.append({"n": name.strip(), "p": pos,
+                        "apy": money(tds[3]), "gtd": money(tds[4]),
+                        "fa": int(fa.group(1)) if fa else None})
+            n += 1
+        print(f"  {pos}: {n} contracts")
+        time.sleep(0.5)
+    save("otc_contracts.json", out)
+
+
 if __name__ == "__main__":
     t0 = time.time()
     fetch_sleeper_core()
@@ -260,4 +291,5 @@ if __name__ == "__main__":
     fetch_borischen()
     fetch_vegas()
     fetch_nflverse()
+    fetch_contracts()
     print(f"Done in {time.time()-t0:.0f}s")
