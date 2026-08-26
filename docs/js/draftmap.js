@@ -321,7 +321,7 @@
     // page layout: everything on the left, my projected team in its own
     // sidebar on the right so the snake board never has to scroll
     const main = LAB.el('div', { style: 'flex:1;min-width:0' });
-    const aside = LAB.el('div', { style: 'flex:none;width:230px' });
+    const aside = LAB.el('div', { class: 'side-rail', style: 'flex:none;width:230px' });
     root.append(LAB.el('div', { style: 'display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap' }, main, aside));
 
     // ---------- my picks planner ----------
@@ -420,8 +420,8 @@
       LAB.el('p', { class: 'muted', style: 'font-size:12px;margin:4px 0 8px' },
         'Solid amber = keeper locked on the real board · dashed = predicted keeper · everything else = each manager\'s most-likely pick given ADP, his historical QB/TE/DEF timing (hover a name up top), how many he really drafts, and what his keepers already cover. Your column runs off your board; your resulting team is on the right. Click any open cell for odds.'));
     // columns compress to fit — the board never scrolls horizontally
-    const wrap = LAB.el('div', { style: 'min-width:0' });
-    const grid = LAB.el('div', { style: `display:grid;grid-template-columns:28px repeat(${sim.N},minmax(0,1fr));gap:3px` });
+    const wrap = LAB.el('div', { class: 'snake-wrap', style: 'min-width:0' });
+    const grid = LAB.el('div', { class: 'snake-grid', style: `display:grid;grid-template-columns:28px repeat(${sim.N},minmax(0,1fr));gap:3px` });
     grid.append(LAB.el('div', {}));
     const nameOfSlot = {};
     Object.entries(sim.dd.draftOrder).forEach(([uid, slot]) => (nameOfSlot[slot] = L.users[uid]?.name || 'slot ' + slot));

@@ -300,8 +300,8 @@ table.lab th.sortable:hover { color: var(--ink); }
 .heat td.cell.bye-cell { background: var(--surface); color: var(--ink-3); }
 
 /* ---------- draft room ---------- */
-.draft-layout { display: grid; grid-template-columns: 1fr 340px; gap: 14px; align-items: start; }
-@media (max-width: 980px) { .draft-layout { grid-template-columns: 1fr; } }
+.draft-layout { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 14px; align-items: start; }
+@media (max-width: 980px) { .draft-layout { grid-template-columns: minmax(0, 1fr); } }
 .on-clock { border: 1px solid var(--accent); background: var(--accent-soft); border-radius: var(--radius); padding: 10px 14px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .pick-ticker { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
 .tick {
@@ -333,10 +333,47 @@ table.lab th.sortable:hover { color: var(--ink); }
 .tabbar button.active { color: var(--accent); border-bottom-color: var(--accent); }
 .league-pick { display: inline-flex; gap: 4px; }
 
+/* ---------- responsive / mobile ---------- */
+/* side rails (Finder Steer/Campaign, Draft Map team sidebar) stack full-width */
+@media (max-width: 900px) {
+  .side-rail { width: 100% !important; flex: 1 1 100% !important; position: static !important; }
+}
+
 @media (max-width: 700px) {
+  .page { padding: 12px 10px 70px; }
+  h1 { font-size: 24px; }
+  h2 { font-size: 18px; }
+
+  /* nav: one horizontally-scrollable strip instead of a tall wrapped block */
+  .nav { flex-wrap: nowrap; overflow-x: auto; padding: 8px 10px; gap: 2px; scrollbar-width: none; }
+  .nav::-webkit-scrollbar { display: none; }
+  .nav .wordmark { font-size: 19px; margin-right: 8px; flex: none; }
+  .nav a.tab { padding: 7px 9px; font-size: 14px; flex: none; }
+  .nav .spacer, .nav .build-stamp { display: none; }
+
+  /* board rows: drop secondary stat columns, tighten the rest */
   .prow .stats .stat.hide-m { display: none; }
   .col-heads .stats .stat.hide-m { display: none; }
-  .page { padding: 12px 10px 70px; }
-  .nav { padding: 8px 10px; }
-  h1 { font-size: 24px; }
+  .prow .stat, .col-heads .stat { width: 46px; }
+  .prow .rank { width: 24px; }
+  .col-heads { top: 46px; }
+
+  /* stat tiles: never 3-up on a phone (beats inline repeat(3,1fr)) */
+  .tiles { grid-template-columns: 1fr 1fr !important; }
+
+  /* tables scroll sideways instead of crushing their columns */
+  table.lab { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .heat td.cell { width: 36px; }
+
+  /* snake board: full-width grid scrolls as one piece */
+  .snake-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .snake-grid { min-width: 860px; }
+
+  .card { padding: 12px; }
+  .modal { padding: 14px; border-radius: 12px; }
+  .seg button { padding: 6px 10px; font-size: 13px; }
+  .tabbar button { padding: 8px 10px; font-size: 14.5px; }
+  .countdown { min-width: 130px; padding: 10px 8px; }
+  .countdown .c-num { font-size: 28px; }
+  .tile .t-value { font-size: 22px; }
 }

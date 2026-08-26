@@ -90,7 +90,7 @@
 
   // ---------- rails ----------
   function controlsRail() {
-    const rail = LAB.el('div', { class: 'card', style: 'width:250px;flex:none' }, LAB.el('h2', {}, 'Steer'));
+    const rail = LAB.el('div', { class: 'card side-rail', style: 'width:250px;flex:none' }, LAB.el('h2', {}, 'Steer'));
     const label = t => LAB.el('div', { class: 'muted', style: 'font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin:10px 0 4px' }, t);
     // exclusion chip: lit = in the feed, dimmed/struck = filtered out
     const xchip = (lbl, excluded, fn) => LAB.el('button', {
@@ -204,7 +204,7 @@
   }
 
   function campaignRail() {
-    const rail = LAB.el('div', { class: 'card', style: 'width:250px;flex:none;position:sticky;top:10px' }, LAB.el('h2', {}, 'Campaign'));
+    const rail = LAB.el('div', { class: 'card side-rail', style: 'width:250px;flex:none;position:sticky;top:10px' }, LAB.el('h2', {}, 'Campaign'));
     const mine = props.filter(x => statuses[x.h]);
     const groups = { sent: '📤 Sent', countered: '🔁 Countered', accepted: '✅ Accepted', dead: '💀 Dead' };
     let any = false;
