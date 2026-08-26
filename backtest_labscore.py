@@ -495,3 +495,22 @@ whiffs = sorted((r for r in all_rows if r["adp"] <= 36 and r["outcome"] and bust
                 key=lambda r: -r["safety"])[:6]
 for r in whiffs:
     print(f"  {r['season']} {name(r):22} {r['pos']} adp {r['adp']:.0f} safety {r['safety']:.0f} -> finished {r['pos']}{r['outcome']}")
+
+print("\n-- wc ramp calibration: mean within-position Spearman of the blend --")
+RAMPS = [("(adp-24)/96  [current]", 24, 96), ("(adp-12)/72", 12, 72),
+         ("(adp-36)/120", 36, 120), ("(adp-0)/120", 0, 120),
+         ("(adp-48)/96", 48, 96), ("flat 0.5", None, None), ("flat 0.85 (all ceiling)", None, 0.85)]
+for label, a0, span in RAMPS:
+    rs = []
+    for pos in POS:
+        grp = [r for r in all_rows if r["pos"] == pos and r["outcome"] and r["adp"] <= 240]
+        fins = []
+        for r in grp:
+            if a0 is None:
+                wcv = span if span else 0.5
+            else:
+                wcv = max(0.15, min(0.85, (r["adp"] - a0) / span))
+            fins.append((1 - wcv) * r["safety"] + wcv * r["ceiling"])
+        rs.append(spearman([-f for f in fins], [r["outcome"] for r in grp]))
+    print(f"  {label:26} mean r={sum(rs)/len(rs):.3f}   " +
+          " ".join(f"{p}={v:.3f}" for p, v in zip(POS, rs)))

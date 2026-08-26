@@ -956,6 +956,13 @@ print(f"  lab inputs on {n_lab} players; "
 # VORP distribution so equal scores mean equal value across positions.
 print("Lab Score pillars...")
 
+# phase 4 manual inputs: Vegas win totals + PFF O-line rank (data/team_context.json)
+try:
+    TEAM_CTX = json.loads((ROOT / "data" / "team_context.json").read_text(encoding="utf-8"))["teams"]
+except (OSError, KeyError, ValueError):
+    TEAM_CTX = {}
+    print("  (no team_context.json — win totals / O-line skipped)")
+
 # team aggregates from CURRENT rosters + 2026 league-scored projections
 team_agg = {}
 for e in players_out:
@@ -1057,6 +1064,11 @@ for e in players_out:
     m["offq"] = ta.get("proj")
     m["qbq"] = ta.get("qb")
     m["weapons"] = ta.get("wrte")
+    tc = TEAM_CTX.get(e.get("team")) or {}
+    m["wins"] = tc.get("wins")
+    m["oline"] = 33 - tc["oline"] if tc.get("oline") else None  # higher = better
+    if e["pos"] == "QB":
+        m["vgs"] = e.get("vpts")  # Vegas prop-implied points (market signal)
     if e["pos"] == "RB" and ta.get("rb"):
         m["bfshare"] = (e.get("proj") or 0) / ta["rb"]
     m["vac"] = lab.get("vtp")
@@ -1096,18 +1108,23 @@ def mix(parts):
     return sum(p * w for p, w in parts if p is not None) / tot
 
 PILLARS = {
+    # sit now carries the phase-4 inputs: Vegas win total (RBs are the most
+    # game-script-dependent) and PFF O-line rank (ALY explains ~29% of RB
+    # half-PPR production; run-block-win-rate showed ~none, hence PFF units)
     "RB": {"opp": [("wo", .60), ("snp", .25), ("tshare", .15)],
            "tal": [("yac", .40), ("rypg", .35), ("tdluck", .25)],
-           "sit": [("offq", .40), ("vaca", .30), ("bfshare", .30)]},
+           "sit": [("offq", .25), ("vaca", .20), ("bfshare", .25), ("oline", .20), ("wins", .10)]},
     "WR": {"opp": [("tshare", .40), ("ayshare", .30), ("tpg", .30)],
            "tal": [("tprr", .25), ("ypt", .25), ("rypg", .35), ("tdluck", .15)],
-           "sit": [("vac", .30), ("offq", .35), ("qbq", .35)]},
+           "sit": [("vac", .25), ("offq", .20), ("qbq", .30), ("wins", .15), ("oline", .10)]},
     "TE": {"opp": [("yptpa", .40), ("tshare", .35), ("tpg", .25)],
            "tal": [("rypg", .50), ("ypt", .30), ("tdluck", .20)],
-           "sit": [("vac", .30), ("offq", .35), ("qbq", .35)]},
+           "sit": [("vac", .25), ("offq", .20), ("qbq", .30), ("wins", .15), ("oline", .10)]},
+    # QB talent leans on the Vegas prop market (vgs) — the backtest showed
+    # prior-year QB stats are the weakest predictor, the market is stronger
     "QB": {"opp": [("qrypg", .50), ("papg", .20), ("qrza", .30)],
-           "tal": [("pypg", .60), ("ypa", .20), ("tdluck", .20)],
-           "sit": [("weapons", .55), ("offq", .45)]},
+           "tal": [("pypg", .35), ("ypa", .10), ("tdluck", .15), ("vgs", .40)],
+           "sit": [("weapons", .35), ("offq", .25), ("oline", .20), ("wins", .20)]},
 }
 
 for e in players_out:
@@ -1212,10 +1229,23 @@ for e in players_out:
     hi = bisect.bisect_right(all_vals, v)
     lab["sc"] = round(100.0 * ((lo + hi) / 2) / len(all_vals))
     n_sc += 1
+# LAB EDGE: where the score disagrees with the market. The backtest showed
+# ADP+Lab beats either alone — the actionable number is the disagreement.
+scored = [e for e in players_out if (e.get("lab") or {}).get("sc") is not None
+          and e.get("adp")]
+scored.sort(key=lambda x: x["adp"])
+n_adp = len(scored)
+for i, e in enumerate(scored):
+    adp_pct = 100.0 * (1 - (i + 0.5) / n_adp)  # best ADP -> ~100
+    e["lab"]["ed"] = round(e["lab"]["sc"] - adp_pct)
+
 top = sorted((e for e in players_out if (e.get("lab") or {}).get("sc") is not None),
              key=lambda x: -x["lab"]["sc"])[:5]
 print(f"  Lab Score on {n_sc} players; top: " +
       ", ".join(f"{e['name']} {e['lab']['sc']}" for e in top))
+edges = sorted((e for e in scored if e["adp"] <= 150), key=lambda x: -x["lab"]["ed"])
+print("  top edges: " + ", ".join(f"{e['name']} +{e['lab']['ed']}" for e in edges[:4])
+      + " | fades: " + ", ".join(f"{e['name']} {e['lab']['ed']}" for e in edges[-3:]))
 
 print("Writing outputs...")
 dump("meta.json", meta)

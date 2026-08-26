@@ -58,9 +58,21 @@
     const L = (p && p.lab) || {};
     if (L.sc == null) return '';
     return `Lab Score ${L.sc}${L.est ? ' — ESTIMATED (no real 2025 sample)' : ''}\n`
+      + (L.ed != null ? `Lab Edge ${L.ed > 0 ? '+' : ''}${L.ed} vs his ADP — ${L.ed >= 12 ? 'the model likes him better than his price' : L.ed <= -12 ? 'the model likes him less than his price' : 'priced about right'}\n` : '')
       + `Opportunity ${L.o} · Talent ${L.t} · Situation ${L.s} · Trajectory ${L.ys}/${L.yc}\n`
       + `Safety ${L.sfty} · Ceiling ${L.ceil} — graded ${Math.round((L.wc || 0) * 100)}% on ceiling at his ADP\n`
       + `(0-100, sticky-stat pillars, cross-position value-normalized)`;
+  };
+  // edge chip: shown only when the model meaningfully disagrees with ADP
+  LAB.edgeChip = p => {
+    const ed = ((p && p.lab) || {}).ed;
+    if (ed == null || Math.abs(ed) < 12) return '';
+    const up = ed > 0;
+    return LAB.el('span', {
+      class: 'badge ' + (up ? 'mine' : 'status'),
+      title: (up ? 'Lab Edge +' + ed + ' — the model grades him well above his market price'
+        : 'Lab Edge ' + ed + ' — the model grades him below his market price') + '. From the Lab Score vs his ADP percentile.',
+    }, (up ? '▲' : '▼') + ' LAB ' + (up ? '+' : '') + ed);
   };
 
   LAB.adpColor = function (rank, adp, scale) {
@@ -479,7 +491,9 @@
           bar('Situation', L2.s, 'team context: vacated work, offense quality, QB, backfield competition'),
           bar('Trajectory', Math.round(((L2.ys ?? 0) + (L2.yc ?? 0)) / 2), 'age curve + draft capital (safety reads the level, ceiling reads the slope)'),
           el('div', { class: 'muted', style: 'margin-top:7px;font-size:11.5px' },
-            `Safety ${L2.sfty} · Ceiling ${L2.ceil} — graded ${Math.round((L2.wc || 0) * 100)}% on ceiling at his ADP, then value-normalized across positions.`));
+            `Safety ${L2.sfty} · Ceiling ${L2.ceil} — graded ${Math.round((L2.wc || 0) * 100)}% on ceiling at his ADP, then value-normalized across positions.`),
+          L2.ed != null ? el('div', { style: 'margin-top:5px;font-size:12px;font-weight:600', class: L2.ed >= 12 ? 'good' : L2.ed <= -12 ? 'bad' : 'muted' },
+            `Lab Edge ${L2.ed > 0 ? '+' : ''}${L2.ed} vs ADP — ${L2.ed >= 12 ? 'the model likes him better than his price' : L2.ed <= -12 ? 'the model likes him less than his price' : 'priced about right'}`) : '');
         return el('div', { style: 'margin-top:12px' },
           scoreBlock,
           el('div', { class: 't-label', style: 'margin-top:12px;color:var(--ink-3);font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;font-weight:700' }, 'Lab Score inputs'),

@@ -235,6 +235,7 @@
         p.rookie ? LAB.el('span', { class: 'badge rookie' }, 'R') : '',
         p.status ? LAB.el('span', { class: 'badge status' }, p.status.slice(0, 3).toUpperCase()) : '',
         isKeeper ? LAB.el('span', { class: 'badge keeper', title: 'announced keeper' }, 'K') : '',
+        LAB.edgeChip(p),
         mine ? LAB.el('span', { class: 'badge mine', title: 'on my roster' }, 'MINE')
           : holder ? LAB.el('span', { class: 'muted', style: 'font-size:11px', title: 'rostered by' }, holder) : '',
         (board.notes || {})[pid] ? LAB.el('span', { class: 'note-dot', title: board.notes[pid] }, '✎') : ''),

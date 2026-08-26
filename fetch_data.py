@@ -232,6 +232,9 @@ def fetch_nflverse():
         print("  FAIL draft_picks")
     save("nflverse_draft.json", draft)
 
+    # NOTE: nflverse's contracts release (OverTheCap mirror) was evaluated
+    # for a contract-security signal on 2026-08-26 and found stale (no deals
+    # signed after 2022, ~99% of "active" rows already expired) — skipped.
     for yr, name in ((int(SEASON) - 1, "nflverse_roster_last.json"),
                      (int(SEASON) - 2, "nflverse_roster_prior2.json")):
         b = get(f"{base}/rosters/roster_{yr}.csv")
