@@ -141,6 +141,30 @@ step BEFORE running.
   (games.csv): mean prior-year points allowed of listed opponents, as a
   situation-side candidate under the standard rule.
 
-## Phase 2 results
+## Phase 2 results (executed 2026-08-27)
 
-(filled per step)
+- **P0 ✓** parity: harness baseline = shipped model; re-adding the ML
+  winners now shows convergence (no further gain), as it should.
+- **P1 ✓** 250 players frozen to data/predictions_2026.json + scorer
+  (re-frozen after P3/P5 shipped; graded once, January 2027).
+- **P2 ✓** daily archiver live: 177 prop sets (both prices) + 9,418 ADP
+  values per day into data/archive/, committed by the Action.
+- **P3 ✓ SHIPPED** — continuous target (pts over ADP-band mean) found
+  what binary gaps saturated on: ceiling → .614·ceil + .258·bfshare_p +
+  .128·tshare_p (rho +0.156→+0.242, CI [+.06,+.12], 12/12 seasons,
+  binary gap ALSO +16.0→+16.5); safety → .7225·saf + .2775·qrza_p
+  (Konami-QB signal, rho +0.160→+0.219, 11/12, binary +13.7→+14.6).
+- **P4 ✗** NGS: structurally coverage-blocked — qualification thresholds
+  exclude the late-round pool (24% WR / ~10% RB-QB coverage). naysh
+  +14.3 univariate on covered folds but nothing survives blending.
+- **P5 ✓ SHIPPED** — interactions: ceiling → .90·ceil + .10·(posshare_p ·
+  vac_p/100) ("owns his room AND opportunity vacated": 5/5 schemes,
+  pooled +16.5→+19.1, 12/12 seasons); safety → .90·saf + .10·(snp_p ·
+  dage_p/100) ("young pedigree AND already plays": 4/5, +14.6→+16.4,
+  11/12). Missing product → 25.
+- **P6 ✗** SoS (opponents' prior-year points allowed): 0/5 on every
+  variant, actively harmful. Preseason SoS is noise; book closed.
+
+**Cumulative state after the overhaul (12 seasons, LOSO):** ceiling hit
+gap **+21.4** (was +15.0 this morning), safety bust gap **+15.5** (was
++9.3). The January scoring of the frozen file is the untainted test.
