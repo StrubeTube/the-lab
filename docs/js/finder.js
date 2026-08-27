@@ -27,14 +27,20 @@
     }, leagues[t].name));
   }
 
-  // seed intel once: Chris (VEROVILLIANZ) wants Pickens
-  let intel = store(K_INTEL, null);
-  if (!intel) {
-    intel = { ggg: {}, lob: {} };
+  // intel starts empty now. The old seed (VERO wants Pickens) is DEAD — Chris
+  // denied interest 8/26 — so a one-time migration strips it from any device
+  // that stored it and keeps the denial as a note instead.
+  let intel = store(K_INTEL, null) || { ggg: {}, lob: {} };
+  if (!store('thelab-intel-fix1', false)) {
     const L0 = leagues.ggg;
     const vero = L0.rosters.find(r => (L0.users[r.owner]?.name || '').toUpperCase().startsWith('VEROVILLI'));
-    if (vero) intel.ggg[vero.rid] = { note: 'Chris — already asked about Pickens', wants: ['8137'], never: false };
+    const iv = vero && (intel.ggg || {})[vero.rid];
+    if (iv && (iv.wants || []).includes('8137')) {
+      iv.wants = iv.wants.filter(x => x !== '8137');
+      iv.note = 'asked about Pickens — denied interest (8/26)';
+    }
     save(K_INTEL, intel);
+    save('thelab-intel-fix1', true);
   }
   let statuses = store(K_PROPS, {});
   let weights = store(K_WEIGHTS, { motivation: 1, propensity: 1, fairness: 1, market: 1, intel: 1 });
@@ -397,7 +403,7 @@
       const oName = mgrName(pr.over.rid), uName = mgrName(pr.under.rid);
       const oOver = C.ownedPicks(pr.over.rid).length - 16, uShort = 16 - C.ownedPicks(pr.under.rid).length;
       const pitch = 'Two clean pick trades, no players:\n' +
-        `1) ${oName}: my R${pr.over.give.map(a => a.round).join('+R')} for your R${pr.over.get.map(a => a.round).join('+R')} — you're ${oOver} pick${oOver > 1 ? 's' : ''} over the roster limit; this sheds one.\n` +
+        `1) ${oName}: my R${pr.over.give.map(a => a.round).join('+R')} for your R${pr.over.get.map(a => a.round).join('+R')} — you're carrying ${oOver} pick${oOver > 1 ? 's' : ''} more than you can roster (and they all count on your cap); this sheds one.\n` +
         `2) ${uName}: my R${pr.under.give.map(a => a.round).join('+R')} for your R${pr.under.get.map(a => a.round).join('+R')} — you're ${uShort} short; this fixes your count AND nets you +${Math.round(pr.under.optics || 0)} on a classic value chart (two real picks beat the one).`;
       const outR = [...pr.over.give, ...pr.under.give].map(a => a.round).sort((x, y) => x - y);
       const inR = [...pr.over.get, ...pr.under.get].map(a => a.round).sort((x, y) => x - y);
@@ -422,7 +428,7 @@
             LAB.el('span', {}, inR.map(r => netChip(r, '#3ee68f'))))),
         // 2) + 3) the two legs
         LAB.el('div', { style: 'display:flex;gap:16px;flex-wrap:wrap;margin-top:8px' },
-          box(`1 · ${oName}`, `${oOver} over, must shed`, pr.over, pr.over.rid),
+          box(`1 · ${oName}`, `${oOver} over 16 — extra salary`, pr.over, pr.over.rid),
           box(`2 · ${uName}`, `${uShort} short, needs count`, pr.under, pr.under.rid)),
         LAB.el('div', { class: 'flex', style: 'gap:6px;margin-top:7px;flex-wrap:wrap' },
           LAB.el('button', {
@@ -464,6 +470,58 @@
     list.sort((a, b2) => ui.sort === 'gain' ? b2.myGain - a.myGain
       : ui.sort === 'ev' ? prob(b2.score) * b2.myGain - prob(a.score) * a.myGain
         : b2.score - a.score || b2.myGain - a.myGain);
+    // ⭐ GO FOR THESE — Alex (8/26): "selling my extra keepers is the point —
+    // make it easy." One row per spare keeper: the single best LIVE proposal
+    // for him (sent/dead drop out, so a dead opening auto-advances to its
+    // fallback here), always ranked by likelihood. Best pick pair rides last.
+    const live = x => !statuses[x.h] && !ui.exclTeams.has(x.rid);
+    const me0 = L.rosters.find(r => r.rid === C.myRid);
+    const slate0 = new Set(C.slate(me0.players, 'true').map(s => s.p.id));
+    const spares = me0.players.map(pid => C.byId[pid])
+      .filter(p => p && C.eligible(p) && !slate0.has(p.id) && (C.surplusSlots(p, 'true') ?? 0) > 3)
+      .sort((a, b2) => (C.surplusSlots(b2, 'true') ?? 0) - (C.surplusSlots(a, 'true') ?? 0));
+    const bestFor = p => props.filter(x => live(x) && x.give.some(a => a.kind === 'player' && a.id === p.id))
+      .sort((a, b2) => b2.score - a.score || b2.myGain - a.myGain)[0];
+    const bestPair = (LAB.pickPairs(C, L) || []).filter(pr => !ui.exclTeams.has(pr.over.rid) && !ui.exclTeams.has(pr.under.rid))[0];
+    if (spares.length || bestPair) {
+      const box = LAB.el('div', { style: 'border:1.5px solid var(--accent);border-radius:10px;padding:8px 12px 10px;margin-top:10px;background:rgba(255,106,43,.06)' },
+        LAB.el('div', { class: 'flex', style: 'gap:8px;align-items:baseline;flex-wrap:wrap' },
+          LAB.el('b', { style: 'font-family:var(--font-display);font-size:14px;color:var(--accent)' }, '⭐ Go for these'),
+          LAB.el('span', { class: 'muted', style: 'font-size:10.5px' }, 'your spare keepers + the best offer alive for each — send these, everything below is the full menu')));
+      let n = 0;
+      const row = (title, deal, tierEl, sub, btns, opened) => box.append(LAB.el('div', { style: 'margin-top:6px;padding-top:6px' + (n++ ? ';border-top:1px solid var(--border)' : '') },
+        LAB.el('div', { class: 'flex', style: 'gap:7px;flex-wrap:wrap;align-items:baseline' },
+          LAB.el('b', { class: 'mono', style: 'color:var(--accent)' }, n + '.'), title, deal, tierEl),
+        sub ? LAB.el('div', { class: 'muted', style: 'font-size:11px;margin:2px 0 0 18px' }, sub) : '',
+        LAB.el('div', { class: 'flex', style: 'gap:6px;margin:4px 0 0 18px;flex-wrap:wrap' }, ...btns),
+        opened || ''));
+      for (const p of spares.slice(0, 5)) {
+        const s = Math.round(C.surplusSlots(p, 'true') ?? 0);
+        const x = bestFor(p);
+        const title = LAB.el('b', { style: 'font-size:13px' }, `Sell ${p.name}`,
+          LAB.el('span', { class: 'mono muted', style: 'font-size:10.5px;font-weight:400' }, ` K R${C.costRd(p)} · +${s} true`));
+        if (!x) { row(title, LAB.el('span', { class: 'muted', style: 'font-size:11.5px' }, 'no live buyer right now — their slates are full or offers died'), '', '', []); continue; }
+        const t = tier(x.score);
+        const open = ui.topOpen === x.h;
+        row(title,
+          LAB.el('span', { style: 'font-size:12px' }, `→ ${mgrName(x.rid)} for ${x.get.map(fmtAsset).join(' + ')}` + (x.give.length > 1 ? ` (with ${x.give.filter(a => !(a.kind === 'player' && a.id === p.id)).map(fmtAsset).join(' + ')})` : '')),
+          LAB.el('b', { style: 'font-size:11px;color:' + t[1] }, t[0]),
+          x.why ? 'Their angle: ' + x.why : '',
+          [LAB.el('button', { style: 'font-size:10.5px;padding:1px 8px', onclick: () => navigator.clipboard.writeText(pitchText(x)).then(() => LAB.toast('pitch copied — paste into league chat', 'good')) }, '📋 pitch'),
+            LAB.el('button', { style: 'font-size:10.5px;padding:1px 8px', onclick: () => setStatus(x.h, 'sent') }, '📤 mark sent'),
+            LAB.el('button', { style: 'font-size:10.5px;padding:1px 8px', onclick: () => { ui.topOpen = open ? null : x.h; render(); } }, open ? '▾ hide card' : '▸ full card')],
+          open ? card(x) : '');
+      }
+      if (bestPair) {
+        row(LAB.el('b', { style: 'font-size:13px' }, 'Pick pair', LAB.el('span', { class: 'mono muted', style: 'font-size:10.5px;font-weight:400' }, ' 2 trades together')),
+          LAB.el('span', { style: 'font-size:12px' },
+            `1) ${mgrName(bestPair.over.rid)}: my R${bestPair.over.give.map(a => a.round).join('+R')} ⇄ R${bestPair.over.get.map(a => a.round).join('+R')} · 2) ${mgrName(bestPair.under.rid)}: my R${bestPair.under.give.map(a => a.round).join('+R')} ⇄ R${bestPair.under.get.map(a => a.round).join('+R')}`),
+          LAB.el('span', { class: 'mono', style: 'font-size:11px;color:#3ee68f' }, `+${Math.round(bestPair.total)} value`),
+          `${mgrName(bestPair.over.rid)} holds extra picks (they all count against the cap); ${mgrName(bestPair.under.rid)} is short on picks — each leg reads fair from their side.`,
+          [LAB.el('button', { style: 'font-size:10.5px;padding:1px 8px', onclick: () => { ui.view = 'pairs'; render(); } }, '⚖ open pick pairs')]);
+      }
+      feedCol.append(box);
+    }
     // collapse identical shapes across teams into one card w/ team chips
     const groups = new Map();
     for (const x of list) {
