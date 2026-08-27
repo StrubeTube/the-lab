@@ -1339,6 +1339,41 @@ for e in players_out:
     hi = bisect.bisect_right(all_vals, v)
     lab["sc"] = round(100.0 * ((lo + hi) / 2) / len(all_vals))
     n_sc += 1
+
+# KEEPER-SLOT SCORE (Alex 08-27): the Keepers page grades a player at the
+# draft slot he can actually be ACQUIRED at — his keep round — not at market
+# ADP. Same pillars, same pipeline; only the safety/ceiling blend point
+# moves (a late-round keep IS a late pick: ceiling-weighted; an early keep
+# is graded on safety). His re-blended fin is percentiled against the
+# ORIGINAL market-slot fin pool (counterfactual: him at keep cost, the
+# field at market), then through the same VORP-quantile -> global map.
+# lab.kg = GGG keep-round score, lab.kl = LOB; absent = not eligible there.
+for _tag, _key in (("ggg", "kg"), ("lob", "kl")):
+    _Lg = leagues_out[_tag]
+    _kept_last = set(_Lg["lastKept"])
+    _n_k = 0
+    for e in players_out:
+        lab = e.get("lab") or {}
+        if lab.get("fin") is None or lab.get("sfty") is None:
+            continue
+        _r_last = _Lg["lastDraftRound"].get(e["id"])
+        if _r_last is None:
+            continue  # not in last year's league draft -> not keepable here
+        _cost = _r_last - (1 if e["id"] in _kept_last else 0)
+        _slot = (_cost - 0.5) * 10  # mid-round pick, 10-team league
+        _wc = max(0.15, min(0.85, (_slot - 24) / 96))
+        _fin = (1 - _wc) * lab["sfty"] + _wc * lab["ceil"]
+        if lab.get("est"):
+            _fin = 50 + (_fin - 50) * 0.75
+        _pool = fin_pools[e["pos"]]
+        _cp = (bisect.bisect_left(_pool, _fin) + bisect.bisect_right(_pool, _fin)) / 2 / len(_pool)
+        _v = vquant(vorp_dist[e["pos"]], _cp)
+        _lo = bisect.bisect_left(all_vals, _v)
+        _hi = bisect.bisect_right(all_vals, _v)
+        lab[_key] = round(100.0 * ((_lo + _hi) / 2) / len(all_vals))
+        _n_k += 1
+    print(f"  keeper-slot Lab scores ({_tag}): {_n_k} eligible players")
+
 # LAB EDGE: where the score disagrees with the market. The backtest showed
 # ADP+Lab beats either alone — the actionable number is the disagreement.
 scored = [e for e in players_out if (e.get("lab") or {}).get("sc") is not None

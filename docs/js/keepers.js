@@ -46,6 +46,9 @@
           sAdp: wouldRd != null ? cost - midPick(wouldRd) : null,
           sTrue: vAdp == null ? vBoard : vBoard == null ? vAdp : (vAdp + vBoard) / 2,
           official: officialKeepers.has(p.id),
+          // Lab Score re-blended at his KEEP round for this league (kg/kl
+          // from compute.py) — a late keep is graded like a late pick
+          kSc: (p.lab || {})[L === leagues.ggg ? 'kg' : 'kl'] ?? null,
         };
       });
   }
@@ -59,8 +62,8 @@
     { key: 'kRd', label: 'K rd', num: true, get: c => c.kRd,
       title: "projected round he'd go in THIS league's keeper draft (predicted keepers consume their cost rounds)" },
     { key: 'myRank', label: 'My rank', num: true, get: c => c.myRank },
-    { key: 'lab', label: 'Lab', num: true, get: c => (c.p.lab || {}).sc,
-      title: 'Lab Score 0-100: sticky-stat pillars (opportunity, talent, situation, trajectory) blended safety-vs-ceiling by ADP, normalized across positions by value over replacement. Hover a value for the breakdown; ~ = estimated (no real 2025 sample).' },
+    { key: 'lab', label: 'Lab @K', num: true, get: c => c.kSc,
+      title: 'Lab Score re-blended AT HIS KEEP ROUND: same pillars, but safety-vs-ceiling is weighted for the slot he can actually be acquired at — a late-round keep is graded like a late pick (ceiling matters), an early keep on safety. Hover a value to compare with his market-slot score; ~ = estimated (no real 2025 sample).' },
     { key: 'sBoard', label: 'Surplus (board)', num: true, get: c => c.sBoard,
       title: 'expected pick value of the cost round minus your board rank — positive = bargain. Sort here to grade by it.' },
     { key: 'sAdp', label: 'Surplus (ADP)', num: true, get: c => c.sAdp,
@@ -174,7 +177,10 @@
             ? LAB.el('span', { title: 'would fall to round ' + c.kRd + ' of the keeper draft' }, 'R' + c.kRd)
             : LAB.el('span', { class: 'muted', title: 'predicted to be KEPT — would go ~R' + c.wouldRd + ' if he entered the draft' }, 'kept')),
           LAB.el('td', { class: 'num' }, c.myRank ? '#' + c.myRank : '–'),
-          LAB.el('td', { class: 'num ' + LAB.labColor((c.p.lab || {}).sc), style: 'font-weight:700', title: LAB.labTitle(c.p) }, LAB.labFmt(c.p)),
+          LAB.el('td', {
+            class: 'num ' + LAB.labColor(c.kSc), style: 'font-weight:700',
+            title: c.kSc == null ? '' : `graded at his R${c.costRd} keep slot — market-slot score ${(c.p.lab || {}).sc ?? '–'}\n\n` + LAB.labTitle(c.p),
+          }, c.kSc == null ? '–' : ((c.p.lab || {}).est ? '~' : '') + c.kSc),
           sCell('sBoard'),
           sCell('sAdp'),
           sCell('sTrue'),
