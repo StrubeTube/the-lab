@@ -1320,6 +1320,21 @@ for e in players_out:
     safety = 0.85 * safety + 0.15 * (dage_p if dage_p is not None else 50)
     pacr_p = pct(e["id"], "pacr")
     ceiling = 0.85 * ceiling + 0.15 * (pacr_p if pacr_p is not None else 50)
+    # P3 continuous-outcome winners (LAB_OVERHAUL Phase 2): stepwise vs a
+    # points-over-ADP-expectation target, rule = mean d-rho > +0.02, >=4/5
+    # schemes, binary gaps must not degrade. Ceiling leans harder into
+    # usage shares (backfield share + target share: rho +0.156 -> +0.242,
+    # CI [+.06,+.12], 12/12 seasons, binary gap ALSO up +16.0 -> +16.5);
+    # safety adds QB red-zone rushing (Konami QBs smash their ADP band:
+    # rho +0.160 -> +0.219, 11/12, binary +13.7 -> +14.6). Constant nz-50
+    # terms cancel within position at the fin-percentile step, so each
+    # term only reorders the positions that carry the stat.
+    bf_p = pct(e["id"], "bfshare")
+    ts_p = pct(e["id"], "tshare")
+    ceiling = (0.614 * ceiling + 0.258 * (bf_p if bf_p is not None else 50)
+               + 0.128 * (ts_p if ts_p is not None else 50))
+    qz_p = pct(e["id"], "qrza")
+    safety = 0.7225 * safety + 0.2775 * (qz_p if qz_p is not None else 50)
     # depth-chart guard (live Sleeper depth charts, unbacktestable but
     # cheap insurance): a player listed 3rd+ at his position doesn't get to
     # keep a full stats-based grade — new signings over him show up here

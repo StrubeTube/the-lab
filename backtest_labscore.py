@@ -804,6 +804,13 @@ def build_season(Y):
         safety = 0.85 * safety + 0.15 * (dage_pv if dage_pv is not None else 50)
         pacr_pv = pct(pos, m, "pacr")
         ceiling = 0.85 * ceiling + 0.15 * (pacr_pv if pacr_pv is not None else 50)
+        # P3 parity: continuous-outcome winners (see LAB_OVERHAUL Phase 2)
+        bf_pv = pct(pos, m, "bfshare")
+        ts_pv = pct(pos, m, "tshare")
+        ceiling = (0.614 * ceiling + 0.258 * (bf_pv if bf_pv is not None else 50)
+                   + 0.128 * (ts_pv if ts_pv is not None else 50))
+        qz_pv = pct(pos, m, "qrza")
+        safety = 0.7225 * safety + 0.2775 * (qz_pv if qz_pv is not None else 50)
         wc = max(0.15, min(0.85, (m["adp"] - 24) / 96))
         fin = (1 - wc) * safety + wc * ceiling
         if est:
@@ -2140,3 +2147,90 @@ if "postest" in sys.argv:
             g = gap_vec(sc, rows_, mask, flag, invert)
             n = int(mask.sum())
             print(f"      {pp}: n={n:4}  gap {'n/a' if g is None else f'{g:+.1f}'}")
+
+# ============ P3: CONTINUOUS-OUTCOME RETEST (LAB_OVERHAUL Phase 2) ============
+# run: python backtest_labscore.py conttest
+# Binary hit/bust gaps discard most of each row's information. Target here:
+# POINTS OVER ADP-EXPECTATION (pts minus the season's ADP-band mean), an
+# every-row continuous outcome. PRE-REGISTERED RULE: adopt only if mean
+# delta-rho > +0.02 AND >=4/5 schemes positive, AND the binary gaps do not
+# degrade by more than 1.0 point.
+if "conttest" in sys.argv:
+    print("\n" + "=" * 18 + " P3: CONTINUOUS-OUTCOME RETEST " + "=" * 18)
+    # per-season ADP-band expected points (bands of 12 slots)
+    for Yc in SEASONS:
+        rows_y = [r for r in all_rows if r["season"] == Yc and r["adp"] <= 240]
+        bins = {}
+        for r in rows_y:
+            bins.setdefault(int(r["adp"] // 12), []).append(r["pts"])
+        bmean = {b: sum(v) / len(v) for b, v in bins.items()}
+        gmean = sum(r["pts"] for r in rows_y) / max(1, len(rows_y))
+        for r in rows_y:
+            r["resid"] = r["pts"] - bmean.get(int(r["adp"] // 12), gmean)
+    latec = [r for r in all_rows if 84 <= r["adp"] <= 240 and "resid" in r]
+    earlyc = [r for r in all_rows if r["adp"] <= 36 and "resid" in r]
+    print(f"pools: late {len(latec)} | early {len(earlyc)} (target = pts over ADP-band mean)")
+
+    ODD6 = {y for y in SEASONS if y % 2 == 1}
+    EVEN6 = {y for y in SEASONS if y % 2 == 0}
+    SCH6 = [("FWD", set(range(2022, 2026))), ("REV", set(range(2014, 2022))),
+            ("ODD", ODD6), ("EVEN", EVEN6)]
+
+    def rho_metric(fn, rows_, years):
+        sub = [r for r in rows_ if r["season"] in years and fn(r) is not None]
+        if len(sub) < 30:
+            return None
+        return spearman([fn(r) for r in sub], [r["resid"] for r in sub])
+
+    def eval6(fn, rows_):
+        vals = [rho_metric(fn, rows_, test) for _, test in SCH6]
+        loso = [v for v in (rho_metric(fn, rows_, {y}) for y in SEASONS) if v is not None]
+        vals.append(sum(loso) / len(loso) if loso else None)
+        return vals
+
+    fmt6 = lambda vals: " ".join(" none " if v is None else f"{v:+.3f}" for v in vals)
+    nz6 = lambda v: 50.0 if v is None else v
+
+    def stepwise_rho(side, rows_, base_fn, bin_rows, bin_flag, bin_invert):
+        def bin_gap(fn):
+            sub = [(fn(r), r) for r in bin_rows if fn(r) is not None]
+            sub.sort(key=lambda t: -t[0])
+            h = len(sub) // 2
+            top = 100.0 * sum(bin_flag(r) for _, r in sub[:h]) / h
+            bot = 100.0 * sum(bin_flag(r) for _, r in sub[h:]) / (len(sub) - h)
+            return (bot - top) if bin_invert else (top - bot)
+        base_vals = eval6(base_fn, rows_)
+        base_bin = bin_gap(base_fn)
+        cur_fn, cur_vals = base_fn, base_vals
+        print(f"   {side} baseline rho {fmt6(base_vals)}  (binary gap {base_bin:+.1f})")
+        for step in range(3):
+            best = None
+            for k in FEAT_KEYS:
+                if k == "adpinv":
+                    continue
+                for w in (0.10, 0.15):
+                    def cand(r, _k=k, _w=w, _f=cur_fn):
+                        v = _f(r)
+                        if v is None:
+                            return None
+                        fv = r["feat"].get(_k)
+                        return (1 - _w) * v + _w * (fv if fv is not None else 50)
+                    vals = eval6(cand, rows_)
+                    ds = [v - b for v, b in zip(vals, cur_vals) if v is not None and b is not None]
+                    if len(ds) < 5:
+                        continue
+                    mean = sum(ds) / len(ds)
+                    pos_n = sum(1 for d in ds if d > 0)
+                    if mean > 0.02 and pos_n >= 4:
+                        bg = bin_gap(cand)
+                        if bg >= base_bin - 1.0 and (best is None or mean > best[0]):
+                            best = (mean, pos_n, k, w, cand, vals, bg)
+            if best is None:
+                print(f"   {side} step {step + 1}: nothing passes (rho rule + binary no-degrade). STOP.")
+                break
+            mean, pos_n, k, w, cand, vals, bg = best
+            cur_fn, cur_vals = cand, vals
+            print(f"   {side} ADOPTED +{k} w={w} (d-rho {mean:+.3f}, {pos_n}/5, binary {bg:+.1f})  rho -> {fmt6(vals)}")
+
+    stepwise_rho("CEILING", latec, lambda r: r["ceiling"], latec, hit, False)
+    stepwise_rho("SAFETY ", earlyc, lambda r: r["safety"], earlyc, bust, True)
