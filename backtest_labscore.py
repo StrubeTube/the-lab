@@ -798,6 +798,12 @@ def build_season(Y):
         peak_p_v = pct(pos, m, "peak")
         if peak_p_v is not None:
             ceiling = 0.90 * ceiling + 0.10 * peak_p_v
+        # LAB_OVERHAUL P0 parity: the two shipped ML-retest winners are now
+        # part of the baseline every future test compares against
+        dage_pv = pct(pos, m, "dage")
+        safety = 0.85 * safety + 0.15 * (dage_pv if dage_pv is not None else 50)
+        pacr_pv = pct(pos, m, "pacr")
+        ceiling = 0.85 * ceiling + 0.15 * (pacr_pv if pacr_pv is not None else 50)
         wc = max(0.15, min(0.85, (m["adp"] - 24) / 96))
         fin = (1 - wc) * safety + wc * ceiling
         if est:

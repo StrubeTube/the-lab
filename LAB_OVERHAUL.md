@@ -105,3 +105,42 @@ Caveat noted: a 104-candidate search inflates false-discovery risk vs
 the rule's original single-candidate design; both winners carry
 literature priors and 10-12/12 season robustness, which is why they
 shipped anyway.
+
+---
+
+# PHASE 2 — Exhausting the options (plan, 2026-08-27)
+
+Executed one by one, a commit per step. Pre-registered rules stated per
+step BEFORE running.
+
+- **P0 — Backtest parity.** Port the two shipped winners into
+  build_season so the harness baseline IS the shipped model. Every later
+  test compares against this.
+- **P1 — 2026 prediction freeze.** Snapshot every scored player's
+  sc/sfty/ceil/wc/ed/kg/kl + ADP to `data/predictions_2026.json`, plus a
+  pre-registered scoring script (`score_predictions.py`) that grades the
+  freeze against 2026 finishes in January: hit/bust gaps + Spearman, the
+  same metrics as the backtest. The only untainted holdout left.
+- **P2 — Irreplaceable-data archiver.** Daily compact snapshots of Vegas
+  prop lines (line + both costs) and Sleeper ADP into `data/archive/`,
+  written by fetch_data so the GitHub Action commits them. No historical
+  archive of props exists at any price; ours starts today.
+- **P3 — Continuous-outcome retest.** Re-run the stepwise with a
+  rank-correlation objective (score vs points-over-ADP-expectation)
+  instead of binary hit/bust gaps. RULE: adopt only if mean Δρ > +0.02
+  AND ≥4/5 schemes positive, then re-verify on the binary gaps (must not
+  degrade them by >1.0).
+- **P4 — Next Gen Stats round.** nflverse NGS (2016+): separation,
+  xYAC+/-, RYOE, time-to-throw, aggressiveness, CPAE. Join by gsis,
+  2-yr blend, percentile, univariate screen + stepwise on the P0
+  baseline under the standard rule.
+- **P5 — Interaction terms.** Pairwise products of the top-12 screened
+  features + shipped inputs, stepwise under the standard rule. GBM's +3
+  bound says expectations modest.
+- **P6 — Strength of schedule.** Season SoS from historical schedules
+  (games.csv): mean prior-year points allowed of listed opponents, as a
+  situation-side candidate under the standard rule.
+
+## Phase 2 results
+
+(filled per step)
