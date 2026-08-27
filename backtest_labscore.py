@@ -2066,3 +2066,71 @@ if "confirm" in sys.argv:
     # who moves in 2025 (sanity: which late QBs does pacr promote/demote)
     qbs = [(r["feat"].get("pacr"), r["pid"]) for r in late if r["season"] == 2025 and r["pos"] == "QB"]
     print("2025 late-QB pacr percentiles (pid):", sorted([q for q in qbs if q[0] is not None], reverse=True)[:6])
+
+# ---- position-awareness oracle check (Alex 08-27: "did we test by position?") ----
+if "postest" in sys.argv:
+    import numpy as np
+    from sklearn.ensemble import HistGradientBoostingClassifier
+    print("\n==== POSITION-AWARENESS CHECK: GBM oracle with vs without position ====")
+    late = [r for r in all_rows if 84 <= r["adp"] <= 240 and r["outcome"]]
+    early = [r for r in all_rows if r["adp"] <= 36 and r["outcome"]]
+    KEYS_NM = [k for k in FEAT_KEYS if k != "adpinv"]
+
+    def matrix(rows_, keys, with_pos):
+        X = np.full((len(rows_), len(keys) + (4 if with_pos else 0)), np.nan)
+        for i, r in enumerate(rows_):
+            for j, k in enumerate(keys):
+                v = r["feat"].get(k)
+                if v is not None:
+                    X[i, j] = v
+            if with_pos:
+                for pj, pp in enumerate(("QB", "RB", "WR", "TE")):
+                    X[i, len(keys) + pj] = 1.0 if r["pos"] == pp else 0.0
+        return X
+
+    def gap_vec(scores, rows_, mask, flag, invert=False):
+        sub = [(scores[i], rows_[i]) for i in range(len(rows_))
+               if mask[i] and not np.isnan(scores[i])]
+        if len(sub) < 30:
+            return None
+        sub.sort(key=lambda t: -t[0])
+        h = len(sub) // 2
+        top = 100.0 * sum(flag(r) for _, r in sub[:h]) / h
+        bot = 100.0 * sum(flag(r) for _, r in sub[h:]) / (len(sub) - h)
+        return (bot - top) if invert else (top - bot)
+
+    def loso(X, y, seas):
+        p = np.full(len(y), np.nan)
+        for yy in SEASONS:
+            tr, te = seas != yy, seas == yy
+            if te.sum() == 0 or len(set(y[tr])) < 2:
+                continue
+            mdl = HistGradientBoostingClassifier(max_iter=300, max_depth=3,
+                                                 learning_rate=0.06,
+                                                 min_samples_leaf=40, random_state=7)
+            mdl.fit(X[tr], y[tr])
+            p[te] = mdl.predict_proba(X[te])[:, 1]
+        return p
+
+    for name, rows_, flag, invert in (("CEILING/late-hit", late, hit, False),
+                                      ("SAFETY/early-bust", early, bust, True)):
+        y = np.array([1 if flag(r) else 0 for r in rows_])
+        seas = np.array([r["season"] for r in rows_])
+        for wp in (False, True):
+            X = matrix(rows_, KEYS_NM, wp)
+            p = loso(X, y, seas)
+            sc = p if not invert else -p
+            per_y = [gap_vec(sc, rows_, seas == yy, flag, invert) for yy in SEASONS]
+            per_y = [v for v in per_y if v is not None]
+            pooled = gap_vec(sc, rows_, np.ones(len(rows_), bool), flag, invert)
+            print(f"  {name:18} {'WITH position' if wp else 'no position  '}: "
+                  f"LOSO-mean {sum(per_y)/len(per_y):+.1f}  pooled {pooled:+.1f}")
+        # per-position OOS gaps for the position-aware model (where n allows)
+        Xp = matrix(rows_, KEYS_NM, True)
+        p = loso(Xp, y, seas)
+        sc = p if not invert else -p
+        for pp in ("QB", "RB", "WR", "TE"):
+            mask = np.array([r["pos"] == pp for r in rows_])
+            g = gap_vec(sc, rows_, mask, flag, invert)
+            n = int(mask.sum())
+            print(f"      {pp}: n={n:4}  gap {'n/a' if g is None else f'{g:+.1f}'}")
