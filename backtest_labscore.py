@@ -329,6 +329,56 @@ FEAT_KEYS = ["wo", "snp", "tshare", "ayshare", "yptpa", "tpg", "rypg", "ypt", "y
              "unrl", "injb", "dur", "dc", "spd", "btk", "burst", "agil", "bmi",
              "dage", "pepa", "cpoe", "pacr", "ruepa", "repa", "racr", "wopr",
              "boomr", "wkcv", "adpinv"]
+
+# NGS loader block — inserted at module level after FEAT_KEYS
+import gzip as _gzip
+
+NGS = {}  # (year, gsis) -> {field: value}
+_NGS_FIELDS = {
+    "receiving": [("avg_separation", "nsep"), ("avg_yac_above_expectation", "nyacx"),
+                  ("percent_share_of_intended_air_yards", "naysh")],
+    "rushing": [("rush_yards_over_expected_per_att", "nryoe"),
+                ("percent_attempts_gte_eight_defenders", "n8box")],
+    "passing": [("avg_time_to_throw", "nttt"), ("aggressiveness", "naggr")],
+}
+for _y in range(2015, 2025):
+    _nf = CACHE / f"ngs_{_y}.json"
+    if _nf.exists():
+        _d = json.loads(_nf.read_text(encoding="utf-8"))
+        for _g, _v in _d.items():
+            NGS[(_y, _g)] = _v
+        continue
+    _merged = {}
+    for _typ, _flds in _NGS_FIELDS.items():
+        try:
+            _rq = urllib.request.Request(
+                f"https://github.com/nflverse/nflverse-data/releases/download/nextgen_stats/ngs_{_y}_{_typ}.csv.gz",
+                headers=UA)
+            with urllib.request.urlopen(_rq, timeout=120) as _resp:
+                _txt = _gzip.decompress(_resp.read()).decode("utf-8", "replace")
+        except Exception as _e:
+            continue
+        for _r in csv.DictReader(io.StringIO(_txt)):
+            if str(_r.get("week")) != "0":      # week 0 = season aggregate
+                continue
+            _g = _r.get("player_gsis_id")
+            if not _g:
+                continue
+            for _src, _dst in _flds:
+                try:
+                    _v = _r.get(_src)
+                    if _v not in (None, ""):
+                        _merged.setdefault(_g, {})[_dst] = float(_v)
+                except ValueError:
+                    pass
+    if _merged:
+        print(f"  ngs_{_y}: {len(_merged)} players")
+    _nf.write_text(json.dumps(_merged), encoding="utf-8")
+    for _g, _v in _merged.items():
+        NGS[(_y, _g)] = _v
+
+FEAT_KEYS += ["nsep", "nyacx", "naysh", "nryoe", "n8box", "nttt", "naggr"]
+
 AGE_CURVE = {
     "RB": [(21, 0.85), (23, 1.0), (26, 0.97), (27, 0.83), (28, 0.76),
            (29, 0.62), (30, 0.45), (32, 0.25), (35, 0.10)],
@@ -694,6 +744,14 @@ def build_season(Y):
                     return v / g2 if g2 else None
                 return v
             v1, v2 = _pv(ps1), _pv(ps2)
+            if v1 is not None and v2 is not None:
+                m[kk] = 0.65 * v1 + 0.35 * v2
+            elif v1 is not None or v2 is not None:
+                m[kk] = v1 if v1 is not None else v2
+        n1 = NGS.get((Y - 1, gid)) or {}
+        n2 = NGS.get((Y - 2, gid)) or {}
+        for kk in ("nsep", "nyacx", "naysh", "nryoe", "n8box", "nttt", "naggr"):
+            v1, v2 = n1.get(kk), n2.get(kk)
             if v1 is not None and v2 is not None:
                 m[kk] = 0.65 * v1 + 0.35 * v2
             elif v1 is not None or v2 is not None:
@@ -2234,3 +2292,88 @@ if "conttest" in sys.argv:
 
     stepwise_rho("CEILING", latec, lambda r: r["ceiling"], latec, hit, False)
     stepwise_rho("SAFETY ", earlyc, lambda r: r["safety"], earlyc, bust, True)
+
+# ============ P4: NEXT GEN STATS ROUND (LAB_OVERHAUL Phase 2) ============
+# run: python backtest_labscore.py ngstest
+# 7 NGS features (2016+ tracking data): receiver separation / YAC over
+# expected / intended-air share, RB RYOE + stacked-box rate, QB time-to-
+# throw + aggressiveness. Univariate screen, then stepwise on the CURRENT
+# shipped baseline (P0+P3) under the standard rule (mean > +1.5, >=4/5)
+# on BOTH binary objectives, plus the P3 continuous rho check.
+if "ngstest" in sys.argv:
+    print("\n" + "=" * 20 + " P4: NGS ROUND " + "=" * 20)
+    NKEYS = ["nsep", "nyacx", "naysh", "nryoe", "n8box", "nttt", "naggr"]
+    late = [r for r in all_rows if 84 <= r["adp"] <= 240 and r["outcome"]]
+    early = [r for r in all_rows if r["adp"] <= 36 and r["outcome"]]
+    for k in NKEYS:
+        cov = 100.0 * sum(1 for r in late if r["feat"].get(k) is not None) / len(late)
+        print(f"   coverage {k:6} {cov:4.0f}% of late rows")
+
+    ODD7 = {y for y in SEASONS if y % 2 == 1}
+    EVEN7 = {y for y in SEASONS if y % 2 == 0}
+    SCH7 = [("FWD", set(range(2022, 2026))), ("REV", set(range(2014, 2022))),
+            ("ODD", EVEN7 and ODD7), ("EVEN", EVEN7)]
+    SCH7 = [("FWD", set(range(2022, 2026))), ("REV", set(range(2014, 2022))),
+            ("ODD", ODD7), ("EVEN", EVEN7)]
+    nz7 = lambda v: 50.0 if v is None else v
+
+    def gap7(fn, rows_, years, flag, invert=False):
+        sub = [(fn(r), r) for r in rows_ if r["season"] in years and fn(r) is not None]
+        if len(sub) < 30:
+            return None
+        sub.sort(key=lambda t: -t[0])
+        h = len(sub) // 2
+        top = 100.0 * sum(flag(r) for _, r in sub[:h]) / h
+        bot = 100.0 * sum(flag(r) for _, r in sub[h:]) / (len(sub) - h)
+        return (bot - top) if invert else (top - bot)
+
+    def eval7(fn, rows_, flag, invert=False):
+        vals = [gap7(fn, rows_, test, flag, invert) for _, test in SCH7]
+        loso = [v for v in (gap7(fn, rows_, {y}, flag, invert) for y in SEASONS) if v is not None]
+        vals.append(sum(loso) / len(loso) if loso else None)
+        return vals
+
+    fmt7 = lambda vals: " ".join("  none" if v is None else f"{v:+6.1f}" for v in vals)
+
+    print("\n   univariate (LOSO-mean gap where computable):")
+    for k in NKEYS:
+        hg = [gap7(lambda r, _k=k: r["feat"].get(_k), late, {y}, hit) for y in SEASONS]
+        hg = [v for v in hg if v is not None]
+        bg = [gap7(lambda r, _k=k: r["feat"].get(_k), early, {y}, bust, True) for y in SEASONS]
+        bg = [v for v in bg if v is not None]
+        print(f"   {k:6}  hit {'n/a' if not hg else f'{sum(hg)/len(hg):+5.1f} ({len(hg)} folds)'}"
+              f"   bust {'n/a' if not bg else f'{sum(bg)/len(bg):+5.1f} ({len(bg)} folds)'}")
+
+    def stepwise7(side, rows_, flag, invert, base_fn):
+        base_vals = eval7(base_fn, rows_, flag, invert)
+        cur_fn, cur_vals = base_fn, base_vals
+        print(f"   {side} baseline {fmt7(base_vals)}")
+        for step in range(3):
+            best = None
+            for k in NKEYS:
+                for w in (0.10, 0.15):
+                    def cand(r, _k=k, _w=w, _f=cur_fn):
+                        v = _f(r)
+                        if v is None:
+                            return None
+                        return (1 - _w) * v + _w * nz7(r["feat"].get(_k))
+                    vals = eval7(cand, rows_, flag, invert)
+                    ds = [v - b for v, b in zip(vals, cur_vals) if v is not None and b is not None]
+                    if len(ds) < 5:
+                        continue
+                    mean = sum(ds) / len(ds)
+                    pos_n = sum(1 for d in ds if d > 0)
+                    if mean > 1.5 and pos_n >= 4 and (best is None or mean > best[0]):
+                        best = (mean, pos_n, k, w, cand, vals)
+            if best is None:
+                print(f"   {side} step {step + 1}: nothing passes. STOP.")
+                break
+            mean, pos_n, k, w, cand, vals = best
+            cur_fn, cur_vals = cand, vals
+            print(f"   {side} ADOPTED +{k} w={w} (mean {mean:+.1f}, {pos_n}/5) -> {fmt7(vals)}")
+
+    ship_c = lambda r: r["ceiling"]
+    ship_s = lambda r: r["safety"]
+    print("\n   stepwise vs CURRENT shipped baseline:")
+    stepwise7("CEILING", late, hit, False, ship_c)
+    stepwise7("SAFETY ", early, bust, True, ship_s)
