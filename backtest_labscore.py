@@ -214,6 +214,29 @@ def injury_burden(pid, Y):
     return b
 
 DC_VAL = {1: 1.0, 2: 0.8, 3: 0.65, 4: 0.5, 5: 0.4, 6: 0.32, 7: 0.25}
+
+# combine athleticism (round-4 ceiling tests): speed score = wt * 200 /
+# forty^4 (Barwis), static per player, joined norm(name)|pos
+SPD_MAP = {}
+try:
+    _cf = CACHE / "combine.csv"
+    if not _cf.exists():
+        print("  fetching combine.csv...")
+        _rq = urllib.request.Request(
+            "https://github.com/nflverse/nflverse-data/releases/download/combine/combine.csv",
+            headers=UA)
+        with urllib.request.urlopen(_rq, timeout=120) as _resp:
+            _cf.write_bytes(_resp.read())
+    _cmb = list(csv.DictReader(io.StringIO(_cf.read_text(encoding="utf-8"))))
+    for _r in _cmb:
+        try:
+            _w, _f = float(_r.get("wt") or 0), float(_r.get("forty") or 0)
+        except ValueError:
+            continue
+        if _w and _f and _r.get("pos") in ("QB", "RB", "WR", "TE"):
+            SPD_MAP[norm(_r.get("player_name")) + "|" + _r["pos"]] = _w * 200 / (_f ** 4)
+except Exception as _e:
+    print("combine load failed (speed-score tests degrade):", _e)
 AGE_CURVE = {
     "RB": [(21, 0.85), (23, 1.0), (26, 0.97), (27, 0.83), (28, 0.76),
            (29, 0.62), (30, 0.45), (32, 0.25), (35, 0.10)],
@@ -543,6 +566,21 @@ def build_season(Y):
         m["dc"] = DC_VAL.get((dc or {}).get("round"), 0.15)
         m["exp"] = Y - dc["season"] if dc else (p.get("years_exp") or 0)
         m["adpinv"] = -adp  # EST proxy for projection (better ADP = better)
+        # --- ceiling-fix candidates (round 4) ---
+        # athleticism: combine speed score, static career trait
+        sp = SPD_MAP.get(norm(p.get("full_name")) + "|" + pos)
+        if sp is not None:
+            m["spd"] = sp
+        # broken-tackle rate, 2-yr blend (Sleeper carries rush_btkl 2016+;
+        # earlier prior-seasons stay None — a missing field pre-2016 is
+        # unknown, not zero)
+        bt1 = ((st.get("rush_btkl") or 0) / att) if (att >= 50 and Y - 1 >= 2016) else None
+        att2_ = st2.get("rush_att") or 0
+        bt2 = ((st2.get("rush_btkl") or 0) / att2_) if (att2_ >= 50 and Y - 2 >= 2016) else None
+        if bt1 is not None and bt2 is not None:
+            m["btk"] = 0.65 * bt1 + 0.35 * bt2
+        elif bt1 is not None or bt2 is not None:
+            m["btk"] = bt1 if bt1 is not None else bt2
         raw[pid] = (pos, m)
 
     # percentiles within position
@@ -677,6 +715,12 @@ def build_season(Y):
                          team_opp.get(t), team_opp2.get(t))))(ros_now.get(pid)),
                      "occhg": oc_changed(ros_now.get(pid), Y) if ros_now.get(pid) else None,
                      "hcchg": hc_changed(ros_now.get(pid), Y) if ros_now.get(pid) else None,
+                     # -- ceiling-fix fields (round 4) --
+                     "spd_p": pct(pos, m, "spd"), "btk_p": pct(pos, m, "btk"),
+                     "vaca_p": pct(pos, m, "vaca"), "adp_pp": adp_p,
+                     "exp": m.get("exp", 0),
+                     "win4": m["dc"] >= 0.5 and ((pos in ("WR", "TE") and 1 <= m.get("exp", 0) <= 3)
+                                                 or (pos == "RB" and m.get("exp", 0) <= 2)),
                      "window": dcr_ok and ((pos in ("WR", "TE") and 1 <= m.get("exp", 0) <= 3)
                                            or (pos == "RB" and m.get("exp", 0) <= 2))})
     return rows
@@ -1450,3 +1494,119 @@ if "sittest" in sys.argv:
         ("H3 new-HEAD-COACH -5", evalrow(hit3, lambda r: C3(r) - (5 if r["hcchg"] else 0))),
     ]
     show("CEILING variants (hit gap, ADP 84-240)", base_c3, cv3)
+
+
+# ============== CEILING-FIX TESTS (round 4: the Tuten autopsy) ==============
+# run: python backtest_labscore.py ceiltest
+# Alex 08-27: consensus calls Tuten an all-ceiling play; our ceiling is
+# resume-based and blind to athleticism, path-to-volume, and magnitude.
+# Candidates judged on the SAME pre-registered rule as the grand audit
+# (mean delta > +1.5 AND >=4/5 schemes positive) on the standard hit
+# objective. A second table rescores everything on a MAGNITUDE objective
+# (hit12: QB/TE top-6, RB/WR top-12 = league-winner seasons) —
+# exploratory and reported, not ruled. ROLE uses the ADP-percentile
+# projection proxy (partially circular — same caveat as the v56 blend).
+if "ceiltest" in sys.argv:
+    print("\n" + "=" * 20 + " CEILING-FIX TESTS (round 4) " + "=" * 20)
+    ODD4 = {y for y in SEASONS if y % 2 == 1}
+    EVEN4 = {y for y in SEASONS if y % 2 == 0}
+    SCH4 = [("FWD", set(range(2014, 2022)), set(range(2022, 2026))),
+            ("REV", set(range(2022, 2026)), set(range(2014, 2022))),
+            ("ODD", EVEN4, ODD4), ("EVEN", ODD4, EVEN4)]
+    nz4 = lambda v: 50.0 if v is None else v
+
+    def hit_metric4(fn, years, hfn):
+        grp = [r for r in all_rows if 84 <= r["adp"] <= 240 and r["outcome"]
+               and r["season"] in years and fn(r) is not None]
+        if len(grp) < 30:
+            return None
+        grp.sort(key=lambda r: -fn(r))
+        h = len(grp) // 2
+        return (100 * sum(map(hfn, grp[:h])) / h
+                - 100 * sum(map(hfn, grp[h:])) / (len(grp) - h))
+
+    def eval4(fn, hfn):
+        vals = [hit_metric4(fn, test, hfn) for _, _, test in SCH4]
+        loso = [v for v in (hit_metric4(fn, {y}, hfn) for y in SEASONS) if v is not None]
+        vals.append(sum(loso) / len(loso))
+        return vals
+
+    def report4(title, base_vals, variants):
+        print("\n-- " + title + " --")
+        print(f"   {'variant':38} {'FWD':>6} {'REV':>6} {'ODD':>6} {'EVEN':>6} {'LOSO':>6}   mean-d  verdict")
+        print(f"   {'SHIPPED ceiling':38} " + " ".join(f"{v:+6.1f}" for v in base_vals) + "   (baseline)")
+        for label, vals in variants:
+            ds = [v - b for v, b in zip(vals, base_vals)]
+            mean = sum(ds) / len(ds)
+            pos_n = sum(1 for d in ds if d > 0)
+            vd = "CHANGE MODEL <<<" if (mean > 1.5 and pos_n >= 4) else "no change"
+            print(f"   {label:38} " + " ".join(f"{x:+6.1f}" for x in vals) + f"   {mean:+6.1f}  {vd}")
+
+    W4T2 = (.35, .25, .15, .25)
+
+    def ceil_full(r, opp=None, tal=None, win=None):
+        c = r["comp"]
+        opp = c["opp"] if opp is None else opp
+        tal = c["tal"] if tal is None else tal
+        win = c["win"] if win is None else win
+        base = mixw([(opp, W4T2[0]), (tal, W4T2[1]), (c["sit"], W4T2[2]), (c["trC"], W4T2[3])])
+        if base is None:
+            return None
+        v = (0.82 * base + 0.10 * nz4(c["rz"])
+             + 0.08 * (nz4(c["ad"]) if r["pos"] == "WR" else 50))
+        if win:
+            v += 4
+        if r.get("peak_p") is not None:
+            v = 0.90 * v + 0.10 * r["peak_p"]
+        return v
+
+    def v_ath_rb(r):
+        v = ceil_full(r)
+        return None if v is None else (0.90 * v + 0.10 * nz4(r["spd_p"]) if r["pos"] == "RB" else v)
+
+    def v_ath_all(r):
+        v = ceil_full(r)
+        return None if v is None else 0.90 * v + 0.10 * nz4(r["spd_p"])
+
+    def v_ath_tal(r):
+        if r["pos"] == "RB" and r["spd_p"] is not None and r["comp"]["tal"] is not None:
+            return ceil_full(r, tal=0.85 * r["comp"]["tal"] + 0.15 * r["spd_p"])
+        return ceil_full(r)
+
+    def v_btk(r):
+        if r["pos"] == "RB" and r["btk_p"] is not None and r["comp"]["tal"] is not None:
+            return ceil_full(r, tal=0.85 * r["comp"]["tal"] + 0.15 * r["btk_p"])
+        return ceil_full(r)
+
+    def v_w4(r):
+        return ceil_full(r, win=r["win4"])
+
+    def v_role(r):
+        c = r["comp"]
+        if (r["pos"] == "RB" and r["exp"] <= 2 and (r["vaca_p"] or 0) >= 65
+                and c["opp"] is not None and r["adp_pp"] is not None):
+            return ceil_full(r, opp=0.60 * c["opp"] + 0.40 * r["adp_pp"])
+        return ceil_full(r)
+
+    cover_spd = sum(1 for r in all_rows if r["spd_p"] is not None)
+    cover_btk = sum(1 for r in all_rows if r["btk_p"] is not None)
+    gate_role = sum(1 for r in all_rows if r["pos"] == "RB" and r["exp"] <= 2 and (r["vaca_p"] or 0) >= 65)
+    gate_w4 = sum(1 for r in all_rows if r["win4"] and not r["comp"]["win"])
+    print(f"coverage: speed score {cover_spd}/{len(all_rows)} rows · broken-tackle {cover_btk}"
+          f" · ROLE gate hits {gate_role} · rows the R4 window newly reaches {gate_w4}")
+
+    hit_mag = lambda r: r["outcome"] <= (6 if r["pos"] in ("QB", "TE") else 12)
+
+    VARS = [("F1 +speed score .10 (RB only)", v_ath_rb),
+            ("F2 +speed score .10 (all pos)", v_ath_all),
+            ("F3 speed into RB talent .15", v_ath_tal),
+            ("F4 broken-tackle rate into RB tal", v_btk),
+            ("F5 window loosened to R4 capital", v_w4),
+            ("F6 role-proxy blend (blocked RBs)", v_role)]
+
+    base_std = eval4(ceil_full, hit)
+    report4("STANDARD OBJECTIVE (QB/TE top-12, RB/WR top-24) — the ruled test", base_std,
+            [(lbl, eval4(fn, hit)) for lbl, fn in VARS])
+    base_mag = eval4(ceil_full, hit_mag)
+    report4("MAGNITUDE OBJECTIVE (QB/TE top-6, RB/WR top-12) — exploratory", base_mag,
+            [(lbl, eval4(fn, hit_mag)) for lbl, fn in VARS])
