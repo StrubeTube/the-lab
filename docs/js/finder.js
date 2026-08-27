@@ -48,7 +48,7 @@
   let L, C, props;
   // filters are EXCLUSION-style (per Alex): everything shows by default,
   // click a chip to remove it from the feed, click again to bring it back
-  const ui = { view: 'feed', sort: 'success', exclAssets: new Set(), exclTeams: new Set(), exclTargets: new Set(), minTier: 'all', minGain: 0, aggr: 'ladder', maxAssets: 3, showWeights: false, showDead: false, groupSel: {} };
+  const ui = { exclAssets: new Set(), exclTeams: new Set(), exclTargets: new Set(), minTier: 'all', minGain: 0, aggr: 'ladder', maxAssets: 3, showWeights: false, showDead: false, expand: {} };
 
   const mgrName = rid => (L.users[(L.rosters.find(r => r.rid === rid) || {}).owner]?.name) || 'Team ' + rid;
   const pname = pid => C.byId[pid]?.name || pid;
@@ -239,16 +239,20 @@
   }
 
   // ---------- feed ----------
-  function matchesUI(x) {
-    const st = statuses[x.h]?.status;
-    if (st === 'dead' || st === 'accepted') return false; // live feed only
+  // hand a proposal to the Trade Lab builder (was referenced but never
+  // defined — the pairs-view builder buttons were dead until now)
+  const loadProposal = (rid, x) => {
+    save('thelab-handoff-v1', { tag, partnerRid: rid, give: x.give, get: x.get });
+    location.href = 'trade.html';
+  };
+  // exclusion + dial filters, STATUS-BLIND — sections need dead options
+  // countable so they can offer a per-action reset
+  function passes(x) {
     if (ui.exclTeams.has(x.rid)) return false;
-    // any excluded asset on my give side hides the card
     for (const a of x.give) {
       const key = a.kind === 'player' ? 'pl:' + a.id : 'pk:' + a.round + '.' + a.origRid;
       if (ui.exclAssets.has(key)) return false;
     }
-    // any excluded return category hides the card
     const gp = x.get.filter(a => a.kind === 'pick').map(a => a.round);
     if (ui.exclTargets.has('early') && gp.some(r => r <= 4)) return false;
     if (ui.exclTargets.has('mid') && gp.some(r => r >= 5 && r <= 8)) return false;
@@ -308,12 +312,6 @@
       }, 'load ▸'));
   }
 
-  // one card per distinct trade SHAPE (same assets out, same rounds back) —
-  // when it works with several teams, one card lists them all as chips
-  const shapeKey = x => [x.type,
-    x.give.map(a => a.kind === 'pick' ? 'p' + a.round : a.id).join('+'),
-    x.get.map(a => a.kind === 'pick' ? 'p' + a.round : a.id).join('+')].join('|');
-
   function card(x, grp) {
     const t = tier(x.score);
     const st = statuses[x.h]?.status;
@@ -372,16 +370,8 @@
     return el;
   }
 
-  // ---------- Pick Pairs: two offsetting pick-only trades ----------
-  function renderPairs(col) {
-    col.append(LAB.el('p', { class: 'muted', style: 'font-size:11.5px;margin-top:8px' },
-      'Two pick-only trades to set up and accept TOGETHER: consolidate up with a team that\'s over the 16-pick limit, shed down to a team that\'s short — no shared picks, your count nets back to 16, and your picks get higher. Each partner needs exactly what you\'re giving them.'));
-    const pairs = LAB.pickPairs(C, L).filter(pr => !ui.exclTeams.has(pr.over.rid) && !ui.exclTeams.has(pr.under.rid));
-    if (!pairs.length) {
-      col.append(LAB.el('p', { class: 'muted', style: 'font-size:12.5px;margin-top:8px' },
-        'No workable pairs right now — needs at least one team over 16 picks and one under, with combos that leave you ahead.'));
-      return;
-    }
+  // ---------- pick pairs: one self-contained card per two-trade combo ----------
+  function pairCard(pr) {
     const box = (title, sub, side, ownerRid) => LAB.el('div', { style: 'flex:1;min-width:230px' },
       LAB.el('div', { class: 'flex', style: 'gap:6px;align-items:baseline' },
         LAB.el('b', { style: 'font-family:var(--font-display);font-size:13px' }, title),
@@ -399,145 +389,159 @@
         LAB.el('div', { style: 'flex:1;border:1px solid rgba(62,230,143,.35);border-radius:7px;padding:3px 7px 5px;background:rgba(62,230,143,.05)' },
           LAB.el('div', { style: 'font-size:8.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:#3ee68f' }, 'you get'),
           side.get.map(a => assetRow({ kind: 'pick', ...a }, ownerRid)))));
-    for (const pr of pairs.slice(0, 8)) {
-      const oName = mgrName(pr.over.rid), uName = mgrName(pr.under.rid);
-      const oOver = C.ownedPicks(pr.over.rid).length - 16, uShort = 16 - C.ownedPicks(pr.under.rid).length;
-      const pitch = 'Two clean pick trades, no players:\n' +
-        `1) ${oName}: my R${pr.over.give.map(a => a.round).join('+R')} for your R${pr.over.get.map(a => a.round).join('+R')} — you're carrying ${oOver} pick${oOver > 1 ? 's' : ''} more than you can roster (and they all count on your cap); this sheds one.\n` +
-        `2) ${uName}: my R${pr.under.give.map(a => a.round).join('+R')} for your R${pr.under.get.map(a => a.round).join('+R')} — you're ${uShort} short; this fixes your count AND nets you +${Math.round(pr.under.optics || 0)} on a classic value chart (two real picks beat the one).`;
-      const outR = [...pr.over.give, ...pr.under.give].map(a => a.round).sort((x, y) => x - y);
-      const inR = [...pr.over.get, ...pr.under.get].map(a => a.round).sort((x, y) => x - y);
-      const netChip = (r, col2) => LAB.el('span', {
-        class: 'mono',
-        style: `display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:7px;font-weight:700;font-size:12px;margin-right:4px;border:1px solid ${col2};color:${col2};background:${col2}11`,
-      }, 'R' + r);
-      col.append(LAB.el('div', {
-        style: 'border:1px solid var(--border);border-radius:10px;padding:9px 12px;margin-top:8px;background:var(--surface)',
-      },
-        // 1) THE NET — what the whole package does to my picks
-        LAB.el('div', { style: 'border:1.5px solid var(--accent);border-radius:9px;padding:6px 10px 8px;background:rgba(255,106,43,.05)' },
-          LAB.el('div', { class: 'flex', style: 'gap:10px;flex-wrap:wrap;align-items:baseline' },
-            LAB.el('b', { style: 'font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--accent)' }, 'net — both trades together'),
-            LAB.el('b', { style: 'font-size:12.5px;color:#3ee68f' }, `+${Math.round(pr.total)} value`),
-            LAB.el('span', { class: 'muted', style: 'font-size:10.5px' }, 'count stays 16 · no shared picks')),
-          LAB.el('div', { class: 'flex', style: 'gap:12px;flex-wrap:wrap;margin-top:5px;align-items:center' },
-            LAB.el('span', { style: 'font-size:10px;font-weight:700;color:#ff5c5c;text-transform:uppercase' }, 'out'),
-            LAB.el('span', {}, outR.map(r => netChip(r, '#ff5c5c'))),
-            LAB.el('span', { style: 'color:var(--ink-3)' }, '→'),
-            LAB.el('span', { style: 'font-size:10px;font-weight:700;color:#3ee68f;text-transform:uppercase' }, 'in'),
-            LAB.el('span', {}, inR.map(r => netChip(r, '#3ee68f'))))),
-        // 2) + 3) the two legs
-        LAB.el('div', { style: 'display:flex;gap:16px;flex-wrap:wrap;margin-top:8px' },
-          box(`1 · ${oName}`, `${oOver} over 16 — extra salary`, pr.over, pr.over.rid),
-          box(`2 · ${uName}`, `${uShort} short, needs count`, pr.under, pr.under.rid)),
-        LAB.el('div', { class: 'flex', style: 'gap:6px;margin-top:7px;flex-wrap:wrap' },
-          LAB.el('button', {
-            style: 'font-size:11px',
-            onclick: () => loadProposal(pr.over.rid, { give: pr.over.give.map(a => ({ kind: 'pick', ...a })), get: pr.over.get.map(a => ({ kind: 'pick', ...a })) }),
-          }, '⚗ trade 1 in builder'),
-          LAB.el('button', {
-            style: 'font-size:11px',
-            onclick: () => loadProposal(pr.under.rid, { give: pr.under.give.map(a => ({ kind: 'pick', ...a })), get: pr.under.get.map(a => ({ kind: 'pick', ...a })) }),
-          }, '⚗ trade 2 in builder'),
-          LAB.el('button', {
-            style: 'font-size:11px',
-            onclick: () => navigator.clipboard.writeText(pitch).then(() => LAB.toast('both pitches copied', 'good')),
-          }, '📋 copy both pitches'))));
-    }
+    const oName = mgrName(pr.over.rid), uName = mgrName(pr.under.rid);
+    const oOver = C.ownedPicks(pr.over.rid).length - 16, uShort = 16 - C.ownedPicks(pr.under.rid).length;
+    const pitch = 'Two clean pick trades, no players:\n' +
+      `1) ${oName}: my R${pr.over.give.map(a => a.round).join('+R')} for your R${pr.over.get.map(a => a.round).join('+R')} — you're carrying ${oOver} pick${oOver > 1 ? 's' : ''} more than you can roster (and they all count on your cap); this sheds one.\n` +
+      `2) ${uName}: my R${pr.under.give.map(a => a.round).join('+R')} for your R${pr.under.get.map(a => a.round).join('+R')} — you're ${uShort} short; this fixes your count AND nets you +${Math.round(pr.under.optics || 0)} on a classic value chart (two real picks beat the one).`;
+    const outR = [...pr.over.give, ...pr.under.give].map(a => a.round).sort((x, y) => x - y);
+    const inR = [...pr.over.get, ...pr.under.get].map(a => a.round).sort((x, y) => x - y);
+    const netChip = (r, col2) => LAB.el('span', {
+      class: 'mono',
+      style: `display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:7px;font-weight:700;font-size:12px;margin-right:4px;border:1px solid ${col2};color:${col2};background:${col2}11`,
+    }, 'R' + r);
+    return LAB.el('div', {
+      style: 'border:1px solid var(--border);border-radius:10px;padding:9px 12px;margin-top:8px;background:var(--surface)',
+    },
+      LAB.el('div', { style: 'border:1.5px solid var(--accent);border-radius:9px;padding:6px 10px 8px;background:rgba(255,106,43,.05)' },
+        LAB.el('div', { class: 'flex', style: 'gap:10px;flex-wrap:wrap;align-items:baseline' },
+          LAB.el('b', { style: 'font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--accent)' }, 'net — both trades together'),
+          LAB.el('b', { style: 'font-size:12.5px;color:#3ee68f' }, `+${Math.round(pr.total)} value`),
+          LAB.el('span', { class: 'muted', style: 'font-size:10.5px' }, 'count stays 16 · no shared picks')),
+        LAB.el('div', { class: 'flex', style: 'gap:12px;flex-wrap:wrap;margin-top:5px;align-items:center' },
+          LAB.el('span', { style: 'font-size:10px;font-weight:700;color:#ff5c5c;text-transform:uppercase' }, 'out'),
+          LAB.el('span', {}, outR.map(r => netChip(r, '#ff5c5c'))),
+          LAB.el('span', { style: 'color:var(--ink-3)' }, '→'),
+          LAB.el('span', { style: 'font-size:10px;font-weight:700;color:#3ee68f;text-transform:uppercase' }, 'in'),
+          LAB.el('span', {}, inR.map(r => netChip(r, '#3ee68f'))))),
+      LAB.el('div', { style: 'display:flex;gap:16px;flex-wrap:wrap;margin-top:8px' },
+        box(`1 · ${oName}`, `${oOver} over 16 — extra salary`, pr.over, pr.over.rid),
+        box(`2 · ${uName}`, `${uShort} short, needs count`, pr.under, pr.under.rid)),
+      LAB.el('div', { class: 'flex', style: 'gap:6px;margin-top:7px;flex-wrap:wrap' },
+        LAB.el('button', {
+          style: 'font-size:11px',
+          onclick: () => loadProposal(pr.over.rid, { give: pr.over.give.map(a => ({ kind: 'pick', ...a })), get: pr.over.get.map(a => ({ kind: 'pick', ...a })) }),
+        }, '⚗ trade 1 in builder'),
+        LAB.el('button', {
+          style: 'font-size:11px',
+          onclick: () => loadProposal(pr.under.rid, { give: pr.under.give.map(a => ({ kind: 'pick', ...a })), get: pr.under.get.map(a => ({ kind: 'pick', ...a })) }),
+        }, '⚗ trade 2 in builder'),
+        LAB.el('button', {
+          style: 'font-size:11px',
+          onclick: () => navigator.clipboard.writeText(pitch).then(() => LAB.toast('both pitches copied', 'good')),
+        }, '📋 copy both pitches')));
   }
 
+  // ---------- the page IS the priority list (Alex 8/27): one numbered ----------
+  // section per targeted action — each spare keeper to sell, then pick
+  // balance, then leftovers — with the top options stacked under it.
+  // 💀 kills an option forever (persisted by hash) and the next-best one
+  // takes its seat; each section can resurrect its dead in one click.
   function render() {
     root.innerHTML = '';
     const row = LAB.el('div', { style: 'display:flex;gap:14px;margin-top:14px;align-items:flex-start;flex-wrap:wrap' });
     row.append(controlsRail());
     const feedCol = LAB.el('div', { style: 'flex:1;min-width:340px' });
-    const viewSeg = LAB.el('div', { class: 'seg' },
-      [['feed', 'Proposals'], ['pairs', '⚖ Pick pairs']].map(([k, lbl]) =>
-        LAB.el('button', { class: ui.view === k ? 'active' : '', onclick: () => { ui.view = k; render(); } }, lbl)));
-    const sortSeg = LAB.el('div', { class: 'seg' },
-      [['success', 'Success'], ['gain', 'My value'], ['ev', 'Blend']].map(([k, lbl]) =>
-        LAB.el('button', { class: ui.sort === k ? 'active' : '', onclick: () => { ui.sort = k; render(); } }, lbl)));
-    feedCol.append(LAB.el('div', { class: 'flex', style: 'gap:10px;align-items:center;flex-wrap:wrap' },
-      viewSeg, ui.view === 'feed' ? sortSeg : ''));
-    if (ui.view === 'pairs') {
-      renderPairs(feedCol);
-      row.append(feedCol);
-      row.append(campaignRail());
-      root.append(row);
-      return;
-    }
-    let list = props.filter(matchesUI);
-    list.sort((a, b2) => ui.sort === 'gain' ? b2.myGain - a.myGain
-      : ui.sort === 'ev' ? prob(b2.score) * b2.myGain - prob(a.score) * a.myGain
-        : b2.score - a.score || b2.myGain - a.myGain);
-    // ⭐ GO FOR THESE — Alex (8/26): "selling my extra keepers is the point —
-    // make it easy." One row per spare keeper: the single best LIVE proposal
-    // for him (sent/dead drop out, so a dead opening auto-advances to its
-    // fallback here), always ranked by likelihood. Best pick pair rides last.
-    const live = x => !statuses[x.h] && !ui.exclTeams.has(x.rid);
+    const byScore = (a, b2) => b2.score - a.score || b2.myGain - a.myGain;
+    const stOf = x => statuses[x.h]?.status;
+
+    // one proposal, one row
+    const optionRow = x => {
+      const t = tier(x.score);
+      const st = stOf(x);
+      const open = ui.topOpen === x.h;
+      return LAB.el('div', { style: 'margin-top:6px;border:1px solid ' + (st ? 'var(--accent)' : 'var(--border)') + ';border-radius:8px;padding:5px 9px;background:var(--surface)' },
+        LAB.el('div', { class: 'flex', style: 'gap:7px;flex-wrap:wrap;align-items:baseline' },
+          st ? LAB.el('b', { style: 'font-size:10px;color:var(--accent)' }, st === 'sent' ? '📤 SENT' : '🔁 COUNTERED') : '',
+          LAB.el('b', { style: 'font-size:12.5px' }, mgrName(x.rid)),
+          LAB.el('span', { style: 'font-size:12px' }, 'my ' + x.give.map(fmtAsset).join(' + ') + ' ⇄ ' + x.get.map(fmtAsset).join(' + ')),
+          LAB.el('span', { class: 'badge', style: 'font-size:8.5px' }, x.rung),
+          LAB.el('b', { style: 'font-size:10.5px;color:' + t[1] }, t[0]),
+          LAB.el('span', { class: 'mono', style: 'font-size:10.5px;color:#3ee68f' }, '+' + Math.round(x.myGain)),
+          LAB.el('span', { class: 'mono muted', style: 'font-size:10.5px' }, `them ${x.theirGain >= 0 ? '+' : ''}${Math.round(x.theirGain)}`)),
+        x.why ? LAB.el('div', { class: 'muted', style: 'font-size:10.5px;margin-top:1px' }, 'Their angle: ' + x.why) : '',
+        LAB.el('div', { class: 'flex', style: 'gap:5px;margin-top:4px;flex-wrap:wrap' },
+          LAB.el('button', { style: 'font-size:10.5px;padding:1px 8px', onclick: () => navigator.clipboard.writeText(pitchText(x)).then(() => LAB.toast('pitch copied — paste into league chat', 'good')) }, '📋 pitch'),
+          LAB.el('button', { style: 'font-size:10.5px;padding:1px 8px', onclick: () => setStatus(x.h, st === 'sent' ? null : 'sent') }, st === 'sent' ? '📤 sent ✓' : '📤 mark sent'),
+          LAB.el('button', { style: 'font-size:10.5px;padding:1px 8px', title: 'kill this option — the next-best takes its place; reset from the section header', onclick: () => setStatus(x.h, 'dead') }, '💀 dead'),
+          LAB.el('button', { style: 'font-size:10.5px;padding:1px 8px', onclick: () => loadProposal(x.rid, x) }, '⚗ builder'),
+          LAB.el('button', { style: 'font-size:10.5px;padding:1px 8px', onclick: () => { ui.topOpen = open ? null : x.h; render(); } }, open ? '▾ hide' : '▸ details')),
+        open ? card(x) : '');
+    };
+
+    const sectionEl = (S, si, contentEls) => {
+      const el = LAB.el('div', { style: 'border:1.5px solid var(--accent);border-radius:10px;padding:8px 12px 10px;margin-top:10px;background:rgba(255,106,43,.05)' },
+        LAB.el('div', { class: 'flex', style: 'gap:8px;align-items:baseline;flex-wrap:wrap' },
+          LAB.el('b', { class: 'mono', style: 'color:var(--accent);font-size:15px' }, (si + 1) + '.'),
+          LAB.el('b', { style: 'font-family:var(--font-display);font-size:15px' }, S.title),
+          LAB.el('span', { class: 'mono muted', style: 'font-size:10.5px' }, S.meta),
+          S.dead && S.dead.length ? LAB.el('button', {
+            style: 'font-size:9.5px;padding:0 7px;margin-left:auto', title: 'un-kill these options and surface them again',
+            onclick: () => { S.dead.forEach(x => delete statuses[x.h]); save(K_PROPS, statuses); render(); },
+          }, `💀 ${S.dead.length} dead — reset`) : ''));
+      contentEls.forEach(c => el.append(c));
+      return el;
+    };
+
+    // build the action list
     const me0 = L.rosters.find(r => r.rid === C.myRid);
     const slate0 = new Set(C.slate(me0.players, 'true').map(s => s.p.id));
     const spares = me0.players.map(pid => C.byId[pid])
       .filter(p => p && C.eligible(p) && !slate0.has(p.id) && (C.surplusSlots(p, 'true') ?? 0) > 3)
       .sort((a, b2) => (C.surplusSlots(b2, 'true') ?? 0) - (C.surplusSlots(a, 'true') ?? 0));
-    const bestFor = p => props.filter(x => live(x) && x.give.some(a => a.kind === 'player' && a.id === p.id))
-      .sort((a, b2) => b2.score - a.score || b2.myGain - a.myGain)[0];
-    const bestPair = (LAB.pickPairs(C, L) || []).filter(pr => !ui.exclTeams.has(pr.over.rid) && !ui.exclTeams.has(pr.under.rid))[0];
-    if (spares.length || bestPair) {
-      const box = LAB.el('div', { style: 'border:1.5px solid var(--accent);border-radius:10px;padding:8px 12px 10px;margin-top:10px;background:rgba(255,106,43,.06)' },
-        LAB.el('div', { class: 'flex', style: 'gap:8px;align-items:baseline;flex-wrap:wrap' },
-          LAB.el('b', { style: 'font-family:var(--font-display);font-size:14px;color:var(--accent)' }, '⭐ Go for these'),
-          LAB.el('span', { class: 'muted', style: 'font-size:10.5px' }, 'your spare keepers + the best offer alive for each — send these, everything below is the full menu')));
-      let n = 0;
-      const row = (title, deal, tierEl, sub, btns, opened) => box.append(LAB.el('div', { style: 'margin-top:6px;padding-top:6px' + (n++ ? ';border-top:1px solid var(--border)' : '') },
-        LAB.el('div', { class: 'flex', style: 'gap:7px;flex-wrap:wrap;align-items:baseline' },
-          LAB.el('b', { class: 'mono', style: 'color:var(--accent)' }, n + '.'), title, deal, tierEl),
-        sub ? LAB.el('div', { class: 'muted', style: 'font-size:11px;margin:2px 0 0 18px' }, sub) : '',
-        LAB.el('div', { class: 'flex', style: 'gap:6px;margin:4px 0 0 18px;flex-wrap:wrap' }, ...btns),
-        opened || ''));
-      for (const p of spares.slice(0, 5)) {
-        const s = Math.round(C.surplusSlots(p, 'true') ?? 0);
-        const x = bestFor(p);
-        const title = LAB.el('b', { style: 'font-size:13px' }, `Sell ${p.name}`,
-          LAB.el('span', { class: 'mono muted', style: 'font-size:10.5px;font-weight:400' }, ` K R${C.costRd(p)} · +${s} true`));
-        if (!x) { row(title, LAB.el('span', { class: 'muted', style: 'font-size:11.5px' }, 'no live buyer right now — their slates are full or offers died'), '', '', []); continue; }
-        const t = tier(x.score);
-        const open = ui.topOpen === x.h;
-        row(title,
-          LAB.el('span', { style: 'font-size:12px' }, `→ ${mgrName(x.rid)} for ${x.get.map(fmtAsset).join(' + ')}` + (x.give.length > 1 ? ` (with ${x.give.filter(a => !(a.kind === 'player' && a.id === p.id)).map(fmtAsset).join(' + ')})` : '')),
-          LAB.el('b', { style: 'font-size:11px;color:' + t[1] }, t[0]),
-          x.why ? 'Their angle: ' + x.why : '',
-          [LAB.el('button', { style: 'font-size:10.5px;padding:1px 8px', onclick: () => navigator.clipboard.writeText(pitchText(x)).then(() => LAB.toast('pitch copied — paste into league chat', 'good')) }, '📋 pitch'),
-            LAB.el('button', { style: 'font-size:10.5px;padding:1px 8px', onclick: () => setStatus(x.h, 'sent') }, '📤 mark sent'),
-            LAB.el('button', { style: 'font-size:10.5px;padding:1px 8px', onclick: () => { ui.topOpen = open ? null : x.h; render(); } }, open ? '▾ hide card' : '▸ full card')],
-          open ? card(x) : '');
-      }
-      if (bestPair) {
-        row(LAB.el('b', { style: 'font-size:13px' }, 'Pick pair', LAB.el('span', { class: 'mono muted', style: 'font-size:10.5px;font-weight:400' }, ' 2 trades together')),
-          LAB.el('span', { style: 'font-size:12px' },
-            `1) ${mgrName(bestPair.over.rid)}: my R${bestPair.over.give.map(a => a.round).join('+R')} ⇄ R${bestPair.over.get.map(a => a.round).join('+R')} · 2) ${mgrName(bestPair.under.rid)}: my R${bestPair.under.give.map(a => a.round).join('+R')} ⇄ R${bestPair.under.get.map(a => a.round).join('+R')}`),
-          LAB.el('span', { class: 'mono', style: 'font-size:11px;color:#3ee68f' }, `+${Math.round(bestPair.total)} value`),
-          `${mgrName(bestPair.over.rid)} holds extra picks (they all count against the cap); ${mgrName(bestPair.under.rid)} is short on picks — each leg reads fair from their side.`,
-          [LAB.el('button', { style: 'font-size:10.5px;padding:1px 8px', onclick: () => { ui.view = 'pairs'; render(); } }, '⚖ open pick pairs')]);
-      }
-      feedCol.append(box);
+    const used = new Set();
+    const secs = [];
+    for (const p of spares) {
+      const opts = props.filter(x => passes(x) && x.give.some(a => a.kind === 'player' && a.id === p.id)).sort(byScore);
+      opts.forEach(x => used.add(x.h));
+      const live = opts.filter(x => !stOf(x));
+      const sent = opts.filter(x => stOf(x) === 'sent' || stOf(x) === 'countered');
+      const dead = opts.filter(x => stOf(x) === 'dead');
+      secs.push({
+        key: 'sell:' + p.id, title: 'Sell ' + p.name,
+        meta: `K R${C.costRd(p)} · +${Math.round(C.surplusSlots(p, 'true') ?? 0)} true — surplus you keep only by trading him`,
+        live, sent, dead, rank: sent.length ? 9.5 : (live[0]?.score ?? -1),
+      });
     }
-    // collapse identical shapes across teams into one card w/ team chips
-    const groups = new Map();
-    for (const x of list) {
-      const k = shapeKey(x);
-      if (!groups.has(k)) groups.set(k, { k, vs: [] });
-      groups.get(k).vs.push(x);
+    const other = props.filter(x => passes(x) && !used.has(x.h)).sort(byScore);
+    if (other.length) {
+      secs.push({
+        key: 'other', title: 'Other moves', meta: 'pick consolidations & slate buys the sells above don\'t cover',
+        live: other.filter(x => !stOf(x)),
+        sent: other.filter(x => stOf(x) === 'sent' || stOf(x) === 'countered'),
+        dead: other.filter(x => stOf(x) === 'dead'),
+        rank: (other.find(x => !stOf(x))?.score ?? 0) - 2.5,
+      });
     }
-    const glist = [...groups.values()];
-    if (!glist.length) feedCol.append(LAB.el('p', { class: 'muted', style: 'font-size:12.5px;margin-top:10px' }, 'Nothing matches these filters — loosen a dial or clear the shop selection.'));
-    glist.slice(0, ui.showAll ? 999 : 14).forEach(g => {
-      const sel = Math.min(ui.groupSel[g.k] ?? 0, g.vs.length - 1);
-      feedCol.append(card(g.vs[sel], g));
+    secs.sort((a, b2) => b2.rank - a.rank);
+
+    secs.forEach((S, si) => {
+      const parts = [];
+      S.sent.forEach(x => parts.push(optionRow(x)));
+      const shown = ui.expand[S.key] ? S.live : S.live.slice(0, 3);
+      shown.forEach(x => parts.push(optionRow(x)));
+      if (!S.live.length && !S.sent.length) parts.push(LAB.el('p', { class: 'muted', style: 'font-size:11.5px;margin:6px 0 0' },
+        S.dead.length ? 'every option is marked dead — reset above to retry them, or wait for the board to shift' : 'no live buyer right now — their slates are full'));
+      if (S.live.length > 3) parts.push(LAB.el('button', {
+        style: 'font-size:10.5px;margin-top:5px',
+        onclick: () => { ui.expand[S.key] = !ui.expand[S.key]; render(); },
+      }, ui.expand[S.key] ? '▴ fewer' : `▾ ${S.live.length - 3} more option${S.live.length - 3 > 1 ? 's' : ''}`));
+      feedCol.append(sectionEl(S, si, parts));
     });
-    if (!ui.showAll && glist.length > 14) {
-      feedCol.append(LAB.el('button', { style: 'margin-top:8px', onclick: () => { ui.showAll = true; render(); } }, `show all ${glist.length}`));
+
+    // pick balance rides as the final numbered action
+    const pairs = (LAB.pickPairs(C, L) || []).filter(pr => !ui.exclTeams.has(pr.over.rid) && !ui.exclTeams.has(pr.under.rid));
+    if (pairs.length) {
+      const parts = (ui.expand.pairs ? pairs.slice(0, 4) : pairs.slice(0, 1)).map(pairCard);
+      if (pairs.length > 1) parts.push(LAB.el('button', {
+        style: 'font-size:10.5px;margin-top:5px',
+        onclick: () => { ui.expand.pairs = !ui.expand.pairs; render(); },
+      }, ui.expand.pairs ? '▴ fewer' : `▾ ${Math.min(pairs.length, 4) - 1} more pair combos`));
+      feedCol.append(sectionEl({ title: 'Balance the pick ledger', meta: 'two pick-only trades accepted together — consolidate up with an over-16 team, shed to a short one' }, secs.length, parts));
     }
+    if (!secs.length && !pairs.length) feedCol.append(LAB.el('p', { class: 'muted', style: 'font-size:12.5px;margin-top:10px' },
+      'Nothing actionable — no spare keepers with surplus and no workable pick pairs. Loosen a dial or clear exclusions.'));
+
     row.append(feedCol);
     row.append(campaignRail());
     root.append(row);
