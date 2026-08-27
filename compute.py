@@ -1335,6 +1335,18 @@ for e in players_out:
                + 0.128 * (ts_p if ts_p is not None else 50))
     qz_p = pct(e["id"], "qrza")
     safety = 0.7225 * safety + 0.2775 * (qz_p if qz_p is not None else 50)
+    # P5 interaction winners (LAB_OVERHAUL Phase 2): compound signals the
+    # linear pillars can't express. posshare*vac = "owns his position room
+    # AND opportunity just vacated" (ceiling: 5/5 schemes, pooled +16.5 ->
+    # +19.1, 12/12 seasons); snp*dage = "young pedigree AND already on the
+    # field" (safety: 4/5, +14.6 -> +16.4, 11/12). Missing product -> 25
+    # (an absent compound is a mild negative, not neutral).
+    ps_p, vc_p = pct(e["id"], "posshare"), pct(e["id"], "vac")
+    _iv = (ps_p * vc_p / 100.0) if (ps_p is not None and vc_p is not None) else 25.0
+    ceiling = 0.90 * ceiling + 0.10 * _iv
+    sn_p, dg_p = pct(e["id"], "snp"), pct(e["id"], "dage")
+    _iv2 = (sn_p * dg_p / 100.0) if (sn_p is not None and dg_p is not None) else 25.0
+    safety = 0.90 * safety + 0.10 * _iv2
     # depth-chart guard (live Sleeper depth charts, unbacktestable but
     # cheap insurance): a player listed 3rd+ at his position doesn't get to
     # keep a full stats-based grade — new signings over him show up here

@@ -869,6 +869,13 @@ def build_season(Y):
                    + 0.128 * (ts_pv if ts_pv is not None else 50))
         qz_pv = pct(pos, m, "qrza")
         safety = 0.7225 * safety + 0.2775 * (qz_pv if qz_pv is not None else 50)
+        # P5 parity: interaction winners (see LAB_OVERHAUL Phase 2)
+        ps_pv, vc_pv = pct(pos, m, "posshare"), pct(pos, m, "vac")
+        _ivv = (ps_pv * vc_pv / 100.0) if (ps_pv is not None and vc_pv is not None) else 25.0
+        ceiling = 0.90 * ceiling + 0.10 * _ivv
+        sn_pv, dg_pv2 = pct(pos, m, "snp"), pct(pos, m, "dage")
+        _ivv2 = (sn_pv * dg_pv2 / 100.0) if (sn_pv is not None and dg_pv2 is not None) else 25.0
+        safety = 0.90 * safety + 0.10 * _ivv2
         wc = max(0.15, min(0.85, (m["adp"] - 24) / 96))
         fin = (1 - wc) * safety + wc * ceiling
         if est:
@@ -910,6 +917,7 @@ def build_season(Y):
                          team_opp.get(t), team_opp2.get(t))))(ros_now.get(pid)),
                      "occhg": oc_changed(ros_now.get(pid), Y) if ros_now.get(pid) else None,
                      "hcchg": hc_changed(ros_now.get(pid), Y) if ros_now.get(pid) else None,
+                     "team_now": ros_now.get(pid),
                      # -- full feature-percentile library (ML retest) --
                      "feat": {k2: pct(pos, m, k2) for k2 in FEAT_KEYS},
                      # -- ceiling-fix fields (round 4) --
@@ -2377,3 +2385,178 @@ if "ngstest" in sys.argv:
     print("\n   stepwise vs CURRENT shipped baseline:")
     stepwise7("CEILING", late, hit, False, ship_c)
     stepwise7("SAFETY ", early, bust, True, ship_s)
+
+# ============ P5: INTERACTION TERMS (LAB_OVERHAUL Phase 2) ============
+# run: python backtest_labscore.py intertest
+# Pairwise products of the strongest screened features (percentile *
+# percentile / 100). GBM's +3 nonlinearity bound caps expectations.
+# Standard rule: mean > +1.5, >=4/5 schemes, on the current baseline.
+if "intertest" in sys.argv:
+    print("\n" + "=" * 20 + " P5: INTERACTION TERMS " + "=" * 20)
+    SHORT = ["tshare", "wopr", "yptpa", "rypg", "snp", "tpg", "dc", "dage",
+             "youth", "posshare", "rzsh", "bfshare", "peak", "boomr", "qrza", "vac"]
+    late = [r for r in all_rows if 84 <= r["adp"] <= 240 and r["outcome"]]
+    early = [r for r in all_rows if r["adp"] <= 36 and r["outcome"]]
+    ODD8 = {y for y in SEASONS if y % 2 == 1}
+    EVEN8 = {y for y in SEASONS if y % 2 == 0}
+    SCH8 = [("FWD", set(range(2022, 2026))), ("REV", set(range(2014, 2022))),
+            ("ODD", ODD8), ("EVEN", EVEN8)]
+    nz8 = lambda v: 50.0 if v is None else v
+
+    def inter(r, a, b):
+        va, vb = r["feat"].get(a), r["feat"].get(b)
+        if va is None or vb is None:
+            return None
+        return va * vb / 100.0
+
+    def gap8(fn, rows_, years, flag, invert=False):
+        sub = [(fn(r), r) for r in rows_ if r["season"] in years and fn(r) is not None]
+        if len(sub) < 30:
+            return None
+        sub.sort(key=lambda t: -t[0])
+        h = len(sub) // 2
+        top = 100.0 * sum(flag(r) for _, r in sub[:h]) / h
+        bot = 100.0 * sum(flag(r) for _, r in sub[h:]) / (len(sub) - h)
+        return (bot - top) if invert else (top - bot)
+
+    def eval8(fn, rows_, flag, invert=False):
+        vals = [gap8(fn, rows_, test, flag, invert) for _, test in SCH8]
+        loso = [v for v in (gap8(fn, rows_, {y}, flag, invert) for y in SEASONS) if v is not None]
+        vals.append(sum(loso) / len(loso) if loso else None)
+        return vals
+
+    fmt8 = lambda vals: " ".join("  none" if v is None else f"{v:+6.1f}" for v in vals)
+    pairs = [(a, b) for i, a in enumerate(SHORT) for b in SHORT[i + 1:]]
+    print(f"   {len(pairs)} candidate products")
+
+    for side, rows_, flag, invert, base_fn in (
+            ("CEILING", late, hit, False, lambda r: r["ceiling"]),
+            ("SAFETY ", early, bust, True, lambda r: r["safety"])):
+        base_vals = eval8(base_fn, rows_, flag, invert)
+        cur_fn, cur_vals = base_fn, base_vals
+        print(f"   {side} baseline {fmt8(base_vals)}")
+        for step in range(3):
+            best = None
+            for a, b in pairs:
+                for w in (0.10, 0.15):
+                    def cand(r, _a=a, _b=b, _w=w, _f=cur_fn):
+                        v = _f(r)
+                        if v is None:
+                            return None
+                        iv = inter(r, _a, _b)
+                        return (1 - _w) * v + _w * (iv if iv is not None else 25.0)
+                    vals = eval8(cand, rows_, flag, invert)
+                    ds = [v2 - b2 for v2, b2 in zip(vals, cur_vals) if v2 is not None and b2 is not None]
+                    if len(ds) < 5:
+                        continue
+                    mean = sum(ds) / len(ds)
+                    pos_n = sum(1 for d in ds if d > 0)
+                    if mean > 1.5 and pos_n >= 4 and (best is None or mean > best[0]):
+                        best = (mean, pos_n, a, b, w, cand, vals)
+            if best is None:
+                print(f"   {side} step {step + 1}: nothing passes. STOP.")
+                break
+            mean, pos_n, a, b, w, cand, vals = best
+            cur_fn, cur_vals = cand, vals
+            print(f"   {side} ADOPTED +{a}x{b} w={w} (mean {mean:+.1f}, {pos_n}/5) -> {fmt8(vals)}")
+
+# ============ P6: STRENGTH OF SCHEDULE (LAB_OVERHAUL Phase 2) ============
+# run: python backtest_labscore.py sostest
+# As-of-August SoS: mean of the CURRENT season's opponents' PRIOR-year
+# points allowed per game (nfldata games.csv scores). Situation-side
+# candidate under the standard rule.
+if "sostest" in sys.argv:
+    print("\n" + "=" * 20 + " P6: STRENGTH OF SCHEDULE " + "=" * 20)
+    _gf = CACHE / "games_full.csv"
+    if not _gf.exists():
+        _rq = urllib.request.Request(
+            "https://raw.githubusercontent.com/nflverse/nfldata/master/data/games.csv", headers=UA)
+        with urllib.request.urlopen(_rq, timeout=120) as _resp:
+            _gf.write_bytes(_resp.read())
+    TEAM_FIX = {"LA": "LAR", "OAK": "LV", "SD": "LAC", "STL": "LAR"}
+    fix = lambda t: TEAM_FIX.get(t, t)
+    pa = {}      # (year, team) -> [points allowed]
+    sched = {}   # (year, team) -> [opponents]
+    for row in csv.DictReader(io.StringIO(_gf.read_text(encoding="utf-8"))):
+        if row.get("game_type") != "REG" or not row.get("home_score"):
+            continue
+        y = int(row["season"])
+        h, a = fix(row["home_team"]), fix(row["away_team"])
+        try:
+            hs, as_ = float(row["home_score"]), float(row["away_score"])
+        except ValueError:
+            continue
+        pa.setdefault((y, h), []).append(as_)
+        pa.setdefault((y, a), []).append(hs)
+        sched.setdefault((y, h), []).append(a)
+        sched.setdefault((y, a), []).append(h)
+    SOS = {}     # (year, team) -> mean prior-yr pts allowed of listed opponents
+    for (y, t), opps in sched.items():
+        vals = [sum(pa[(y - 1, o)]) / len(pa[(y - 1, o)]) for o in opps if (y - 1, o) in pa]
+        if vals:
+            SOS[(y, t)] = sum(vals) / len(vals)
+    print(f"   SoS computed for {len(SOS)} team-seasons")
+    # attach as a feature: higher = softer schedule
+    n_sos = 0
+    for r in all_rows:
+        t = r.get("team_now")
+        v = SOS.get((r["season"], t)) if t else None
+        r["sos_p"] = None
+        if v is not None:
+            r["_sos_raw"] = v
+            n_sos += 1
+    # percentile within season (schedule strength is a season-relative thing)
+    for y in SEASONS:
+        ys = sorted(r["_sos_raw"] for r in all_rows if r["season"] == y and "_sos_raw" in r)
+        if not ys:
+            continue
+        import bisect as _b
+        for r in all_rows:
+            if r["season"] == y and "_sos_raw" in r:
+                lo = _b.bisect_left(ys, r["_sos_raw"])
+                hi = _b.bisect_right(ys, r["_sos_raw"])
+                r["sos_p"] = 100.0 * ((lo + hi) / 2) / len(ys)
+    print(f"   attached to {n_sos}/{len(all_rows)} rows")
+    late = [r for r in all_rows if 84 <= r["adp"] <= 240 and r["outcome"]]
+    early = [r for r in all_rows if r["adp"] <= 36 and r["outcome"]]
+    ODD9 = {y for y in SEASONS if y % 2 == 1}
+    EVEN9 = {y for y in SEASONS if y % 2 == 0}
+    SCH9 = [("FWD", set(range(2022, 2026))), ("REV", set(range(2014, 2022))),
+            ("ODD", ODD9), ("EVEN", EVEN9)]
+
+    def gap9(fn, rows_, years, flag, invert=False):
+        sub = [(fn(r), r) for r in rows_ if r["season"] in years and fn(r) is not None]
+        if len(sub) < 30:
+            return None
+        sub.sort(key=lambda t: -t[0])
+        h = len(sub) // 2
+        top = 100.0 * sum(flag(r) for _, r in sub[:h]) / h
+        bot = 100.0 * sum(flag(r) for _, r in sub[h:]) / (len(sub) - h)
+        return (bot - top) if invert else (top - bot)
+
+    def eval9(fn, rows_, flag, invert=False):
+        vals = [gap9(fn, rows_, test, flag, invert) for _, test in SCH9]
+        loso = [v for v in (gap9(fn, rows_, {y}, flag, invert) for y in SEASONS) if v is not None]
+        vals.append(sum(loso) / len(loso) if loso else None)
+        return vals
+
+    fmt9 = lambda vals: " ".join("  none" if v is None else f"{v:+6.1f}" for v in vals)
+    nz9 = lambda v: 50.0 if v is None else v
+    uni_h = eval9(lambda r: r["sos_p"], late, hit)
+    uni_b = eval9(lambda r: r["sos_p"], early, bust, True)
+    print(f"   SoS alone: hit {fmt9(uni_h)} | bust {fmt9(uni_b)}")
+    for side, rows_, flag, invert, base_fn in (
+            ("CEILING", late, hit, False, lambda r: r["ceiling"]),
+            ("SAFETY ", early, bust, True, lambda r: r["safety"])):
+        base_vals = eval9(base_fn, rows_, flag, invert)
+        print(f"   {side} baseline {fmt9(base_vals)}")
+        for w in (0.08, 0.12):
+            def cand(r, _w=w):
+                v = base_fn(r)
+                return None if v is None else (1 - _w) * v + _w * nz9(r["sos_p"])
+            vals = eval9(cand, rows_, flag, invert)
+            ds = [v2 - b2 for v2, b2 in zip(vals, base_vals) if v2 is not None and b2 is not None]
+            mean = sum(ds) / len(ds)
+            pos_n = sum(1 for d in ds if d > 0)
+            verdict = "CHANGE MODEL <<<" if (mean > 1.5 and pos_n >= 4) else "no change"
+            print(f"   {side} +sos w={w}: {fmt9(vals)}  mean {mean:+.1f} ({pos_n}/5)  {verdict}")
