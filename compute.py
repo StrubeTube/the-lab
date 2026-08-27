@@ -522,20 +522,55 @@ try:
 except FileNotFoundError:
     pass
 if vegas_raw:
+    def _vprob(cost):
+        """American odds -> implied probability."""
+        if cost is None:
+            return None
+        try:
+            cost = float(cost)
+        except (TypeError, ValueError):
+            return None
+        if cost == 0:
+            return None
+        return (-cost) / (-cost + 100.0) if cost < 0 else 100.0 / (cost + 100.0)
+
+    VSTALE = {"n": 0}
+
     def vegas_line(offer):
-        """Consensus O/U line: BettingPros book 0 main line, else opening."""
+        """Consensus O/U line: BettingPros book 0 main line, else opening.
+        STALE-LINE GUARD (2026-08-27, the Charbonnet find): books sometimes
+        leave a dead line posted and price the correction into the juice
+        (his rush yds sat at 749.5 with the under -1901 — the market
+        actually believes far less). De-vig the two-way prices; if implied
+        P(over) leaves [0.30, 0.70] the posted number no longer reflects
+        the market's median, so the line is treated as absent."""
+        sides = {}
+        opening = None
         for sel in offer.get("selections") or []:
-            if (sel.get("selection") or "").lower() != "over":
-                continue
+            side = (sel.get("selection") or "").lower()
             for bk in sel.get("books") or []:
                 if bk.get("id") == 0:
                     for ln in bk.get("lines") or []:
                         if ln.get("main") and ln.get("line") is not None:
-                            return ln["line"]
-            op = sel.get("opening_line") or {}
-            if op.get("line") is not None:
-                return op["line"]
-        return None
+                            sides[side] = (ln["line"], ln.get("cost"))
+            if side == "over" and opening is None:
+                op = sel.get("opening_line") or {}
+                if op.get("line") is not None:
+                    opening = op["line"]
+        if "over" in sides:
+            line, oc = sides["over"]
+            uc = sides.get("under", (None, None))[1]
+            po, pu = _vprob(oc), _vprob(uc)
+            if po is not None and pu is not None and (po + pu) > 0:
+                pov = po / (po + pu)
+                if not (0.30 <= pov <= 0.70):
+                    VSTALE["n"] += 1
+                    return None       # dead line — juice says the number moved
+            elif po is not None and not (0.25 <= po <= 0.75):
+                VSTALE["n"] += 1
+                return None           # one-sided quote at an extreme price
+            return line
+        return opening
 
     vlines = {}  # (norm name, pos) -> {stat: line}
     for stat, offers in vegas_raw.items():
@@ -599,7 +634,8 @@ if vegas_raw:
         e["ocrs"] = rr
         e["ocr"] = round(sum(rr.values()) / len(rr), 2)
         e["ocr_n"] = len(rr)
-    print(f"  vegas: {vmatched} players priced ({vunmatched} outside pool), "
+    print(f"  vegas: {vmatched} players priced ({vunmatched} outside pool, "
+          f"{VSTALE['n']} stale lines dropped by the de-vig guard), "
           f"baselines {[f'{p}:{baseline.get(p)}' for p in POS]}")
     top_missing = [e["name"] for e in players_out
                    if e["pos"] in POS and e.get("adp") and e["adp"] <= 100 and "cr" not in e]
