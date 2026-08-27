@@ -245,6 +245,24 @@ def fetch_nflverse():
         else:
             print(f"  FAIL roster_{yr}")
         save(name, roster)
+    # nflverse season player stats: QB PACR (air conversion) feeds the
+    # ceiling per LAB_OVERHAUL.md — prior season + one back for the blend
+    for name2, yr2 in (("nflverse_pstats.json", int(PREV_SEASON)),
+                       ("nflverse_pstats2.json", int(PREV_SEASON) - 1)):
+        b2 = get(f"https://github.com/nflverse/nflverse-data/releases/download/stats_player/stats_player_reg_{yr2}.csv")
+        out2 = []
+        if b2:
+            for row in csv.DictReader(io.StringIO(b2.decode("utf-8", "replace"))):
+                if row.get("position") == "QB" and row.get("pacr") not in (None, ""):
+                    try:
+                        out2.append({"n": row.get("player_display_name"),
+                                     "pacr": float(row["pacr"])})
+                    except ValueError:
+                        pass
+            print(f"  pstats_{yr2}: {len(out2)} QB PACR rows")
+        else:
+            print(f"  FAIL pstats_{yr2}")
+        save(name2, out2)
 
 
 def fetch_contracts():

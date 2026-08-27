@@ -1009,6 +1009,15 @@ except (OSError, ValueError):
 otc = load_opt("otc_contracts.json", [])
 otc_by = {norm(c["n"]) + "|" + c["p"]: c for c in otc if c.get("n")}
 
+# nflverse QB air conversion (PACR) — LAB_OVERHAUL.md ceiling input
+def _pacr_map(fname):
+    try:
+        return {norm(r2.get("n") or ""): r2.get("pacr") for r2 in load(fname)}
+    except FileNotFoundError:
+        return {}
+PACR1 = _pacr_map("nflverse_pstats.json")
+PACR2 = _pacr_map("nflverse_pstats2.json")
+
 # phase 4 manual inputs: Vegas win totals + PFF O-line rank (data/team_context.json)
 try:
     TEAM_CTX = json.loads((ROOT / "data" / "team_context.json").read_text(encoding="utf-8"))["teams"]
@@ -1156,6 +1165,18 @@ for e in players_out:
     m["dc"] = DC_VAL.get(lab.get("dcr"), 0.15)
     m["youth"] = max(0.0, min(1.0, (27 - (lab.get("age") or 27)) / 6))
     m["proj"] = e.get("proj") or 0
+    # draft age (LAB_OVERHAUL.md): age the year he was drafted, inverted —
+    # the free proxy for college breakout age / early declare
+    if lab.get("dcy") and lab.get("age"):
+        m["dage"] = -(lab["age"] - (int(meta.get("season", 2026)) - int(lab["dcy"])))
+    # QB air conversion (PACR), 2-yr 0.65/0.35 blend
+    if e["pos"] == "QB":
+        _pk = norm(e.get("name") or "")
+        _p1, _p2 = PACR1.get(_pk), PACR2.get(_pk)
+        if _p1 is not None and _p2 is not None:
+            m["pacr"] = 0.65 * _p1 + 0.35 * _p2
+        elif _p1 is not None or _p2 is not None:
+            m["pacr"] = _p1 if _p1 is not None else _p2
     # contract: APY = how seriously the team invests in the role; years of
     # control = security. Rookie-deal stars score low on APY but high on dc.
     ct = otc_by.get(norm(e.get("name") or "") + "|" + e["pos"])
@@ -1288,6 +1309,17 @@ for e in players_out:
     peak_p = pct(e["id"], "peak")
     if peak_p is not None:
         ceiling = 0.90 * ceiling + 0.10 * peak_p
+    # OVERHAUL 2026-08-27 (LAB_OVERHAUL.md): the two stepwise winners from
+    # the full-library ML retest, each passing the 5-scheme pre-registered
+    # rule. DRAFT AGE (the free proxy for college breakout age / early
+    # declare) into safety: mean +3.5, 4/5 schemes, pooled bust gap
+    # +7.2 -> +13.7, better-or-equal 10/12 seasons. QB AIR CONVERSION
+    # (nflverse PACR) into ceiling: mean +2.2, 4/5, never worse 12/12 —
+    # the Goff/efficient-vet archetype the miss autopsy kept flagging.
+    dage_p = pct(e["id"], "dage")
+    safety = 0.85 * safety + 0.15 * (dage_p if dage_p is not None else 50)
+    pacr_p = pct(e["id"], "pacr")
+    ceiling = 0.85 * ceiling + 0.15 * (pacr_p if pacr_p is not None else 50)
     # depth-chart guard (live Sleeper depth charts, unbacktestable but
     # cheap insurance): a player listed 3rd+ at his position doesn't get to
     # keep a full stats-based grade — new signings over him show up here

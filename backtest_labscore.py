@@ -237,6 +237,98 @@ try:
             SPD_MAP[norm(_r.get("player_name")) + "|" + _r["pos"]] = _w * 200 / (_f ** 4)
 except Exception as _e:
     print("combine load failed (speed-score tests degrade):", _e)
+
+# ---- overhaul feature layer (LAB_OVERHAUL.md, 2026-08-27) ----
+# combine athletic extras: burst (vertical + broad), agility (3-cone +
+# shuttle, inverted), BMI — same norm(name)|pos join as speed score
+ATH_MAP = {}
+try:
+    _cmb2 = list(csv.DictReader(io.StringIO((CACHE / "combine.csv").read_text(encoding="utf-8"))))
+    def _fnum(x):
+        try:
+            return float(x) if x not in (None, "") else None
+        except ValueError:
+            return None
+    for _r in _cmb2:
+        if _r.get("pos") not in ("QB", "RB", "WR", "TE"):
+            continue
+        _k = norm(_r.get("player_name")) + "|" + _r["pos"]
+        _vert, _brd = _fnum(_r.get("vertical")), _fnum(_r.get("broad_jump"))
+        _cone, _sh = _fnum(_r.get("cone")), _fnum(_r.get("shuttle"))
+        _wt2, _ht = _fnum(_r.get("wt")), _r.get("ht") or ""
+        _hin = None
+        if "-" in _ht:
+            try:
+                _ft, _in = _ht.split("-")
+                _hin = int(_ft) * 12 + int(_in)
+            except ValueError:
+                pass
+        _d = ATH_MAP.setdefault(_k, {})
+        if _vert is not None and _brd is not None:
+            _d["burst"] = _vert + _brd / 3.0
+        if _cone is not None and _sh is not None:
+            _d["agil"] = -(_cone + _sh)
+        if _wt2 is not None and _hin:
+            _d["bmi"] = 703.0 * _wt2 / (_hin ** 2)
+except OSError:
+    pass
+
+# nflverse season player stats (EPA / CPOE / WOPR / RACR / PACR), 2012+,
+# keyed by gsis id — the efficiency layer Sleeper box scores can't see
+PSTATS = {}
+for _y in range(2012, 2026):
+    _pf = CACHE / f"pstats_{_y}.json"
+    if _pf.exists():
+        PSTATS[_y] = json.loads(_pf.read_text(encoding="utf-8"))
+        continue
+    print(f"  fetching stats_player_reg_{_y}.csv...")
+    try:
+        _rq = urllib.request.Request(
+            f"https://github.com/nflverse/nflverse-data/releases/download/stats_player/stats_player_reg_{_y}.csv",
+            headers=UA)
+        with urllib.request.urlopen(_rq, timeout=120) as _resp:
+            _prow = list(csv.DictReader(io.StringIO(_resp.read().decode("utf-8", "replace"))))
+    except Exception as _e:
+        print(f"  pstats {_y} failed: {_e}")
+        PSTATS[_y] = {}
+        continue
+    _out = {}
+    for _r in _prow:
+        _g = _r.get("player_id")
+        if not _g:
+            continue
+        _e2 = {}
+        for _k2 in ("games", "passing_epa", "passing_cpoe", "pacr", "rushing_epa",
+                    "receiving_epa", "racr", "target_share", "air_yards_share", "wopr"):
+            try:
+                _v2 = _r.get(_k2)
+                _e2[_k2] = float(_v2) if _v2 not in (None, "") else None
+            except ValueError:
+                _e2[_k2] = None
+        _out[_g] = _e2
+    PSTATS[_y] = _out
+    _pf.write_text(json.dumps(_out), encoding="utf-8")
+
+# full prior-season weekly points (boom rate / consistency), 2013+
+WEEKPTS = {}
+for _y in range(2013, 2025):
+    for _w in range(1, 19 if _y >= 2021 else 18):
+        _d3 = cached(f"wk_{_y}_{_w}.json",
+                     f"https://api.sleeper.app/v1/stats/nfl/regular/{_y}/{_w}")
+        for _pid, _st in (_d3 or {}).items():
+            if (isinstance(_st, dict) and _st.get("pts_half_ppr") is not None
+                    and (_st.get("gp") or _st.get("off_snp") or _st.get("rec_tgt")
+                         or _st.get("rush_att") or _st.get("pass_att"))):
+                WEEKPTS.setdefault((_y, _pid), []).append(_st["pts_half_ppr"])
+
+# every candidate percentile the ML retest sees (order = report order)
+FEAT_KEYS = ["wo", "snp", "tshare", "ayshare", "yptpa", "tpg", "rypg", "ypt", "yac",
+             "tprr", "qrypg", "papg", "qrza", "pypg", "ypa", "tdluck", "offq", "qbq",
+             "weapons", "bfshare", "posshare", "vac", "vaca", "alvl", "aslp", "youth",
+             "odo", "peak", "tddep", "rzsh", "adot", "tsdelta", "lategrow", "ugap",
+             "unrl", "injb", "dur", "dc", "spd", "btk", "burst", "agil", "bmi",
+             "dage", "pepa", "cpoe", "pacr", "ruepa", "repa", "racr", "wopr",
+             "boomr", "wkcv", "adpinv"]
 AGE_CURVE = {
     "RB": [(21, 0.85), (23, 1.0), (26, 0.97), (27, 0.83), (28, 0.76),
            (29, 0.62), (30, 0.45), (32, 0.25), (35, 0.10)],
@@ -581,6 +673,38 @@ def build_season(Y):
             m["btk"] = 0.65 * bt1 + 0.35 * bt2
         elif bt1 is not None or bt2 is not None:
             m["btk"] = bt1 if bt1 is not None else bt2
+        # --- overhaul feature layer (LAB_OVERHAUL.md) ---
+        ath = ATH_MAP.get(norm(p.get("full_name")) + "|" + pos) or {}
+        for k2 in ("burst", "agil", "bmi"):
+            if ath.get(k2) is not None:
+                m[k2] = ath[k2]
+        if dc and age:
+            m["dage"] = -(age - (Y - dc["season"]))  # age AT draft, younger = higher
+        ps1 = PSTATS.get(Y - 1, {}).get(gid) or {}
+        ps2 = PSTATS.get(Y - 2, {}).get(gid) or {}
+        for kk, sk, perg in (("pepa", "passing_epa", 1), ("ruepa", "rushing_epa", 1),
+                             ("repa", "receiving_epa", 1), ("cpoe", "passing_cpoe", 0),
+                             ("pacr", "pacr", 0), ("racr", "racr", 0), ("wopr", "wopr", 0)):
+            def _pv(d):
+                v = d.get(sk)
+                if v is None:
+                    return None
+                if perg:
+                    g2 = d.get("games") or 0
+                    return v / g2 if g2 else None
+                return v
+            v1, v2 = _pv(ps1), _pv(ps2)
+            if v1 is not None and v2 is not None:
+                m[kk] = 0.65 * v1 + 0.35 * v2
+            elif v1 is not None or v2 is not None:
+                m[kk] = v1 if v1 is not None else v2
+        wpts = WEEKPTS.get((Y - 1, pid))
+        if wpts and len(wpts) >= 6:
+            mean_w = sum(wpts) / len(wpts)
+            m["boomr"] = sum(1 for x in wpts if x >= 15) / len(wpts)
+            if mean_w > 4:
+                sd = (sum((x - mean_w) ** 2 for x in wpts) / len(wpts)) ** 0.5
+                m["wkcv"] = -(sd / mean_w)
         raw[pid] = (pos, m)
 
     # percentiles within position
@@ -715,6 +839,8 @@ def build_season(Y):
                          team_opp.get(t), team_opp2.get(t))))(ros_now.get(pid)),
                      "occhg": oc_changed(ros_now.get(pid), Y) if ros_now.get(pid) else None,
                      "hcchg": hc_changed(ros_now.get(pid), Y) if ros_now.get(pid) else None,
+                     # -- full feature-percentile library (ML retest) --
+                     "feat": {k2: pct(pos, m, k2) for k2 in FEAT_KEYS},
                      # -- ceiling-fix fields (round 4) --
                      "spd_p": pct(pos, m, "spd"), "btk_p": pct(pos, m, "btk"),
                      "vaca_p": pct(pos, m, "vaca"), "adp_pp": adp_p,
@@ -1610,3 +1736,333 @@ if "ceiltest" in sys.argv:
     base_mag = eval4(ceil_full, hit_mag)
     report4("MAGNITUDE OBJECTIVE (QB/TE top-6, RB/WR top-12) — exploratory", base_mag,
             [(lbl, eval4(fn, hit_mag)) for lbl, fn in VARS])
+
+
+# ==================== ML RETEST (LAB_OVERHAUL.md, 2026-08-27) ====================
+# run: python backtest_labscore.py mltest
+# The full-overhaul analysis: univariate screen of every feature ever
+# collected, L1-regularized logistic + gradient-boosting ORACLES (LOSO by
+# season, never shipped directly), the weight-system question, and the
+# forward-stepwise combosearch that is the only path to shipping changes
+# (grand-audit rule: mean delta > +1.5 AND >=4/5 schemes).
+if "mltest" in sys.argv:
+    import numpy as np
+    from sklearn.linear_model import LogisticRegression
+    from sklearn.ensemble import HistGradientBoostingClassifier
+
+    print("\n" + "=" * 22 + " ML RETEST (LAB_OVERHAUL.md) " + "=" * 22)
+    ODD5 = {y for y in SEASONS if y % 2 == 1}
+    EVEN5 = {y for y in SEASONS if y % 2 == 0}
+    SCH5 = [("FWD", set(range(2022, 2026))), ("REV", set(range(2014, 2022))),
+            ("ODD", ODD5), ("EVEN", EVEN5)]
+
+    late = [r for r in all_rows if 84 <= r["adp"] <= 240 and r["outcome"]]
+    early = [r for r in all_rows if r["adp"] <= 36 and r["outcome"]]
+    print(f"pools: late {len(late)} rows ({sum(map(hit, late))} hits) | "
+          f"early {len(early)} rows ({sum(map(bust, early))} busts)")
+
+    def matrix(rows_, keys):
+        X = np.full((len(rows_), len(keys)), np.nan)
+        for i, r in enumerate(rows_):
+            for j, k in enumerate(keys):
+                v = r["feat"].get(k)
+                if v is not None:
+                    X[i, j] = v
+        return X
+
+    def gap_vec(scores, rows_, mask, flag, invert=False):
+        sub = [(scores[i], rows_[i]) for i in range(len(rows_))
+               if mask[i] and scores[i] is not None and not np.isnan(scores[i])]
+        if len(sub) < 30:
+            return None
+        sub.sort(key=lambda t: -t[0])
+        h = len(sub) // 2
+        top = 100.0 * sum(flag(r) for _, r in sub[:h]) / h
+        bot = 100.0 * sum(flag(r) for _, r in sub[h:]) / (len(sub) - h)
+        return (bot - top) if invert else (top - bot)
+
+    def eval_vec(scores, rows_, flag, invert=False):
+        seas = np.array([r["season"] for r in rows_])
+        vals = [gap_vec(scores, rows_, np.isin(seas, list(test)), flag, invert)
+                for _, test in SCH5]
+        loso = [v for v in (gap_vec(scores, rows_, seas == y, flag, invert)
+                            for y in SEASONS) if v is not None]
+        vals.append(sum(loso) / len(loso) if loso else None)
+        return vals
+
+    def fmt5(vals):
+        return " ".join("  none" if v is None else f"{v:+6.1f}" for v in vals)
+
+    # ---------------- 1. UNIVARIATE SCREEN ----------------
+    print("\n---- 1. UNIVARIATE SCREEN (each feature alone; LOSO-mean gap, % folds positive) ----")
+    Xl_all = matrix(late, FEAT_KEYS)
+    Xe_all = matrix(early, FEAT_KEYS)
+    seas_l = np.array([r["season"] for r in late])
+    seas_e = np.array([r["season"] for r in early])
+    uni = []
+    for j, k in enumerate(FEAT_KEYS):
+        cov = 100.0 * np.mean(~np.isnan(Xl_all[:, j]))
+        hg = [gap_vec(Xl_all[:, j], late, seas_l == y, hit) for y in SEASONS]
+        hg = [v for v in hg if v is not None]
+        bg = [gap_vec(Xe_all[:, j], early, seas_e == y, bust, invert=True) for y in SEASONS]
+        bg = [v for v in bg if v is not None]
+        uni.append((k, cov,
+                    sum(hg) / len(hg) if hg else None, 100.0 * sum(1 for v in hg if v > 0) / len(hg) if hg else 0,
+                    sum(bg) / len(bg) if bg else None, 100.0 * sum(1 for v in bg if v > 0) / len(bg) if bg else 0))
+    uni.sort(key=lambda t: -(t[2] if t[2] is not None else -99))
+    print(f"   {'feature':10} {'cov%':>5} | {'hit-gap':>8} {'stab%':>6} | {'bust-gap':>8} {'stab%':>6}")
+    for k, cov, h_, hs, b_, bs in uni:
+        hh = "   n/a" if h_ is None else f"{h_:+6.1f}"
+        bb = "   n/a" if b_ is None else f"{b_:+6.1f}"
+        print(f"   {k:10} {cov:5.0f} | {hh:>8} {hs:5.0f}% | {bb:>8} {bs:5.0f}%")
+
+    # ---------------- 2/3. MODEL ORACLES (LOSO OOS) ----------------
+    KEYS_NM = [k for k in FEAT_KEYS if k != "adpinv"]   # market-free set
+
+    def prep(X):
+        Z = X.copy()
+        Z[np.isnan(Z)] = 50.0
+        return (Z - 50.0) / 29.0
+
+    def loso_probs(X, y, seas, make):
+        p = np.full(len(y), np.nan)
+        for yy in SEASONS:
+            tr, te = seas != yy, seas == yy
+            if te.sum() == 0 or len(set(y[tr])) < 2:
+                continue
+            mdl = make()
+            mdl.fit(X[tr], y[tr])
+            p[te] = mdl.predict_proba(X[te])[:, 1]
+        return p
+
+    def l1_stability(X, y, seas, C):
+        nz = np.zeros(X.shape[1])
+        coefs = np.zeros(X.shape[1])
+        n = 0
+        for yy in SEASONS:
+            tr = seas != yy
+            if len(set(y[tr])) < 2:
+                continue
+            mdl = LogisticRegression(penalty="l1", C=C, solver="liblinear", max_iter=2000)
+            mdl.fit(prep(X)[tr], y[tr])
+            nz += (np.abs(mdl.coef_[0]) > 1e-6)
+            coefs += mdl.coef_[0]
+            n += 1
+        return nz / n, coefs / n
+
+    y_l = np.array([1 if hit(r) else 0 for r in late])
+    y_e = np.array([1 if bust(r) else 0 for r in early])
+    Xl_nm = matrix(late, KEYS_NM)
+    Xe_nm = matrix(early, KEYS_NM)
+
+    def gbm():
+        return HistGradientBoostingClassifier(max_iter=300, max_depth=3,
+                                              learning_rate=0.06,
+                                              min_samples_leaf=40, random_state=7)
+
+    print("\n---- 2. L1 LOGISTIC (market-free, LOSO OOS; 3 regularization strengths) ----")
+    l1_late = {}
+    for C in (0.03, 0.1, 0.3):
+        pl = loso_probs(prep(Xl_nm), y_l, seas_l, lambda: LogisticRegression(
+            penalty="l1", C=C, solver="liblinear", max_iter=2000))
+        l1_late[C] = pl
+        print(f"   C={C:<5} late hit-gap  {fmt5(eval_vec(pl, late, hit))}")
+    l1_early = {}
+    for C in (0.03, 0.1, 0.3):
+        pe = loso_probs(prep(Xe_nm), y_e, seas_e, lambda: LogisticRegression(
+            penalty="l1", C=C, solver="liblinear", max_iter=2000))
+        l1_early[C] = pe
+        print(f"   C={C:<5} early bust-gap {fmt5(eval_vec(pe, early, bust, invert=False))}"
+              "   (bust prob ranks: HIGH score = high bust risk)")
+
+    print("\n   L1 feature survival (C=0.1, % of 12 folds selected, mean coef) — CEILING model:")
+    frac, mc = l1_stability(Xl_nm, y_l, seas_l, 0.1)
+    order = np.argsort(-frac)
+    for j in order[:14]:
+        if frac[j] > 0:
+            print(f"     {KEYS_NM[j]:10} {100*frac[j]:4.0f}%  coef {mc[j]:+.3f}")
+    print("   — BUST model (positive coef = MORE bust risk):")
+    frac_e, mc_e = l1_stability(Xe_nm, y_e, seas_e, 0.1)
+    order = np.argsort(-frac_e)
+    for j in order[:14]:
+        if frac_e[j] > 0:
+            print(f"     {KEYS_NM[j]:10} {100*frac_e[j]:4.0f}%  coef {mc_e[j]:+.3f}")
+
+    print("\n---- 3. GRADIENT-BOOSTING ORACLE (market-free, LOSO OOS) ----")
+    gb_l = loso_probs(Xl_nm, y_l, seas_l, gbm)
+    gb_e = loso_probs(Xe_nm, y_e, seas_e, gbm)
+    print(f"   GBM late hit-gap   {fmt5(eval_vec(gb_l, late, hit))}")
+    print(f"   GBM early bust-gap {fmt5(eval_vec(gb_e, early, bust))} (ranked by bust prob)")
+    # market-aware versions (adpinv included) for reference
+    gb_lm = loso_probs(matrix(late, FEAT_KEYS), y_l, seas_l, gbm)
+    print(f"   GBM +market late   {fmt5(eval_vec(gb_lm, late, hit))}")
+    # permutation importance averaged over held-out seasons
+    from sklearn.inspection import permutation_importance
+    imp = np.zeros(len(KEYS_NM))
+    nf = 0
+    for yy in SEASONS:
+        tr, te = seas_l != yy, seas_l == yy
+        if te.sum() < 25 or len(set(y_l[tr])) < 2:
+            continue
+        mdl = gbm()
+        mdl.fit(Xl_nm[tr], y_l[tr])
+        pi = permutation_importance(mdl, Xl_nm[te], y_l[te], n_repeats=5,
+                                    random_state=7, scoring="roc_auc")
+        imp += pi.importances_mean
+        nf += 1
+    imp /= max(nf, 1)
+    print("   GBM permutation importance (held-out seasons, top 14):")
+    for j in np.argsort(-imp)[:14]:
+        print(f"     {KEYS_NM[j]:10} {imp[j]:+.4f}")
+
+    # ---------------- 4. THE WEIGHT-SYSTEM QUESTION ----------------
+    print("\n---- 4. WEIGHT SYSTEM: shipped vs equal-weight vs learned (all same rows) ----")
+    ship_l = np.array([r["ceiling"] for r in late], dtype=float)
+    eq_l = np.array([np.nanmean([v for v in (r["comp"]["opp"], r["comp"]["tal"],
+                                             r["comp"]["sit"], r["comp"]["trC"]) if v is not None])
+                     for r in late])
+    print("   CEILING side (late-pool hit gap, 5 schemes):")
+    print(f"     shipped hand-tuned      {fmt5(eval_vec(ship_l, late, hit))}")
+    print(f"     equal-weight pillars    {fmt5(eval_vec(eq_l, late, hit))}")
+    print(f"     L1 logistic (C=0.1)     {fmt5(eval_vec(l1_late[0.1], late, hit))}")
+    print(f"     GBM oracle              {fmt5(eval_vec(gb_l, late, hit))}")
+    ship_e = np.array([r["safety"] for r in early], dtype=float)
+    eq_e = np.array([np.nanmean([v for v in (r["comp"]["opp_role"], r["comp"]["tal"],
+                                             r["comp"]["sit"], r["comp"]["trS"]) if v is not None])
+                     for r in early])
+    inv = lambda p: np.where(np.isnan(p), np.nan, -p)   # safety ranks LOW bust prob first
+    print("   SAFETY side (early-pool bust gap, 5 schemes; positive = fewer busts up top):")
+    print(f"     shipped hand-tuned      {fmt5(eval_vec(ship_e, early, bust, invert=True))}")
+    print(f"     equal-weight pillars    {fmt5(eval_vec(eq_e, early, bust, invert=True))}")
+    print(f"     L1 logistic (C=0.1)     {fmt5(eval_vec(inv(l1_early[0.1]), early, bust, invert=True))}")
+    print(f"     GBM oracle              {fmt5(eval_vec(inv(gb_e), early, bust, invert=True))}")
+
+    # ---------------- 5. FORWARD STEPWISE (combosearch — the shippable path) ----------------
+    print("\n---- 5. FORWARD STEPWISE under the 5-scheme rule ----")
+
+    def rule_eval(fn, rows_, flag, invert=False):
+        scores = np.array([fn(r) if fn(r) is not None else np.nan for r in rows_], dtype=float)
+        return eval_vec(scores, rows_, flag, invert)
+
+    def passes(vals, base_vals):
+        ds = [v - b for v, b in zip(vals, base_vals) if v is not None and b is not None]
+        if len(ds) < 5:
+            return None, 0, False
+        mean = sum(ds) / len(ds)
+        pos_n = sum(1 for d in ds if d > 0)
+        return mean, pos_n, (mean > 1.5 and pos_n >= 4)
+
+    def stepwise(side, rows_, flag, invert, base_fn):
+        base_vals = rule_eval(base_fn, rows_, flag, invert)
+        cur_fn, cur_vals, chosen = base_fn, base_vals, []
+        print(f"   {side}: baseline {fmt5(base_vals)}")
+        for step in range(4):
+            best = None
+            for k in KEYS_NM:
+                for w in (0.10, 0.15):
+                    def cand(r, _k=k, _w=w, _f=cur_fn):
+                        v = _f(r)
+                        if v is None:
+                            return None
+                        fv = r["feat"].get(_k)
+                        return (1 - _w) * v + _w * (fv if fv is not None else 50)
+                    vals = rule_eval(cand, rows_, flag, invert)
+                    mean, pos_n, ok = passes(vals, cur_vals)
+                    if ok and (best is None or mean > best[0]):
+                        best = (mean, pos_n, k, w, cand, vals)
+            if best is None:
+                print(f"   {side}: step {step + 1} — nothing passes the rule. STOP.")
+                break
+            mean, pos_n, k, w, cand, vals = best
+            chosen.append((k, w))
+            cur_fn, cur_vals = cand, vals
+            print(f"   {side}: ADOPTED +{k} w={w} (mean {mean:+.1f}, {pos_n}/5)  -> {fmt5(vals)}")
+        if not chosen:
+            print(f"   {side}: shipped formula survives the full library. No combination passes.")
+        return chosen
+
+    stepwise("CEILING", late, hit, False, lambda r: r["ceiling"])
+    stepwise("SAFETY ", early, bust, True, lambda r: r["safety"])
+
+    # from-scratch greedy rebuild (no rule — what would a fresh build pick?)
+    print("\n   From-scratch greedy (LOSO objective, informational only):")
+    for side, rows_, flag, invert in (("CEILING", late, hit, False), ("SAFETY ", early, bust, True)):
+        sel = []
+        cur = None
+        for _ in range(8):
+            best = None
+            for k in KEYS_NM:
+                if k in sel:
+                    continue
+                def cand2(r, _keys=sel + [k]):
+                    vs = [r["feat"].get(x) for x in _keys]
+                    vs = [v for v in vs if v is not None]
+                    return sum(vs) / len(vs) if vs else None
+                v = rule_eval(cand2, rows_, flag, invert)[4]
+                if v is not None and (best is None or v > best[0]):
+                    best = (v, k)
+            if best is None or (cur is not None and best[0] < cur + 0.3):
+                break
+            cur, _k = best
+            sel.append(_k)
+        print(f"   {side}: {' + '.join(sel)}   (LOSO {cur:+.1f})")
+
+# ---- confirmation pass for the two stepwise winners (appended temp) ----
+if "confirm" in sys.argv:
+    import random as _rnd
+    print("\n==== CONFIRMATION: bootstrap + per-season for stepwise winners ====")
+    late = [r for r in all_rows if 84 <= r["adp"] <= 240 and r["outcome"]]
+    early = [r for r in all_rows if r["adp"] <= 36 and r["outcome"]]
+    nzc = lambda v: 50.0 if v is None else v
+
+    def ceil_pacr(r):
+        v = r["ceiling"]
+        return None if v is None else 0.85 * v + 0.15 * nzc(r["feat"].get("pacr"))
+
+    def saf_dage(r):
+        v = r["safety"]
+        return None if v is None else 0.85 * v + 0.15 * nzc(r["feat"].get("dage"))
+
+    def gap_rows(rows_, fn, flag, invert=False):
+        sub = [(fn(r), r) for r in rows_ if fn(r) is not None]
+        if len(sub) < 20:
+            return None
+        sub.sort(key=lambda t: -t[0])
+        h = len(sub) // 2
+        top = 100.0 * sum(flag(r) for _, r in sub[:h]) / h
+        bot = 100.0 * sum(flag(r) for _, r in sub[h:]) / (len(sub) - h)
+        return (bot - top) if invert else (top - bot)
+
+    for name, rows_, base_fn, var_fn, flag, invert in (
+            ("CEILING +pacr", late, lambda r: r["ceiling"], ceil_pacr, hit, False),
+            ("SAFETY +dage", early, lambda r: r["safety"], saf_dage, bust, True)):
+        base_g = gap_rows(rows_, base_fn, flag, invert)
+        var_g = gap_rows(rows_, var_fn, flag, invert)
+        _rnd.seed(7)
+        deltas = []
+        for _ in range(1000):
+            samp = [rows_[_rnd.randrange(len(rows_))] for _ in range(len(rows_))]
+            b, v = gap_rows(samp, base_fn, flag, invert), gap_rows(samp, var_fn, flag, invert)
+            if b is not None and v is not None:
+                deltas.append(v - b)
+        deltas.sort()
+        lo, hi = deltas[50], deltas[949]
+        yrs_pos = 0
+        yrs_tot = 0
+        for y in SEASONS:
+            yr = [r for r in rows_ if r["season"] == y]
+            b, v = gap_rows(yr, base_fn, flag, invert), gap_rows(yr, var_fn, flag, invert)
+            if b is not None and v is not None:
+                yrs_tot += 1
+                if v >= b:
+                    yrs_pos += 1
+        print(f"{name}: pooled {base_g:+.1f} -> {var_g:+.1f} (delta {var_g-base_g:+.1f}), "
+              f"bootstrap 90% CI [{lo:+.1f}, {hi:+.1f}], seasons better-or-equal {yrs_pos}/{yrs_tot}")
+
+    # combined final state
+    both_c = gap_rows(late, ceil_pacr, hit)
+    both_s = gap_rows(early, saf_dage, bust, invert=True)
+    print(f"FINAL (both adopted): ceiling pooled hit-gap {both_c:+.1f} | safety pooled bust-gap {both_s:+.1f}")
+    # who moves in 2025 (sanity: which late QBs does pacr promote/demote)
+    qbs = [(r["feat"].get("pacr"), r["pid"]) for r in late if r["season"] == 2025 and r["pos"] == "QB"]
+    print("2025 late-QB pacr percentiles (pid):", sorted([q for q in qbs if q[0] is not None], reverse=True)[:6])
