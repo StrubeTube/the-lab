@@ -145,6 +145,53 @@ def fetch_adp():
     save("ffc_adp_hist.json", hist)
 
 
+def archive_snapshots():
+    """LAB_OVERHAUL P2: daily compact snapshots of the two datasets that
+    cannot be bought historically — Vegas season prop lines (with BOTH
+    sides' prices, so future backtests can de-vig) and Sleeper ADP.
+    Written to data/archive/ and committed by the daily Action.
+    Idempotent per day."""
+    import datetime
+    arch = Path(__file__).parent / "data" / "archive"
+    arch.mkdir(exist_ok=True)
+    day = datetime.date.today().isoformat()
+    vf, af = arch / f"{day}_vegas.json", arch / f"{day}_adp.json"
+    if not vf.exists():
+        try:
+            offers = json.loads((RAW / "vegas_offers.json").read_text(encoding="utf-8"))
+            out = {}
+            for stat, offs in offers.items():
+                for off in offs or []:
+                    parts = off.get("participants") or []
+                    if not parts:
+                        continue
+                    nm = parts[0].get("name")
+                    pos = ((parts[0].get("player") or {}).get("position"))
+                    entry = {}
+                    for sel in off.get("selections") or []:
+                        side = (sel.get("selection") or "").lower()
+                        for bk in sel.get("books") or []:
+                            if bk.get("id") == 0:
+                                for ln in bk.get("lines") or []:
+                                    if ln.get("main") and ln.get("line") is not None:
+                                        entry[side] = [ln["line"], ln.get("cost")]
+                    if entry:
+                        out.setdefault(f"{nm}|{pos}", {})[stat] = entry
+            vf.write_text(json.dumps(out), encoding="utf-8")
+            print(f"  archived {len(out)} player prop sets -> {vf.name}")
+        except (OSError, ValueError) as ex:
+            print(f"  vegas archive skipped: {ex}")
+    if not af.exists():
+        try:
+            proj = json.loads((RAW / f"proj_{SEASON}.json").read_text(encoding="utf-8"))
+            adp = {pid: round(v["adp_half_ppr"], 1) for pid, v in proj.items()
+                   if isinstance(v, dict) and v.get("adp_half_ppr")}
+            af.write_text(json.dumps(adp), encoding="utf-8")
+            print(f"  archived {len(adp)} ADP values -> {af.name}")
+        except (OSError, ValueError) as ex:
+            print(f"  adp archive skipped: {ex}")
+
+
 def fetch_borischen():
     print("Boris Chen tiers")
     files = {
@@ -310,4 +357,5 @@ if __name__ == "__main__":
     fetch_vegas()
     fetch_nflverse()
     fetch_contracts()
+    archive_snapshots()
     print(f"Done in {time.time()-t0:.0f}s")
