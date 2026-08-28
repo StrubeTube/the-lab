@@ -109,27 +109,40 @@
   // board does — for reordering players within tiers (mutually exclusive
   // with the ADP lens so the colors always mean one thing)
   state.labLens = !!LAB.prefs.labLens && !LAB.prefs.adpLens;
+  // vs-Window lens: tint rows by his Lab Score vs the MEDIAN of the players
+  // drafted around him (the "who else could I take here" read) — position
+  // window on position tabs, mixed window on Overall
+  state.winLens = !!LAB.prefs.winLens && !state.adpLens && !state.labLens;
   const adpLensBtn = LAB.$('#adpLensBtn');
   const labLensBtn = LAB.$('#labLensBtn');
+  const winLensBtn = LAB.$('#winLensBtn');
   const syncLensBtns = () => {
-    for (const [btn, on] of [[adpLensBtn, state.adpLens], [labLensBtn, state.labLens]]) {
+    for (const [btn, on] of [[adpLensBtn, state.adpLens], [labLensBtn, state.labLens], [winLensBtn, state.winLens]]) {
       btn.style.background = on ? 'var(--accent-soft)' : '';
       btn.style.borderColor = on ? 'var(--accent)' : '';
       btn.style.color = on ? 'var(--accent)' : '';
     }
   };
   syncLensBtns();
+  const saveLensPrefs = () => {
+    LAB.prefs.adpLens = state.adpLens; LAB.prefs.labLens = state.labLens;
+    LAB.prefs.winLens = state.winLens; LAB.savePrefs();
+    syncLensBtns(); render();
+  };
   adpLensBtn.addEventListener('click', () => {
     state.adpLens = !state.adpLens;
-    if (state.adpLens) state.labLens = false;
-    LAB.prefs.adpLens = state.adpLens; LAB.prefs.labLens = state.labLens; LAB.savePrefs();
-    syncLensBtns(); render();
+    if (state.adpLens) { state.labLens = false; state.winLens = false; }
+    saveLensPrefs();
   });
   labLensBtn.addEventListener('click', () => {
     state.labLens = !state.labLens;
-    if (state.labLens) state.adpLens = false;
-    LAB.prefs.adpLens = state.adpLens; LAB.prefs.labLens = state.labLens; LAB.savePrefs();
-    syncLensBtns(); render();
+    if (state.labLens) { state.adpLens = false; state.winLens = false; }
+    saveLensPrefs();
+  });
+  winLensBtn.addEventListener('click', () => {
+    state.winLens = !state.winLens;
+    if (state.winLens) { state.adpLens = false; state.labLens = false; }
+    saveLensPrefs();
   });
   // Lab-rank deltas for the current view: + = the Lab Score says he should
   // sit N spots HIGHER than my board has him (green), − = lower (red)
@@ -159,9 +172,9 @@
     if (mkt == null || rankNo == null) return null;
     return Math.round(mkt - rankNo);
   }
-  function adpLensStyle(d, overallMode) {
+  function adpLensStyle(d, overallMode, maxAbs) {
     if (d == null || d === 0) return '';
-    const u = Math.min(1, Math.abs(d) / (overallMode ? 24 : 10)); // full color at ±24 ovr / ±10 pos
+    const u = Math.min(1, Math.abs(d) / (maxAbs || (overallMode ? 24 : 10))); // full color at ±24 ovr / ±10 pos
     const c = d > 0 ? '70,214,140' : '242,109,109';
     // alpha floor so even ±1 visibly glows; ramps hard from there
     return `;background:linear-gradient(90deg,rgba(${c},${(0.12 + 0.38 * u).toFixed(3)}),rgba(${c},${(0.03 + 0.12 * u).toFixed(3)}))`
@@ -258,11 +271,12 @@
     const isKeeper = ovl && ovl.keepers.has(pid);
     const mine = ovl && ovl.mine.has(pid);
     const lensD = state.adpLens ? adpDelta(p, rankNo, opts.showPos)
-      : state.labLens ? ((state._labD || {})[pid] ?? null) : null;
-    const lensOn = state.adpLens || state.labLens;
+      : state.labLens ? ((state._labD || {})[pid] ?? null)
+        : state.winLens ? ((p.lab || {})[opts.showPos ? 'wg' : 'wgp'] ?? null) : null;
+    const lensOn = state.adpLens || state.labLens || state.winLens;
     const row = LAB.el('div', {
       class: 'prow', 'data-pid': pid,
-      style: lensOn ? adpLensStyle(lensD, opts.showPos).replace(/^;/, '') : '',
+      style: lensOn ? adpLensStyle(lensD, state.winLens ? true : opts.showPos, state.winLens ? 25 : null).replace(/^;/, '') : '',
     },
       LAB.el('span', { class: 'rank' }, rankNo),
       LAB.headshot(pid),
@@ -278,7 +292,14 @@
           : holder ? LAB.el('span', { class: 'muted', style: 'font-size:11px', title: 'rostered by' }, holder) : '',
         (board.notes || {})[pid] ? LAB.el('span', { class: 'note-dot', title: board.notes[pid] }, '✎') : ''),
       LAB.el('div', { class: 'stats' },
-        LAB.el('span', { class: 'stat w40 ' + LAB.labColor((p.lab || {}).sc), style: 'font-weight:700', title: LAB.labTitle(p) || 'no Lab Score (DEF or no data)' }, LAB.labFmt(p)),
+        (() => {
+          const wgv = (p.lab || {})[opts.showPos ? 'wg' : 'wgp'];
+          const tag = LAB.wgTag(wgv);
+          return LAB.el('span', {
+            class: 'stat w40 ' + (lensOn ? 'muted' : LAB.labColor((p.lab || {}).sc, wgv ?? null)),
+            style: 'font-weight:700', title: LAB.labTitle(p) || 'no Lab Score (DEF or no data)',
+          }, LAB.labFmt(p), tag && !lensOn ? LAB.el('span', { class: 'mono', style: 'font-size:9px;opacity:.7;margin-left:3px' }, tag) : '');
+        })(),
         LAB.el('span', { class: 'stat w40', title: 'bye week' }, p.bye || '–'),
         LAB.el('span', { class: 'stat', title: 'Sleeper ADP (half-PPR, updates daily)', style: 'display:flex;align-items:center;justify-content:flex-end;gap:5px' },
           LAB.el('span', { class: 'adp-dot', style: 'background:' + LAB.adpColor(rankNo, opts.adpPosMode ? p.adp_pos : p.adp) }),
@@ -290,6 +311,9 @@
           title: state.adpLens
             ? (lensD == null ? 'no Sleeper ADP for this comparison'
               : (opts.showPos ? 'overall' : 'positional') + ` gap: your rank ${rankNo} vs ADP ${opts.showPos ? p.adp?.toFixed(1) : p.adp_pos}` + (lensD > 0 ? ' — you are higher than the market' : lensD < 0 ? ' — you are lower than the market' : ''))
+            : state.winLens
+              ? (lensD == null ? 'no window gap (unscored or no ADP)'
+                : `Lab Score vs the median of players drafted around him (${opts.showPos ? 'all positions' : 'his position only'}): ${lensD > 0 ? '+' : ''}${lensD} — ${lensD >= 20 ? 'stands clearly ABOVE his window (the Jacobs-2022 signal)' : lensD <= -20 ? 'clearly BELOW his window' : 'roughly par for the neighborhood'}`)
             : (lensD == null ? 'no Lab Score for this comparison'
               : lensD > 0 ? `the Lab Score ranks him ${lensD} spot${lensD > 1 ? 's' : ''} HIGHER than your board — candidate to move up`
                 : lensD < 0 ? `the Lab Score ranks him ${-lensD} spot${lensD < -1 ? 's' : ''} LOWER than your board — candidate to move down`
@@ -319,6 +343,7 @@
         LAB.el('span', { class: 'stat w40' }, 'Rd'),
         state.adpLens ? LAB.el('span', { class: 'stat w40', title: 'your rank vs Sleeper ADP (positional on this tab)' }, 'Δ ADP') : '',
         state.labLens ? LAB.el('span', { class: 'stat w40', title: 'spots the Lab Score would move him on your board — green = move up, red = move down' }, 'Δ Lab') : '',
+        state.winLens ? LAB.el('span', { class: 'stat w40', title: 'his Lab Score minus the median score of players drafted around him — the "who else could I take here" number; ±20 is a real signal' }, 'Δ Win') : '',
         kSim ? LAB.el('span', { class: 'stat w40', title: 'keeper-draft round' }, 'K Rd') : '',
         LAB.el('span', { class: 'stat hide-m' }, "'26 Proj"),
         LAB.el('span', { class: 'stat hide-m' }, "'25 Fin"),

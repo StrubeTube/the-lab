@@ -53,12 +53,31 @@
     const L = (p && p.lab) || {};
     return L.sc == null ? '–' : (L.est ? '~' : '') + L.sc;
   };
-  LAB.labColor = sc => sc == null ? 'muted' : sc >= 75 ? 'good' : sc >= 45 ? '' : sc >= 25 ? 'warn' : 'bad';
+  // Two color modes (2026-08-28 color diet, per Alex — "so many players are
+  // colored"): with only sc (player card), the old rich scale. With a
+  // window gap passed (board/keepers lists), color ONLY the actionable:
+  // |window gap| >= 20 (his neighborhood clearly agrees/disagrees) or an
+  // extreme absolute score. ~80% of rows stay quiet.
+  LAB.labColor = (sc, wg) => {
+    if (sc == null) return 'muted';
+    if (wg === undefined) return sc >= 75 ? 'good' : sc >= 45 ? '' : sc >= 25 ? 'warn' : 'bad';
+    // window-driven only: an absolute 95 at pick 3 (or a 12 at pick 200) is
+    // information you already have from the ADP — the actionable fact is
+    // whether he beats the players you'd take INSTEAD of him.
+    if (wg != null && wg >= 20) return 'good';
+    if (wg != null && wg <= -20) return 'bad';
+    return '';
+  };
+  // tiny directional suffix for a notable window gap (shown from ±12).
+  // Arrow, not a sign: "80 ▴17" can't be misread as the number 8017/80-17.
+  LAB.wgTag = wg => (wg == null || Math.abs(wg) < 12) ? null
+    : (wg > 0 ? '▴' : '▾') + Math.abs(wg);
   LAB.labTitle = p => {
     const L = (p && p.lab) || {};
     if (L.sc == null) return '';
     return `Lab Score ${L.sc}${L.est ? ' — ESTIMATED (no real 2025 sample)' : ''}\n`
       + (L.ed != null ? `Lab Edge ${L.ed > 0 ? '+' : ''}${L.ed} vs his ADP — ${L.ed >= 12 ? 'the model likes him better than his price' : L.ed <= -12 ? 'the model likes him less than his price' : 'priced about right'}\n` : '')
+      + (L.wg != null ? `Window ${L.wg > 0 ? '+' : ''}${L.wg} vs ALL players near his ADP · ${L.wgp > 0 ? '+' : ''}${L.wgp} vs his position's window — the "who else could I take here" number\n` : '')
       + `Opportunity ${L.o} · Talent ${L.t} · Situation ${L.s} · Trajectory ${L.ys}/${L.yc}\n`
       + `Safety ${L.sfty} · Ceiling ${L.ceil} — graded ${Math.round((L.wc || 0) * 100)}% on ceiling at his ADP\n`
       + `(0-100, sticky-stat pillars, cross-position value-normalized)`;

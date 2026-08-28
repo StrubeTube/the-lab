@@ -1479,6 +1479,45 @@ for i, e in enumerate(scored):
     adp_pct = 100.0 * (1 - (i + 0.5) / n_adp)  # best ADP -> ~100
     e["lab"]["ed"] = round(e["lab"]["sc"] - adp_pct)
 
+# WINDOW GAP (2026-08-28, Alex): the draft-day read is "how does he compare
+# to the players you'd actually pick between," not his global score. wg =
+# sc minus the MEDIAN sc of his ADP window (±18 slots, widened to the
+# nearest 8 players when thin). wgp = the same among his own position only
+# (±30 slots, min 6) — the position tabs compare like-for-like. kgw/klw =
+# his KEEP-round score (kg/kl) vs the window of what's normally available
+# at that draft slot, per league — the keeper version of the same question.
+def _median(vals):
+    s = sorted(vals)
+    n2 = len(s)
+    return (s[n2 // 2] if n2 % 2 else (s[n2 // 2 - 1] + s[n2 // 2]) / 2) if n2 else None
+
+def _window_gap(my_adp, my_sc, pool, span, min_n):
+    win = [sc2 for a2, sc2 in pool if abs(a2 - my_adp) <= span]
+    if len(win) < min_n:
+        win = [sc2 for a2, sc2 in sorted(pool, key=lambda t: abs(t[0] - my_adp))[:min_n]]
+    med = _median(win)
+    return None if med is None else round(my_sc - med)
+
+_all_pool = [(e["adp"], e["lab"]["sc"]) for e in scored]
+_pos_pool = {}
+for e in scored:
+    _pos_pool.setdefault(e["pos"], []).append((e["adp"], e["lab"]["sc"]))
+for e in scored:
+    e["lab"]["wg"] = _window_gap(e["adp"], e["lab"]["sc"], _all_pool, 18, 8)
+    e["lab"]["wgp"] = _window_gap(e["adp"], e["lab"]["sc"], _pos_pool[e["pos"]], 30, 6)
+for _tag, _kkey, _wkey in (("ggg", "kg", "kgw"), ("lob", "kl", "klw")):
+    _Lg = leagues_out[_tag]
+    _kept = set(_Lg["lastKept"])
+    for e in players_out:
+        lab = e.get("lab") or {}
+        if lab.get(_kkey) is None:
+            continue
+        _r = _Lg["lastDraftRound"].get(e["id"])
+        if _r is None:
+            continue
+        _slot = ((_r - (1 if e["id"] in _kept else 0)) - 0.5) * 10
+        lab[_wkey] = _window_gap(max(1, _slot), lab[_kkey], _all_pool, 18, 8)
+
 top = sorted((e for e in players_out if (e.get("lab") or {}).get("sc") is not None),
              key=lambda x: -x["lab"]["sc"])[:5]
 print(f"  Lab Score on {n_sc} players; top: " +

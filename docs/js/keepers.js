@@ -49,6 +49,9 @@
           // Lab Score re-blended at his KEEP round for this league (kg/kl
           // from compute.py) — a late keep is graded like a late pick
           kSc: (p.lab || {})[L === leagues.ggg ? 'kg' : 'kl'] ?? null,
+          // keep-slot window gap: his keep-round score vs what's normally
+          // available at that slot — drives the color diet and the ±N tag
+          kWg: (p.lab || {})[L === leagues.ggg ? 'kgw' : 'klw'] ?? null,
         };
       });
   }
@@ -178,9 +181,12 @@
             : LAB.el('span', { class: 'muted', title: 'predicted to be KEPT — would go ~R' + c.wouldRd + ' if he entered the draft' }, 'kept')),
           LAB.el('td', { class: 'num' }, c.myRank ? '#' + c.myRank : '–'),
           LAB.el('td', {
-            class: 'num ' + LAB.labColor(c.kSc), style: 'font-weight:700',
-            title: c.kSc == null ? '' : `graded at his R${c.costRd} keep slot — market-slot score ${(c.p.lab || {}).sc ?? '–'}\n\n` + LAB.labTitle(c.p),
-          }, c.kSc == null ? '–' : ((c.p.lab || {}).est ? '~' : '') + c.kSc),
+            class: 'num ' + LAB.labColor(c.kSc, c.kWg), style: 'font-weight:700',
+            title: c.kSc == null ? '' : `graded at his R${c.costRd} keep slot — market-slot score ${(c.p.lab || {}).sc ?? '–'}\n`
+              + (c.kWg != null ? `window: ${c.kWg > 0 ? '+' : ''}${c.kWg} vs what's normally available around pick ${Math.round((c.costRd - 0.5) * 10)}\n\n` : '\n')
+              + LAB.labTitle(c.p),
+          }, c.kSc == null ? '–' : ((c.p.lab || {}).est ? '~' : '') + c.kSc,
+            LAB.wgTag(c.kWg) ? LAB.el('span', { class: 'mono', style: 'font-size:9px;opacity:.7;margin-left:3px' }, LAB.wgTag(c.kWg)) : ''),
           sCell('sBoard'),
           sCell('sAdp'),
           sCell('sTrue'),
