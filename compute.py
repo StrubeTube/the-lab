@@ -1518,6 +1518,48 @@ for _tag, _kkey, _wkey in (("ggg", "kg", "kgw"), ("lob", "kl", "klw")):
         _slot = ((_r - (1 if e["id"] in _kept else 0)) - 0.5) * 10
         lab[_wkey] = _window_gap(max(1, _slot), lab[_kkey], _all_pool, 18, 8)
 
+# LAB @DRAFT (2026-08-28): national ADP is the wrong slot for THESE drafts —
+# ~30 keepers come off the board, so the top ~130 available players slide up
+# a mean of ~27 picks. The safety/ceiling blend and the window comparison
+# both key off draft position, so both are wrong by ~2.7 rounds in the exact
+# mid-round zone the model speaks loudest about. Here the whole board is
+# rescored at each player's REAL expected slot in each league:
+#   lab.dg / lab.dl   0-100 score at his keeper-adjusted draft slot
+#   lab.dgw / lab.dlw window gap vs who is ACTUALLY available around him
+#   lab.ds / lab.dls  that expected slot itself (drives every UI label)
+for _tag, _sk, _dk, _wk in (("ggg", "ds", "dg", "dgw"), ("lob", "dls", "dl", "dlw")):
+    _Lg = leagues_out[_tag]
+    _off = set()
+    for _r2 in _Lg["rosters"]:
+        for _k2 in (_r2.get("keepers") or []):
+            _off.add(str(_k2))
+    for _dkp in (_Lg.get("draftKeepers") or []):
+        _off.add(str(_dkp["pid"]))
+    _avail = sorted((e for e in players_out
+                     if (e.get("lab") or {}).get("sfty") is not None
+                     and e.get("adp") and e["id"] not in _off),
+                    key=lambda x: x["adp"])
+    for _i, e in enumerate(_avail):
+        lab = e["lab"]
+        _slot2 = _i + 1
+        lab[_sk] = _slot2
+        _wc2 = max(0.15, min(0.85, (_slot2 - 24) / 96))
+        _fin2 = (1 - _wc2) * lab["sfty"] + _wc2 * lab["ceil"]
+        if lab.get("est"):
+            _fin2 = 50 + (_fin2 - 50) * 0.75
+        _pool2 = fin_pools[e["pos"]]
+        _cp2 = (bisect.bisect_left(_pool2, _fin2) + bisect.bisect_right(_pool2, _fin2)) / 2 / len(_pool2)
+        _v2 = vquant(vorp_dist[e["pos"]], _cp2)
+        _lo2 = bisect.bisect_left(all_vals, _v2)
+        _hi2 = bisect.bisect_right(all_vals, _v2)
+        lab[_dk] = round(100.0 * ((_lo2 + _hi2) / 2) / len(all_vals))
+    # window gap against the players actually available around that slot
+    _dpool = [(e["lab"][_sk], e["lab"][_dk]) for e in _avail]
+    for e in _avail:
+        e["lab"][_wk] = _window_gap(e["lab"][_sk], e["lab"][_dk], _dpool, 18, 8)
+    print(f"  Lab @Draft ({_tag}): {len(_off)} keepers off the board, "
+          f"{len(_avail)} players rescored at their real slot")
+
 top = sorted((e for e in players_out if (e.get("lab") or {}).get("sc") is not None),
              key=lambda x: -x["lab"]["sc"])[:5]
 print(f"  Lab Score on {n_sc} players; top: " +

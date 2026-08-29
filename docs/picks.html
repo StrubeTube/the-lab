@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Trade Finder — The Lab</title>
+<title>Pick Sheet — The Lab</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/lab.css?v=66">
@@ -12,14 +12,13 @@
 <body>
 <div class="page">
   <div class="flex" style="justify-content:space-between;flex-wrap:wrap;gap:10px">
-    <h1>Trade Finder</h1>
+    <h1>Pick Sheet</h1>
     <div class="seg" id="leagueTabs"></div>
   </div>
-  <p class="dim" style="max-width:740px">Your priority list, in order. Each numbered action is a thing worth doing — <b>selling a spare keeper</b>, balancing the pick ledger — with the most likely trades to get it done stacked underneath, priced against <b>both leagues' real trade history</b>. Send the top option; 💀 a dud and the next-best takes its seat (dead offers stay dead until you reset them).</p>
+  <p class="dim" style="max-width:720px">One card per pick you own, in order — who the simulation says will actually be there, ranked by <b>Lab @Draft window gap</b> (his score minus the median of everyone else available at that slot). Built to be read on a phone at the draft table: tap ✓ as players come off, and the sheet re-ranks around what's left.</p>
   <div id="root"></div>
 </div>
 <script src="js/core.js?v=66"></script>
-<script src="js/tradecore.js?v=66"></script>
-<script src="js/finder.js?v=66"></script>
+<script src="js/picks.js?v=66"></script>
 </body>
 </html>

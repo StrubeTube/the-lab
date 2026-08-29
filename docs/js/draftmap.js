@@ -31,6 +31,19 @@
     }, leagues[t].name));
   }
 
+  // ---------- Lab @Draft accessors (compute.py: dg/dgw/ds per league) ----------
+  // In THIS draft ~28 keepers are off the board, so the top ~130 available
+  // players slide up a mean of 27 picks. dScore/dGap are the score and the
+  // window gap recomputed at each player's REAL expected slot; dSlot is that
+  // slot. Everything on this page reads the draft-adjusted numbers.
+  const dKey = k => (tag === 'ggg'
+    ? { s: 'ds', v: 'dg', g: 'dgw' }[k]
+    : { s: 'dls', v: 'dl', g: 'dlw' }[k]);
+  const dSlot = p => ((p && p.lab) || {})[dKey('s')] ?? null;
+  const dScore = p => ((p && p.lab) || {})[dKey('v')] ?? null;
+  const dGap = p => ((p && p.lab) || {})[dKey('g')] ?? null;
+  const gapColor = g => g == null ? 'var(--ink-3)' : g >= 20 ? '#3ee68f' : g <= -20 ? '#ff5c5c' : 'var(--ink-2)';
+
   // ---------- math / rng ----------
   // seeded PRNG so the Monte Carlo gives the same numbers on every render
   const mulberry32 = seed => () => {
@@ -285,12 +298,20 @@
       class: 'flex', style: 'gap:7px;padding:3px 6px;border-radius:7px;margin-top:3px;cursor:pointer;font-size:12.5px;' +
         (hero ? 'background:rgba(255,106,43,.10);border:1px solid var(--accent)' : 'background:var(--surface);border:1px solid var(--border)'),
       onclick: () => LAB.playerCard(p.id),
-      title: `${p.name} — ${fmtPct(prob)} chance he's still available · ADP ${p.adp ?? '–'} · your rank ${oRanks[p.id] ? '#' + oRanks[p.id] : '–'}` + (hero ? ' · projected pick given your earlier picks' : ''),
+      title: `${p.name} — ${fmtPct(prob)} chance he's still available`
+        + `\nADP ${p.adp ?? '–'} nationally, but ~pick ${dSlot(p) ?? '?'} in THIS draft (keepers removed)`
+        + `\nLab @Draft ${dScore(p) ?? '–'}`
+        + (dGap(p) != null ? ` · ${dGap(p) > 0 ? '+' : ''}${dGap(p)} vs the players available around him` : '')
+        + `\nyour rank ${oRanks[p.id] ? '#' + oRanks[p.id] : '–'}`
+        + (hero ? '\nprojected pick given your earlier picks' : ''),
     },
       LAB.headshot(p.id, 'sm'),
       LAB.el('span', { style: 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600;flex:1' }, p.name),
       LAB.posBadge(p.pos),
-      oRanks[p.id] ? LAB.el('span', { class: 'mono muted', style: 'font-size:11px' }, '#' + oRanks[p.id]) : '',
+      dGap(p) != null ? LAB.el('b', {
+        class: 'mono', style: 'font-size:10.5px;flex:none;color:' + gapColor(dGap(p)),
+        title: 'Lab @Draft window gap — his score minus the median of who else is available here',
+      }, (dGap(p) > 0 ? '+' : '') + dGap(p)) : '',
       LAB.el('b', { class: 'mono', style: 'color:' + col + ';width:38px;text-align:right' }, fmtPct(prob)));
   }
 
@@ -307,6 +328,84 @@
       LAB.el('p', { class: 'muted', style: 'font-size:12px;margin:4px 0 10px' },
         `Odds each player lasts to this pick, from ${SIMS} simulated drafts where every manager follows his own historical QB/TE/DEF timing, positional appetite, and roster needs. Locks (≈100%) are omitted.`),
       rows.map(x => probChip(x.p, x.prob))));
+  }
+
+  // ---------- positional cliff timer ----------
+  // A "tier" here is a run of players at one position whose Lab @Draft
+  // scores sit close together; the cliff is where the next man is a real
+  // step down. Paired with the Monte Carlo it answers the only tier
+  // question that matters on the clock: take one now, or can I wait?
+  function cliffs(sim) {
+    const out = [];
+    for (const pos of ['RB', 'WR', 'TE', 'QB']) {
+      const list = sim.adpOrder
+        .filter(p => p.pos === pos && !sim.keptSet.has(p.id) && dScore(p) != null)
+        .sort((a, b) => (dSlot(a) ?? 9e3) - (dSlot(b) ?? 9e3));
+      if (list.length < 4) continue;
+      // walk from the best still-available and cut where the score drops
+      const top = list.slice(0, 24);
+      let cut = -1;
+      for (let i = 1; i < Math.min(top.length, 12); i++) {
+        const cur = dScore(top[i]);
+        const prevAvg = top.slice(0, i).reduce((a, p) => a + dScore(p), 0) / i;
+        if (prevAvg - cur >= 8) { cut = i; break; }
+      }
+      if (cut < 1) continue;
+      const tier = top.slice(0, cut);
+      const nextMan = top[cut];
+      // when is the tier expected to be gone? the LAST member's room pick
+      const gone = tier.map(p => sim.roomPick[p.id]).filter(v => v != null);
+      const goneBy = gone.length ? Math.round(Math.max.apply(null, gone)) : null;
+      out.push({ pos, tier, nextMan, goneBy, drop: Math.round(
+        tier.reduce((a, p) => a + dScore(p), 0) / tier.length - dScore(nextMan)) });
+    }
+    return out;
+  }
+
+  function cliffCard(sim) {
+    const list = cliffs(sim);
+    const myNext = sim.myPicks.filter(pk => !sim.cells[pk]).sort((a, b) => a - b);
+    const card = LAB.el('div', { class: 'card', style: 'margin-top:14px' },
+      LAB.el('h2', {}, 'Tier cliffs — take one now, or wait?'),
+      LAB.el('p', { class: 'muted', style: 'font-size:12px;margin:2px 0 8px' },
+        'Each position\u2019s current tier, when the room is projected to finish it off, and what the drop costs you. Scores are Lab @Draft \u2014 graded at each player\u2019s real slot in THIS keeper draft.'));
+    if (!list.length) {
+      card.append(LAB.el('p', { class: 'muted', style: 'font-size:12.5px' }, 'No clean cliffs right now \u2014 the boards are smooth at every position.'));
+      return card;
+    }
+    for (const c of list) {
+      const nextAfter = myNext.find(pk => c.goneBy != null && pk > c.goneBy);
+      const beforeCliff = myNext.filter(pk => c.goneBy == null || pk <= c.goneBy);
+      const urgent = c.goneBy != null && beforeCliff.length <= 1;
+      card.append(LAB.el('div', {
+        style: 'border:1px solid ' + (urgent ? 'var(--accent)' : 'var(--border)')
+          + ';border-radius:9px;padding:6px 10px;margin-top:6px;background:'
+          + (urgent ? 'rgba(255,106,43,.06)' : 'var(--surface)'),
+      },
+        LAB.el('div', { class: 'flex', style: 'gap:8px;align-items:baseline;flex-wrap:wrap' },
+          LAB.posBadge(c.pos),
+          LAB.el('b', { style: 'font-size:13px' }, `${c.tier.length} left in this tier`),
+          c.goneBy != null ? LAB.el('span', { class: 'mono muted', style: 'font-size:11.5px' },
+            `projected gone by pick #${c.goneBy}`) : '',
+          LAB.el('span', { class: 'mono', style: 'font-size:11.5px;color:var(--warn)' },
+            `next man is ${c.drop} pts worse`),
+          urgent ? LAB.el('b', { style: 'font-size:11px;color:var(--accent)' }, 'LAST CHANCE') : ''),
+        LAB.el('div', { class: 'flex', style: 'gap:5px;flex-wrap:wrap;margin-top:4px' },
+          c.tier.map(p => LAB.el('span', {
+            class: 'badge', style: 'font-size:10px;cursor:pointer',
+            title: `Lab @Draft ${dScore(p)} \u00b7 ~pick ${dSlot(p)}`,
+            onclick: () => LAB.playerCard(p.id),
+          }, p.name)),
+          LAB.el('span', { class: 'muted', style: 'font-size:10.5px' },
+            `\u2192 then ${c.nextMan.name} (${dScore(c.nextMan)})`)),
+        LAB.el('div', { class: 'muted', style: 'font-size:11px;margin-top:3px' },
+          c.goneBy == null ? 'the room rarely takes these \u2014 you can wait'
+            : beforeCliff.length === 0 ? 'the tier is gone before your next pick'
+              : `you have ${beforeCliff.length} pick${beforeCliff.length === 1 ? '' : 's'} `
+                + `(#${beforeCliff.join(', #')}) before it empties`
+                + (nextAfter ? ` \u2014 wait past that and you're shopping the next tier at #${nextAfter}` : ''))));
+    }
+    return card;
   }
 
   function render() {
@@ -400,8 +499,59 @@
             ? `only ${othersBefore} pick${othersBefore === 1 ? '' : 's'} happen before this one — your pick is guaranteed to come from these ${zone.length} players`
             : 'the players this pick will realistically come down to',
         }, LAB.el('div', { style: 'font-size:9.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--accent)' }, '⌖ likely picking from'));
-        zone.forEach(x => zoneBox.append(probChip(x.p, x.prob, x.p.id === heroPid)));
+        // the SET is fixed by the dominance guarantee (my board order), but
+        // the ORDER shown is by Lab @Draft window gap — of the players who
+        // will actually be here, who most out-values this slot
+        zone.slice().sort((a, b) => (dGap(b.p) ?? -99) - (dGap(a.p) ?? -99))
+          .forEach(x => zoneBox.append(probChip(x.p, x.prob, x.p.id === heroPid)));
         col.append(zoneBox);
+        // --- two-pick lookahead: the best PAIR across this pick and my next
+        const nextPick = sim.myPicks.filter(pk => pk > pick && !sim.cells[pk])[0];
+        if (nextPick && zone.length) {
+          const later = sim.adpOrder
+            .filter(p => !heroTaken.has(p.id) && dGap(p) != null && p.pos !== 'DEF'
+              && !(p.pos === 'QB' && myFilled.QB >= 1) && !(p.pos === 'TE' && myFilled.TE >= 1))
+            .map(p => ({ p, prob: sim.probAvail(p.id, nextPick) }))
+            // likely to last but NOT a lock: a player who is ~always there is
+            // not a pairing decision, he's just a later pick
+            .filter(x => x.prob >= 0.55 && x.prob <= 0.95)
+            .sort((a, b) => (dGap(b.p) ?? -99) - (dGap(a.p) ?? -99));
+          let best = null;
+          for (const a of zone) {
+            for (const b of later.slice(0, 12)) {
+              if (b.p.id === a.p.id) continue;
+              if (a.p.pos === b.p.pos && (a.p.pos === 'QB' || a.p.pos === 'TE')) continue;
+              const v = (dGap(a.p) ?? 0) + (dGap(b.p) ?? 0) * b.prob;
+              if (!best || v > best.v) best = { v, a, b };
+            }
+          }
+          if (best) {
+            col.append(LAB.el('div', {
+              style: 'margin-top:5px;padding:4px 7px;border-left:2px solid var(--accent);background:rgba(255,106,43,.05);border-radius:0 6px 6px 0;font-size:10.5px;line-height:1.35',
+              title: 'the best COMBINATION across this pick and your next one — taking the higher-gap player now only wins if the other survives the wait',
+            },
+              LAB.el('b', { style: 'color:var(--accent)' }, '⇢ best pair: '),
+              `${best.a.p.name} now, then ${best.b.p.name} at #${nextPick} `,
+              LAB.el('span', { class: 'mono muted' }, `(${fmtPct(best.b.prob)} he lasts)`)));
+          }
+        }
+        // --- what the room needs before I'm on the clock again
+        if (nextPick) {
+          const between = sim.openPicks.filter(pk => pk > pick && pk < nextPick && !myOpenSet.has(pk));
+          const needCount = {};
+          between.forEach(pk => {
+            const q = byId[sim.expected[pk]];
+            if (q && q.pos) needCount[q.pos] = (needCount[q.pos] || 0) + 1;
+          });
+          const parts = Object.entries(needCount).sort((a, b) => b[1] - a[1])
+            .map(([ps, n]) => `${n} ${ps}`);
+          if (parts.length) {
+            col.append(LAB.el('div', {
+              class: 'muted', style: 'font-size:10px;margin-top:4px',
+              title: 'positions the room is projected to take between this pick and your next — the scarcity clock',
+            }, `room takes before you again: ${parts.join(' · ')}`));
+          }
+        }
         if (depth.length) {
           col.append(LAB.el('div', { class: 'muted', style: 'font-size:9.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin-top:5px' }, 'depth if it breaks weird'));
           depth.forEach(x => col.append(probChip(x.p, x.prob)));
@@ -413,6 +563,7 @@
     }
     planner.append(cols);
     main.append(planner);
+    main.append(cliffCard(sim));
 
     // ---------- full snake board + my projected team ----------
     const boardCard = LAB.el('div', { class: 'card', style: 'margin-top:14px' },
@@ -433,6 +584,16 @@
         title: nameOfSlot[s] + (pr ? ` — history: 1st QB ~R${Math.round(pr.qbRd)} · 1st TE ~R${Math.round(pr.teRd)} · DEF ~R${pr.defRd}` + (pr.cap.QB > 1 ? ` · drafts ${pr.cap.QB} QBs` : '') + (pr.cap.TE > 1 ? ` · ${pr.cap.TE} TEs` : '') + (pr.cap.DEF > 1 ? ` · ${pr.cap.DEF} DEFs` : '') : ''),
       }, s === sim.mySlot ? 'YOU' : nameOfSlot[s]));
     }
+    // cliff overlay: the pick where each position's current tier is projected
+    // to run out — a colored underline on that cell, so the scarcity is
+    // visible spatially instead of only in the card above
+    const cliffAt = {};
+    for (const c of cliffs(sim)) {
+      if (c.goneBy != null) {
+        cliffAt[Math.round(c.goneBy)] = cliffAt[Math.round(c.goneBy)] || [];
+        cliffAt[Math.round(c.goneBy)].push(c);
+      }
+    }
     for (let r = 1; r <= sim.ROUNDS; r++) {
       grid.append(LAB.el('div', { class: 'mono muted', style: 'font-size:11px;display:flex;align-items:center;justify-content:center' }, 'R' + r));
       for (let s = 1; s <= sim.N; s++) {
@@ -443,13 +604,16 @@
         const owner = !cell && sim.ownerOfPick[pick] != null ? sim.ownerOfPick[pick] : null;
         const mineCell = owner != null ? owner === sim.myRid : s === sim.mySlot;
         const base = 'padding:4px 6px;border-radius:6px;font-size:11.5px;min-height:34px;display:flex;flex-direction:column;justify-content:center;overflow:hidden;';
-        const style = cell
+        const cl = cliffAt[pick];
+        const clCss = cl ? `box-shadow:inset 0 -3px 0 var(--${cl[0].pos.toLowerCase()});` : '';
+        const style = (cell
           ? base + (cell.official ? 'background:rgba(245,197,66,.13);border:1px solid var(--warn);' : 'background:rgba(245,197,66,.06);border:1px dashed var(--warn);')
-          : base + `background:var(--surface);border:1px solid ${mineCell ? 'var(--accent)' : 'var(--border)'};cursor:pointer;`;
+          : base + `background:var(--surface);border:1px solid ${mineCell ? 'var(--accent)' : 'var(--border)'};cursor:pointer;`) + clCss;
         grid.append(LAB.el('div', {
           style,
-          title: p ? `${r}.${String(pick - (r - 1) * sim.N).padStart(2, '0')} — ${p.name}` + (cell ? (cell.official ? ' (keeper, locked)' : ' (predicted keeper)') : ' (most likely; click for odds)')
-            + (owner != null ? ` — PICK TRADED: ${ridName[owner]} drafts here` : '') : '',
+          title: (p ? `${r}.${String(pick - (r - 1) * sim.N).padStart(2, '0')} — ${p.name}` + (cell ? (cell.official ? ' (keeper, locked)' : ' (predicted keeper)') : ' (most likely; click for odds)')
+            + (owner != null ? ` — PICK TRADED: ${ridName[owner]} drafts here` : '') : '')
+            + (cl ? cl.map(c => `\nTIER CLIFF: the ${c.pos} tier is projected to empty here — next man is ${c.drop} pts worse`).join('') : ''),
           onclick: cell ? () => LAB.playerCard(pid) : () => pickDetail(sim, pick),
         },
           LAB.el('span', { style: 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600;color:var(--' + ({ QB: 'qb', RB: 'rb', WR: 'wr', TE: 'te', DEF: 'def' }[p?.pos] || 'ink') + ')' }, p ? p.name : '—'),
