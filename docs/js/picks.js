@@ -1,8 +1,8 @@
 /* THE LAB — Pick Sheet: the draft-table view.
-   One card per pick I own, in order. Each card lists the players the Monte
-   Carlo says will realistically be there, ranked by Lab @Draft window gap
-   (score minus the median of who else is available at that slot) — the
-   "who most out-values this pick" read, not a global ranking.
+   One card per pick I own, in order, listing the players who can plausibly
+   still be there. MY BOARD RANK is the order (the board is canonical); the
+   Lab @Draft score and its window gap ride alongside as the second opinion,
+   and a toggle can re-sort by that gap when I want the model's view.
    Players struck off with ✓ are removed everywhere and the sheet re-ranks,
    so it stays correct as the real draft diverges from the projection.
    State is per-device localStorage; no server round trip, works offline. */
@@ -19,6 +19,9 @@
   const save = (k, v) => localStorage.setItem(k, JSON.stringify(v));
 
   let tag = LAB.prefs.dmLeague || 'ggg';
+  // the sheet lists MY board order by default; the Lab gap is the column
+  // beside it, not the ranking
+  let sortMode = LAB.prefs.pickSort === 'gap' ? 'gap' : 'mine';
   let gone = new Set((store(K_GONE, {})[tag]) || []);
   const persistGone = () => {
     const all = store(K_GONE, {});
@@ -97,10 +100,20 @@
     const summary = LAB.el('div', { class: 'card', style: 'margin-top:14px' },
       LAB.el('div', { class: 'flex', style: 'justify-content:space-between;flex-wrap:wrap;gap:8px;align-items:baseline' },
         LAB.el('h2', {}, `Slot ${mySlot} of ${N} — ${myPicks.length} picks`),
-        LAB.el('button', {
-          class: 'btn small',
-          onclick: () => { gone = new Set(); persistGone(); render(); },
-        }, `reset ✓ (${gone.size} marked gone)`)),
+        LAB.el('div', { class: 'flex', style: 'gap:8px;flex-wrap:wrap;align-items:center' },
+          LAB.el('div', { class: 'seg' },
+            [['mine', 'My rankings'], ['gap', 'Lab gap']].map(([k, lbl]) =>
+              LAB.el('button', {
+                class: sortMode === k ? 'active' : '', style: 'font-size:11px',
+                title: k === 'mine'
+                  ? 'list each pick in YOUR board order — the Lab numbers ride alongside as the second opinion'
+                  : 'list by Lab @Draft window gap — who most out-values the slot, regardless of where you have him',
+                onclick: () => { sortMode = k; LAB.prefs.pickSort = k; LAB.savePrefs(); render(); },
+              }, lbl))),
+          LAB.el('button', {
+            class: 'btn small',
+            onclick: () => { gone = new Set(); persistGone(); render(); },
+          }, `reset ✓ (${gone.size} marked gone)`))),
       LAB.el('p', { class: 'muted', style: 'font-size:12px;margin:4px 0 0' },
         'Tap a player’s ✓ when someone drafts him. He disappears from every card below and the ranks recompute — so late in the draft this sheet reflects the real board, not the projection.'));
     root.append(summary);
@@ -124,15 +137,21 @@
       // edge = his expected slot minus this pick. NEGATIVE means he normally
       // goes BEFORE this pick (so he's only here if he falls to you);
       // strongly POSITIVE means taking him now is a reach of that many slots.
+      // MY BOARD is the order (Alex 8/29) — the sheet is his ranking, the
+      // Lab is the advisor beside it. Candidates are whoever can plausibly
+      // be here; they're then listed in his board order (unranked last).
       const here = pool.filter(p => dSlot(p) >= pick - 8);
-      const likely = here.slice(0, 16)
+      const likely = here.slice(0, 20)
         .map(p => ({ p, edge: dSlot(p) - pick }))
-        .sort((a, b) => (dGap(b.p) ?? -99) - (dGap(a.p) ?? -99))
+        .sort(sortMode === 'gap'
+          ? (a, b) => (dGap(b.p) ?? -99) - (dGap(a.p) ?? -99)
+          : (a, b) => (oRanks[a.p.id] ?? 9e3) - (oRanks[b.p.id] ?? 9e3))
         .slice(0, 8);
       card.append(LAB.el('div', { class: 'flex', style: 'gap:8px;align-items:baseline;flex-wrap:wrap' },
         LAB.el('h2', { style: 'margin:0' }, `R${r} · #${pick}`),
         LAB.el('span', { class: 'muted', style: 'font-size:11.5px' },
-          'ranked by how far each beats the field available here')));
+          sortMode === 'mine' ? 'in YOUR board order — Lab @Draft numbers alongside'
+            : 'ranked by how far each beats the field available here')));
       if (!likely.length) {
         card.append(LAB.el('p', { class: 'muted', style: 'font-size:12.5px;margin-top:6px' }, 'nothing left in the pool for this pick'));
         root.append(card);
@@ -150,6 +169,11 @@
             title: 'mark him gone — removes him from every pick card',
             onclick: () => { gone.add(p.id); persistGone(); render(); },
           }, '✓'),
+          LAB.el('b', {
+            class: 'mono', style: 'font-size:11px;width:30px;flex:none;text-align:right;color:'
+              + (oRanks[p.id] ? 'var(--accent)' : 'var(--ink-3)'),
+            title: oRanks[p.id] ? 'your overall board rank' : 'not ranked on your board',
+          }, oRanks[p.id] ? '#' + oRanks[p.id] : '–'),
           LAB.headshot(p.id, 'sm'),
           LAB.el('span', {
             style: 'font-weight:600;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer',
