@@ -80,11 +80,24 @@
     // a pick is worth its DRAFT POSITION: slots of value over a last-round
     // pick, so an earlier pick is always worth more (R4 +125, R9 +75, R16 +5);
     // future-year picks discounted 15%/yr
-    const pickVal = (season, round) => {
+    // valued at the REAL pick number (snake, at the original owner's slot) —
+    // the first 3rd and the last 3rd are nine picks apart
+    const dd = L.draftDetail || {};
+    const N = (L.rosters || []).length || 10;
+    const slotOfRoster = {};
+    Object.entries(dd.slotToRoster || {}).forEach(([slot, rid]) => (slotOfRoster[rid] = +slot));
+    const pickNo = (round, origRid) => {
+      const r = Math.min(16, Math.max(1, +round || 1));
+      const slot = slotOfRoster[origRid];
+      if (!slot) return (r - 0.5) * N;
+      return (r - 1) * N + (r % 2 === 1 ? slot : N + 1 - slot);
+    };
+    const pickVal = (season, round, origRid) => {
       const yrs = Math.max(0, (+season) - (+L.season));
+      const no = pickNo(round, origRid);
       const base = basis === 'true'
-        ? V(midPick(Math.min(16, +round))) // same convex curve as true surplus
-        : Math.max(0, (16.5 - Math.min(16, +round)) * 10);
+        ? V(no)                                  // same convex curve as true surplus
+        : Math.max(0, N * 16 - no);
       return base * Math.pow(0.85, yrs);
     };
     // the league's real market, keyed by the keeper's surplus AT TRADE TIME
@@ -93,11 +106,11 @@
     const surpMatches = s => MK.filter(e => e.surp != null)
       .map(e => ({ ...e, diff: Math.abs(e.surp - s) }))
       .sort((a, b) => a.diff - b.diff || (b.ts || 0) - (a.ts || 0));
-    return { eligible, costRd, surplusSlots, pickVal, surpMatches };
+    return { eligible, costRd, surplusSlots, pickVal, pickNo, surpMatches };
   }
 
   function assetVal(E, lens, a) {
-    if (a.kind === 'pick') return E.pickVal(a.season, a.round);
+    if (a.kind === 'pick') return E.pickVal(a.season, a.round, a.origRid);
     const p = byId[a.id];
     if (!p) return 0;
     if (lens === 'keeper') return Math.max(0, E.surplusSlots(p, basis) ?? 0);

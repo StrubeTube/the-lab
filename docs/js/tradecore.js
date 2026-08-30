@@ -35,11 +35,49 @@
       }
       return cost - midPick(wouldRd(p)); // 'adp' (and legacy 'keeper')
     };
-    const pickVal = (season, round, b) => {
+    // ---- real draft-pick numbers (snake) ----
+    // a "3rd rounder" is not one asset: with 10 teams the first 3rd is pick 21
+    // and the last is pick 30. A pick sits at the ORIGINAL owner's slot no
+    // matter who holds it, so value it there. Falls back to the round midpoint
+    // when the draft order is not set yet.
+    const dd = L.draftDetail || {};
+    const N = (L.rosters || []).length || 10;
+    const slotOfRoster = {};
+    Object.entries(dd.slotToRoster || {}).forEach(([slot, rid]) => (slotOfRoster[rid] = +slot));
+    const pickNo = (round, origRid) => {
+      const r = Math.min(16, Math.max(1, +round || 1));
+      const slot = slotOfRoster[origRid];
+      if (!slot) return (r - 0.5) * N;
+      return (r - 1) * N + (r % 2 === 1 ? slot : N + 1 - slot);
+    };
+    const pickVal = (season, round, b, origRid) => {
       const yrs = Math.max(0, (+season) - (+L.season));
-      const base = b === 'true' ? V(midPick(Math.min(16, +round)))
-        : Math.max(0, (16.5 - Math.min(16, +round)) * 10);
+      const no = pickNo(round, origRid);
+      const base = b === 'true' ? V(no) : Math.max(0, N * 16 - no);
       return base * Math.pow(0.85, yrs);
+    };
+
+    // ---- cap band ----
+    // salary is the flattened round table and EVERY held pick counts toward
+    // the opening (16 is the post-draft roster limit, not a cap cutoff). The
+    // band is only enforced in the WORSENING direction, matching the league
+    // rule: a team already outside it may not move further outside.
+    const SALARY = { 1: 30, 2: 26, 3: 22, 4: 19, 5: 16, 6: 14, 7: 12, 8: 10,
+      9: 8, 10: 7, 11: 6, 12: 5, 13: 4, 14: 3, 15: 2, 16: 2 };
+    const CAP = L.capMax ?? 230, FLOOR = L.capMin ?? 160;
+    const salaryOf = a => (a && a.kind === 'pick' && String(a.season) === String(L.season))
+      ? (SALARY[Math.min(16, +a.round)] || 0) : 0;
+    const openAmt = rid => ownedPicks(rid).reduce((t, p) => t + (SALARY[p.round] || 0), 0);
+    const bandOk = (before, after) =>
+      !((after > CAP && after > before) || (after < FLOOR && after < before));
+    // give = what I send them, get = what I receive
+    const tradeLegal = (rid, give, get) => {
+      const sum = arr => (arr || []).reduce((t, a) => t + salaryOf(a), 0);
+      const inbound = sum(get), outbound = sum(give);
+      if (!inbound && !outbound) return true;            // players only: cap-neutral
+      const tBefore = openAmt(rid), mBefore = openAmt(myRid);
+      return bandOk(tBefore, tBefore + outbound - inbound)
+        && bandOk(mBefore, mBefore + inbound - outbound);
     };
 
     // ---- pick ownership + keeper consumption ----
@@ -129,6 +167,7 @@
       byId, oRanks, midPick, V, eligible, costRd, wouldRd, surplusSlots, pickVal,
       ownedPicks, openOf, reserve, slate, slateSum, surpMatches, marketRound,
       propensity, myRid, keeps, rosterOfPid,
+      pickNo, openAmt, tradeLegal, CAP, FLOOR, SALARY,
     };
   };
 
@@ -151,7 +190,7 @@
       .filter(p => C.eligible(p) && !mySlateIds.has(p.id) && (C.surplusSlots(p, b) ?? 0) > 0)
       .map(p => ({ p, s: C.surplusSlots(p, b), sK: C.surplusSlots(p, 'keeper'), cost: C.costRd(p) }))
       .sort((x, y) => y.s - x.s);
-    const pv = r => C.pickVal(L.season, r, b);
+    const pv = pk => C.pickVal(L.season, pk.round, b, pk.origRid);
     const fmtPick = (pk, rid) => `2026 R${pk.round}` + (pk.origRid !== rid ? ` (orig)` : '');
     const props = [];
     const push = x => props.push(x);
@@ -211,7 +250,7 @@
             type: 'sell', rid: P.rid,
             give: [{ kind: 'player', id: sp.p.id }], get: [{ kind: 'pick', ...r.pick }],
             rung: r.label, chips,
-            myGain: pv(r.pick.round), theirGain: gain,
+            myGain: pv(r.pick), theirGain: gain,
             parts: [...baseParts((extra > 0 ? 1.5 : extra < 0 ? -1.5 : 0) + (weak3 < 12 ? 1 : 0)),
               { k: 'fairness', v: W.fairness * Math.min(2, gain / 12) },
               { k: 'market', v: (r.pick.round >= mktRd ? 1.2 : -0.9 * (mktRd - r.pick.round)) * W.market + (evts.length >= 3 ? 0.5 : 0) },
@@ -231,7 +270,7 @@
               type: 'sell', rid: P.rid,
               give: [{ kind: 'player', id: sp.p.id }, { kind: 'pick', ...sweet }], get: [{ kind: 'pick', ...up }],
               rung: 'PACKAGE', chips,
-              myGain: pv(up.round) - pv(sweet.round), theirGain: gain + pv(sweet.round) - 0,
+              myGain: pv(up) - pv(sweet), theirGain: gain + pv(sweet) - 0,
               parts: [...baseParts((extra > 0 ? 1 : 0) + (weak3 < 12 ? 1 : 0)),
                 { k: 'fairness', v: W.fairness * Math.min(2, (gain + 5) / 12) },
                 { k: 'market', v: 0.4 * W.market },
@@ -259,7 +298,7 @@
               type: 'sell', rid: P.rid,
               give: [{ kind: 'player', id: a2.p.id }, { kind: 'player', id: b2.p.id }], get: [{ kind: 'pick', ...up }],
               rung: 'PAIR', chips,
-              myGain: pv(up.round), theirGain: gain2,
+              myGain: pv(up), theirGain: gain2,
               parts: [...baseParts((extra > 0 ? 1 : 0) + 1),
                 { k: 'fairness', v: W.fairness * Math.min(2.5, gain2 / 10) },
                 { k: 'market', v: 0.3 * W.market }],
@@ -294,7 +333,7 @@
               type: 'buy', rid: P.rid,
               give: [{ kind: 'pick', ...r.pick }], get: [{ kind: 'player', id: ts.p.id }],
               rung: r.label, chips,
-              myGain: myGain - pv(r.pick.round) / 3, theirGain: pv(r.pick.round),
+              myGain: myGain - pv(r.pick) / 3, theirGain: pv(r.pick),
               parts: [...baseParts((extra < 0 ? 1 : 0) + 0.5),
                 { k: 'fairness', v: W.fairness * (r.pick.round <= mktRd ? 1.5 : 0.4) },
                 { k: 'market', v: (r.pick.round <= mktRd ? 0.8 : -0.2) * W.market + (evts.length >= 3 ? 0.4 : 0) }],
@@ -337,9 +376,9 @@
           if (a.round < 3) continue; // their early picks aren't for sale either
           const laters = myOpen.filter(x => x.round > a.round);
           for (let i = 0; i < laters.length - 1; i++) {
-            const net = pv(a.round) - pv(laters[i].round) - pv(laters[i + 1].round);
+            const net = pv(a) - pv(laters[i]) - pv(laters[i + 1]);
             if (net < -8 || net > 8) continue; // near-fair; count is their payment
-            if (Lv(laters[i].round) + Lv(laters[i + 1].round) - Lv(a.round) < 0) continue; // chart optics
+            if (Lv(laters[i]) + Lv(laters[i + 1]) - Lv(a) < 0) continue; // chart optics
             const score = 4 + 2 * W.motivation + Math.min(1.5, Math.max(0, net) / 10) + W.propensity * prop.score * 0.5;
             if (!best || score > best.score) best = { a, b: laters[i], c: laters[i + 1], net, score };
           }
@@ -364,7 +403,7 @@
           if (a.round < 3) continue;
           const later = pOpen.filter(x => x.round > a.round);
           for (let i = 0; i < later.length - 1; i++) {
-            const net = pv(later[i].round) + pv(later[i + 1].round) - pv(a.round);
+            const net = pv(later[i]) + pv(later[i + 1]) - pv(a);
             if (net < 5 || net > 40) continue;
             push({
               type: 'picks', rid: P.rid,
@@ -383,7 +422,9 @@
       }
     }
     for (const x of props) x.score = scoreOf(x.parts);
-    return props;
+    // a proposal that pushes either side further outside the cap band is not a
+    // trade the league would let them make — never surface it
+    return props.filter(x => C.tradeLegal(x.rid, x.give, x.get));
   };
 
   // OPTICS: partners judge pick trades on a classic linear chart, not my
@@ -391,7 +432,6 @@
   // the two picks they receive must be worth >= the one they give, linearly.
   // This kills "R14+R15 for your R8" (-45 on their chart) but keeps
   // "R10+R14 for your R8" (+5 on their chart, still curve-positive for me).
-  const Lv = r => (16.5 - r) * 10;
 
   // small follow-up shed that returns me to 16 after a trade hands me an
   // extra pick: give 2 of my laters -> 1 higher from an under-16 team,
@@ -399,7 +439,8 @@
   LAB.rebalanceFor = function (C, L, opts) {
     const o = { exclude: [], ...opts }; // pick keys I can't give (spent in the main trade)
     const myOpen = C.openOf(C.myRid).filter(p => !o.exclude.includes(p.round + '.' + p.origRid));
-    const pv = r => C.pickVal(L.season, r, 'true');
+    const pv = pk => C.pickVal(L.season, pk.round, 'true', pk.origRid);
+    const Lv = pk => C.pickVal(L.season, pk.round, 'linear', pk.origRid);
     let best = null;
     for (const P of L.rosters) {
       if (P.rid === C.myRid) continue;
@@ -410,10 +451,12 @@
         if (d.round < 3) continue;
         const laters = myOpen.filter(x => x.round > d.round);
         for (let i = 0; i < laters.length - 1; i++) {
-          const net = pv(d.round) - pv(laters[i].round) - pv(laters[i + 1].round);
+          const net = pv(d) - pv(laters[i]) - pv(laters[i + 1]);
           if (net < -6 || net > 6) continue; // near-even both ways — they'd actually say yes
-          const optics = Lv(laters[i].round) + Lv(laters[i + 1].round) - Lv(d.round);
+          const optics = Lv(laters[i]) + Lv(laters[i + 1]) - Lv(d);
           if (optics < 0) continue; // must also look good on their chart
+          if (!C.tradeLegal(P.rid, [laters[i], laters[i + 1]].map(x => ({ kind: 'pick', ...x })),
+            [{ kind: 'pick', ...d }])) continue; // cap band
           const score = (16 - pOwned) + prop + net / 10 + optics / 40;
           if (!best || score > best.score) best = { rid: P.rid, give: [laters[i], laters[i + 1]], get: d, net, optics, score };
         }
@@ -427,7 +470,8 @@
   // count nets back to 16, and my pick quality rises. One best pair per
   // (over, under) partner combination.
   LAB.pickPairs = function (C, L) {
-    const pv = r => C.pickVal(L.season, r, 'true');
+    const pv = pk => C.pickVal(L.season, pk.round, 'true', pk.origRid);
+    const Lv = pk => C.pickVal(L.season, pk.round, 'linear', pk.origRid);
     const myOpen = C.openOf(C.myRid);
     const overs = [], unders = [];
     for (const P of L.rosters) {
@@ -445,7 +489,7 @@
           if (a1.round < 2) continue;
           const bs = oOpen.filter(x => x.round > a1.round);
           for (let i = 0; i < bs.length - 1; i++) {
-            const netA = pv(bs[i].round) + pv(bs[i + 1].round) - pv(a1.round);
+            const netA = pv(bs[i]) + pv(bs[i + 1]) - pv(a1);
             // each LEG must be only a SLIGHT gain for me — the partner's real
             // payment is the count fix, never a value fleecing they'd refuse
             if (netA < 0.5 || netA > 10) continue;
@@ -453,10 +497,13 @@
               if (d.round < 3) continue;
               const cs = myOpen.filter(x => x !== a1 && x.round > d.round);
               for (let j = 0; j < cs.length - 1; j++) {
-                const netB = pv(d.round) - pv(cs[j].round) - pv(cs[j + 1].round);
+                const netB = pv(d) - pv(cs[j]) - pv(cs[j + 1]);
                 if (netB < 0.5 || netB > 10) continue;
-                const opticsB = Lv(cs[j].round) + Lv(cs[j + 1].round) - Lv(d.round);
+                const opticsB = Lv(cs[j]) + Lv(cs[j + 1]) - Lv(d);
                 if (opticsB < 0) continue; // the shed leg must LOOK like a win on their chart
+                const pk = x => ({ kind: 'pick', ...x });
+                if (!C.tradeLegal(O.rid, [pk(a1)], [pk(bs[i]), pk(bs[i + 1])])) continue;
+                if (!C.tradeLegal(U.rid, [pk(cs[j]), pk(cs[j + 1])], [pk(d)])) continue;
                 const total = netA + netB;
                 // prefer BALANCED pairs (both legs modest) over max total
                 const score = Math.min(netA, netB) * 0.8 + total / 10 + (nO - 16) + (16 - nU)
