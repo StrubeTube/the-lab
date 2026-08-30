@@ -124,7 +124,7 @@
     };
 
     // ---- slates ----
-    const slate = (pids, b) => pids.map(pid => byId[pid]).filter(p => eligible(p))
+    const slate = (pids, b) => [...new Set(pids)].map(pid => byId[pid]).filter(p => eligible(p))
       .map(p => ({ p, cost: costRd(p), s: surplusSlots(p, b) ?? -999 }))
       .sort((x, y) => y.s - x.s).slice(0, L.keeperMax || 3);
     const slateSum = sl => sl.reduce((t, x) => t + Math.max(0, x.s), 0);
@@ -183,7 +183,7 @@
     const me = L.rosters.find(r => r.rid === C.myRid);
     const myOpen = C.openOf(C.myRid);
     const myOwned = C.ownedPicks(C.myRid).length;
-    const mySlate = C.slate(me.players, b);
+    const mySlate = C.slate(keeperPool(me), b);
     const mySlateIds = new Set(mySlate.map(x => x.p.id));
     const mySlateSum = C.slateSum(mySlate);
     const spares = me.players.map(pid => C.byId[pid])
@@ -191,6 +191,16 @@
       .map(p => ({ p, s: C.surplusSlots(p, b), sK: C.surplusSlots(p, 'keeper'), cost: C.costRd(p) }))
       .sort((x, y) => y.s - x.s);
     const pv = pk => C.pickVal(L.season, pk.round, b, pk.origRid);
+    // WHO THEY ACTUALLY KEEP. slate() ranks by surplus, which is not the same
+    // as what a manager declared -- DaBlondest declared Swift (+1) and left
+    // Dak Prescott (+16) off, so a pure-surplus slate invented a Dak keeper
+    // and priced trades against a player he was never keeping. Sleeper's
+    // declaration wins; only fall back to the surplus guess for a team that
+    // has not declared a full slate yet (me, mostly).
+    const keeperPool = R => {
+      const dec = (R.keepers || []).filter(pid => C.byId[pid]);
+      return dec.length >= (L.keeperMax || 3) ? dec : R.players;
+    };
     // partners judge pick trades on a linear chart, not my convex curve
     const Lv = pk => C.pickVal(L.season, pk.round, 'linear', pk.origRid);
     const fmtPick = (pk, rid) => `2026 R${pk.round}` + (pk.origRid !== rid ? ` (orig)` : '');
@@ -215,7 +225,7 @@
       const pOpen = C.openOf(P.rid);
       const pOwned = C.ownedPicks(P.rid).length;
       const extra = pOwned - 16;
-      const pSlate = C.slate(P.players, b);
+      const pSlate = C.slate(keeperPool(P), b);
       const pSum = C.slateSum(pSlate);
       const weak3 = pSlate.length >= (L.keeperMax || 3) ? pSlate[pSlate.length - 1].s : -999;
       const prop = C.propensity[P.rid] || { score: 0, n: 0, pre: 0 };
@@ -233,7 +243,7 @@
 
       // ---- SELL: keeper (+optional sweetener / pair) -> their pick ----
       for (const sp of spares.slice(0, 4)) {
-        const afterSlate = C.slate(P.players.concat(sp.p.id), b);
+        const afterSlate = C.slate(keeperPool(P).concat(sp.p.id), b);
         const gain = C.slateSum(afterSlate) - pSum;
         // who my keeper would knock off their slate — the perspective line
         const disp = pSlate.find(x => !afterSlate.some(y => y.p.id === x.p.id));
@@ -287,7 +297,7 @@
       // pair of spares -> one good pick
       if (o.maxAssets >= 3 && spares.length >= 2) {
         const [a2, b2] = spares;
-        const after2 = C.slate(P.players.concat(a2.p.id, b2.p.id), b);
+        const after2 = C.slate(keeperPool(P).concat(a2.p.id, b2.p.id), b);
         const gain2 = C.slateSum(after2) - pSum;
         const disp2 = pSlate.filter(x => !after2.some(y => y.p.id === x.p.id)).map(x => `${x.p.name} (+${Math.round(x.s)})`);
         if (gain2 >= 8) {
@@ -319,7 +329,7 @@
           .map(p => ({ p, s: C.surplusSlots(p, b), sK: C.surplusSlots(p, 'keeper'), cost: C.costRd(p) }))
           .sort((x, y) => y.s - x.s).slice(0, 3);
         for (const ts of theirSpares) {
-          const myGain = C.slateSum(C.slate(me.players.concat(ts.p.id), b)) - mySlateSum;
+          const myGain = C.slateSum(C.slate(keeperPool(me).concat(ts.p.id), b)) - mySlateSum;
           if (myGain < 3) continue;
           const afterReserve = C.reserve(myOpen, ts.cost);
           if (!afterReserve) continue;
@@ -348,8 +358,8 @@
         // ---- SWAP: my spare <-> their spare, both slates improve ----
         for (const sp of spares.slice(0, 3)) {
           for (const ts of theirSpares) {
-            const afterM = C.slate(me.players.filter(x => x !== sp.p.id).concat(ts.p.id), b);
-            const afterT = C.slate(P.players.filter(x => x !== ts.p.id).concat(sp.p.id), b);
+            const afterM = C.slate(keeperPool(me).filter(x => x !== sp.p.id).concat(ts.p.id), b);
+            const afterT = C.slate(keeperPool(P).filter(x => x !== ts.p.id).concat(sp.p.id), b);
             const mg = C.slateSum(afterM) - mySlateSum;
             const tg = C.slateSum(afterT) - pSum;
             if (mg < 3 || tg < 2) continue;

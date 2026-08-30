@@ -1,6 +1,6 @@
 {
  "_source": "Mason Dodd tier images (YouTube), transcribed 2026-08-30",
- "_note": "OVR 1-100 verified identical to his live API board. RB/WR differ from it.",
+ "_note": "OVR 1-100 verified identical to his live API board at capture. RB/WR differed. Pins apply ONLY while his live board is older than _captured -- once Mason Dodd updates his board after this, his own newer ranks win and these are ignored.",
  "overall": [
   "Jahmyr Gibbs",
   "Bijan Robinson",
@@ -207,5 +207,6 @@
    "De'Zhaun Stribling",
    "Matthew Golden"
   ]
- }
+ },
+ "_captured": "2026-08-30 15:00:00.000"
 }

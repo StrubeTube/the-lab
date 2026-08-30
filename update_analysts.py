@@ -51,20 +51,27 @@ def fetch_flock():
     rows.sort()
     positional = {pos: [n for _, n, p in rows if p == pos][: POS_CAP[pos]] for pos in POS}
     overall = [[i + 1, n] for i, (_, n, _p) in enumerate(rows[:OVR_CAP])]
-    positional, overall = apply_pins(positional, overall)
-    return positional, overall, (d.get("lastUpdated") or {}).get(FLOCK_RANKER, "")
+    stamp = (d.get("lastUpdated") or {}).get(FLOCK_RANKER, "")
+    positional, overall = apply_pins(positional, overall, stamp)
+    return positional, overall, stamp
 
 
-def apply_pins(positional, overall):
+def apply_pins(positional, overall, stamp=""):
     """Dodd's tier images outrank his live board where they overlap.
 
     The images cover OVR 1-100, RB 1-50 and WR 1-49; the API supplies the tail.
-    His board and his images genuinely disagree (Jacobs is RB18 on the images,
-    RB25 on the API), and Alex wants the images to win.
+    His images and his board genuinely disagreed at capture time, and Alex wants
+    the images to win -- but only until Dodd himself moves. Once his live board
+    is NEWER than the capture, news has happened (Jacobs RB18 -> RB40 on the
+    2026-08-30 evening update) and his own fresher ranks take over completely.
     """
     if not PINS.exists():
         return positional, overall
     pins = json.loads(PINS.read_text(encoding="utf-8"))
+    captured = pins.get("_captured") or ""
+    if captured and stamp and stamp > captured:
+        print(f"  pins RETIRED — his board ({stamp}) is newer than the images ({captured})")
+        return positional, overall
     head = pins.get("overall") or []
     tail = [n for _, n in overall if n not in set(head)]
     overall = [[i + 1, n] for i, n in enumerate((head + tail)[:OVR_CAP])]
