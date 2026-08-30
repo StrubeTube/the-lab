@@ -4,8 +4,10 @@
 Fetches the machine-readable source and rewrites its section of
 data/analyst_lists.json, then prints a per-source change summary:
 
-  - Flock Fantasy: public API, Corey Buschlen's board -> positional lists +
+  - Flock Fantasy: public API, Mason Dodd's board -> positional lists +
     dense overall list (his ranks number skill players 1..N, no K/DST).
+    The site shows a blend of eight Flock rankers; Alex wants Dodd only
+    (2026-08-30, was Corey Buschlen).
 
 (FantasyPros was removed from the consensus 2026-08-25 per Alex.)
 
@@ -13,6 +15,7 @@ Joel Smyth (Yahoo article) and The Fantasy Footballers (rendered pages) are
 JS-rendered and updated by Claude via the `update-analysts` skill, which
 edits the same JSON file. Run build_consensus.py + compute.py afterwards.
 """
+import csv
 import json
 import re
 import urllib.request
@@ -20,6 +23,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).parent
 LISTS = ROOT / "data" / "analyst_lists.json"
+PINS = ROOT / "data" / "flock_dodd_pins.json"
+FFA_CSV = ROOT / "data" / "raw" / "ffa_rankings.csv"
 POS = ["QB", "RB", "WR", "TE"]
 POS_CAP = {"QB": 50, "RB": 110, "WR": 120, "TE": 60}
 OVR_CAP = 260
@@ -33,15 +38,57 @@ def get(url):
         return r.read().decode("utf-8", "replace")
 
 
+FLOCK_RANKER = "Mason Dodd"
+
+
 def fetch_flock():
     d = json.loads(get("https://api.flockfantasy.com/rankings?format=year"))
-    rows = [(x["overallRanks"]["Corey Buschlen"], x["playerName"], x["position"])
+    rows = [(x["overallRanks"][FLOCK_RANKER], x["playerName"], x["position"])
             for x in d["data"]
-            if x.get("position") in POS and (x.get("overallRanks") or {}).get("Corey Buschlen")]
+            if x.get("position") in POS and (x.get("overallRanks") or {}).get(FLOCK_RANKER)]
+    if not rows:
+        raise RuntimeError(f"no ranks found for {FLOCK_RANKER}")
     rows.sort()
     positional = {pos: [n for _, n, p in rows if p == pos][: POS_CAP[pos]] for pos in POS}
     overall = [[i + 1, n] for i, (_, n, _p) in enumerate(rows[:OVR_CAP])]
-    return positional, overall, (d.get("lastUpdated") or {}).get("Corey Buschlen", "")
+    positional, overall = apply_pins(positional, overall)
+    return positional, overall, (d.get("lastUpdated") or {}).get(FLOCK_RANKER, "")
+
+
+def apply_pins(positional, overall):
+    """Dodd's tier images outrank his live board where they overlap.
+
+    The images cover OVR 1-100, RB 1-50 and WR 1-49; the API supplies the tail.
+    His board and his images genuinely disagree (Jacobs is RB18 on the images,
+    RB25 on the API), and Alex wants the images to win.
+    """
+    if not PINS.exists():
+        return positional, overall
+    pins = json.loads(PINS.read_text(encoding="utf-8"))
+    head = pins.get("overall") or []
+    tail = [n for _, n in overall if n not in set(head)]
+    overall = [[i + 1, n] for i, n in enumerate((head + tail)[:OVR_CAP])]
+    for pos, plist in (pins.get("positional") or {}).items():
+        tail = [n for n in positional.get(pos, []) if n not in set(plist)]
+        positional[pos] = (plist + tail)[: POS_CAP[pos]]
+    return positional, overall
+
+
+def fetch_ffa():
+    """Fantasy Football Advice — their rankings export.
+
+    The site's rankings sit behind a paywall with no open endpoint, so this
+    reads the CSV Alex exports from his account into data/raw/ffa_rankings.csv.
+    Re-export and rerun to refresh.
+    """
+    rows = list(csv.DictReader(FFA_CSV.read_text(encoding="utf-8-sig").splitlines()))
+    skill = [r for r in rows if r.get("Pos") in POS and r.get("Player")]
+    skill.sort(key=lambda r: int(r["Rank"]))
+    positional = {pos: [r["Player"] for r in skill if r["Pos"] == pos][: POS_CAP[pos]]
+                  for pos in POS}
+    overall = [[i + 1, r["Player"]] for i, r in enumerate(skill[:OVR_CAP])]
+    stamp = f"CSV export, {len(skill)} skill players"
+    return positional, overall, stamp
 
 
 def diff(old, new, label):
@@ -60,7 +107,7 @@ def diff(old, new, label):
 def main():
     lists = json.loads(LISTS.read_text(encoding="utf-8"))
     total = 0
-    for src, fetch in (("flock", fetch_flock),):
+    for src, fetch in (("flock", fetch_flock), ("ffa", fetch_ffa)):
         print(f"{src}: fetching...")
         try:
             positional, overall, stamp = fetch()

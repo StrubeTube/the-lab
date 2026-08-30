@@ -5,7 +5,7 @@ Reads the analyst lists from data/analyst_lists.json and averages them into
 data/consensus_ranks.json, which compute.py merges into players.json
 (positional -> `cr`/`crs`, overall "OVR" -> `ocr`/`ocrs`).
 
-Sources: Joel Smyth (Yahoo), Flock Fantasy (Corey Buschlen), The Fantasy
+Sources: Joel Smyth (Yahoo), Flock Fantasy (Mason Dodd), The Fantasy
 Footballers. A "vegas" source is computed live in compute.py from BettingPros
 prop lines and never appears here. (FantasyPros removed 2026-08-25 per Alex.)
 
