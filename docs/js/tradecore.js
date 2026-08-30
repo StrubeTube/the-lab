@@ -181,16 +181,6 @@
     const W = o.weights;
     const b = o.basis;
     const me = L.rosters.find(r => r.rid === C.myRid);
-    const myOpen = C.openOf(C.myRid);
-    const myOwned = C.ownedPicks(C.myRid).length;
-    const mySlate = C.slate(keeperPool(me), b);
-    const mySlateIds = new Set(mySlate.map(x => x.p.id));
-    const mySlateSum = C.slateSum(mySlate);
-    const spares = me.players.map(pid => C.byId[pid])
-      .filter(p => C.eligible(p) && !mySlateIds.has(p.id) && (C.surplusSlots(p, b) ?? 0) > 0)
-      .map(p => ({ p, s: C.surplusSlots(p, b), sK: C.surplusSlots(p, 'keeper'), cost: C.costRd(p) }))
-      .sort((x, y) => y.s - x.s);
-    const pv = pk => C.pickVal(L.season, pk.round, b, pk.origRid);
     // WHO THEY ACTUALLY KEEP. slate() ranks by surplus, which is not the same
     // as what a manager declared -- DaBlondest declared Swift (+1) and left
     // Dak Prescott (+16) off, so a pure-surplus slate invented a Dak keeper
@@ -201,6 +191,16 @@
       const dec = (R.keepers || []).filter(pid => C.byId[pid]);
       return dec.length >= (L.keeperMax || 3) ? dec : R.players;
     };
+    const myOpen = C.openOf(C.myRid);
+    const myOwned = C.ownedPicks(C.myRid).length;
+    const mySlate = C.slate(keeperPool(me), b);
+    const mySlateIds = new Set(mySlate.map(x => x.p.id));
+    const mySlateSum = C.slateSum(mySlate);
+    const spares = me.players.map(pid => C.byId[pid])
+      .filter(p => C.eligible(p) && !mySlateIds.has(p.id) && (C.surplusSlots(p, b) ?? 0) > 0)
+      .map(p => ({ p, s: C.surplusSlots(p, b), sK: C.surplusSlots(p, 'keeper'), cost: C.costRd(p) }))
+      .sort((x, y) => y.s - x.s);
+    const pv = pk => C.pickVal(L.season, pk.round, b, pk.origRid);
     // partners judge pick trades on a linear chart, not my convex curve
     const Lv = pk => C.pickVal(L.season, pk.round, 'linear', pk.origRid);
     const fmtPick = (pk, rid) => `2026 R${pk.round}` + (pk.origRid !== rid ? ` (orig)` : '');
