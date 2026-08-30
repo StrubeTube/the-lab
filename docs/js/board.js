@@ -113,11 +113,17 @@
   // drafted around him (the "who else could I take here" read) — position
   // window on position tabs, mixed window on Overall
   state.winLens = !!LAB.prefs.winLens && !state.adpLens && !state.labLens;
+  // vs-Analysts lens: tint rows by my rank vs the ANALYST CONSENSUS average
+  // (cr / ocr) — the same read as the ADP lens but against my own analyst
+  // panel instead of the market, which reacts to news days before ADP does
+  state.crLens = !!LAB.prefs.crLens && !state.adpLens && !state.labLens && !state.winLens;
   const adpLensBtn = LAB.$('#adpLensBtn');
   const labLensBtn = LAB.$('#labLensBtn');
   const winLensBtn = LAB.$('#winLensBtn');
+  const crLensBtn = LAB.$('#crLensBtn');
   const syncLensBtns = () => {
-    for (const [btn, on] of [[adpLensBtn, state.adpLens], [labLensBtn, state.labLens], [winLensBtn, state.winLens]]) {
+    for (const [btn, on] of [[adpLensBtn, state.adpLens], [labLensBtn, state.labLens],
+      [winLensBtn, state.winLens], [crLensBtn, state.crLens]]) {
       btn.style.background = on ? 'var(--accent-soft)' : '';
       btn.style.borderColor = on ? 'var(--accent)' : '';
       btn.style.color = on ? 'var(--accent)' : '';
@@ -126,22 +132,27 @@
   syncLensBtns();
   const saveLensPrefs = () => {
     LAB.prefs.adpLens = state.adpLens; LAB.prefs.labLens = state.labLens;
-    LAB.prefs.winLens = state.winLens; LAB.savePrefs();
+    LAB.prefs.winLens = state.winLens; LAB.prefs.crLens = state.crLens; LAB.savePrefs();
     syncLensBtns(); render();
   };
   adpLensBtn.addEventListener('click', () => {
     state.adpLens = !state.adpLens;
-    if (state.adpLens) { state.labLens = false; state.winLens = false; }
+    if (state.adpLens) { state.labLens = false; state.winLens = false; state.crLens = false; }
     saveLensPrefs();
   });
   labLensBtn.addEventListener('click', () => {
     state.labLens = !state.labLens;
-    if (state.labLens) { state.adpLens = false; state.winLens = false; }
+    if (state.labLens) { state.adpLens = false; state.winLens = false; state.crLens = false; }
     saveLensPrefs();
   });
   winLensBtn.addEventListener('click', () => {
     state.winLens = !state.winLens;
-    if (state.winLens) { state.adpLens = false; state.labLens = false; }
+    if (state.winLens) { state.adpLens = false; state.labLens = false; state.crLens = false; }
+    saveLensPrefs();
+  });
+  crLensBtn.addEventListener('click', () => {
+    state.crLens = !state.crLens;
+    if (state.crLens) { state.adpLens = false; state.labLens = false; state.winLens = false; }
     saveLensPrefs();
   });
   // Lab-rank deltas for the current view: + = the Lab Score says he should
@@ -171,6 +182,13 @@
     const mkt = overallMode ? p.adp : p.adp_pos;
     if (mkt == null || rankNo == null) return null;
     return Math.round(mkt - rankNo);
+  }
+  // delta = analyst consensus rank − my rank: positive = I'm higher on him
+  // than my analysts (green). Null when nobody ranked him.
+  function crDelta(p, rankNo, overallMode) {
+    const c = overallMode ? p.ocr : p.cr;
+    if (c == null || rankNo == null) return null;
+    return Math.round(c - rankNo);
   }
   function adpLensStyle(d, overallMode, maxAbs) {
     if (d == null || d === 0) return '';
@@ -272,8 +290,9 @@
     const mine = ovl && ovl.mine.has(pid);
     const lensD = state.adpLens ? adpDelta(p, rankNo, opts.showPos)
       : state.labLens ? ((state._labD || {})[pid] ?? null)
-        : state.winLens ? ((p.lab || {})[opts.showPos ? 'wg' : 'wgp'] ?? null) : null;
-    const lensOn = state.adpLens || state.labLens || state.winLens;
+        : state.winLens ? ((p.lab || {})[opts.showPos ? 'wg' : 'wgp'] ?? null)
+          : state.crLens ? crDelta(p, rankNo, opts.showPos) : null;
+    const lensOn = state.adpLens || state.labLens || state.winLens || state.crLens;
     const row = LAB.el('div', {
       class: 'prow', 'data-pid': pid,
       style: lensOn ? adpLensStyle(lensD, state.winLens ? true : opts.showPos, state.winLens ? 25 : null).replace(/^;/, '') : '',
@@ -311,6 +330,13 @@
           title: state.adpLens
             ? (lensD == null ? 'no Sleeper ADP for this comparison'
               : (opts.showPos ? 'overall' : 'positional') + ` gap: your rank ${rankNo} vs ADP ${opts.showPos ? p.adp?.toFixed(1) : p.adp_pos}` + (lensD > 0 ? ' — you are higher than the market' : lensD < 0 ? ' — you are lower than the market' : ''))
+            : state.crLens
+              ? (lensD == null ? 'no analyst ranked him for this comparison'
+                : (opts.showPos ? 'overall' : 'positional') + ` gap: your rank ${rankNo} vs analyst average `
+                  + (opts.showPos ? p.ocr : p.cr) + ` (${(opts.showPos ? p.ocr_n : p.cr_n) || 0} source`
+                  + (((opts.showPos ? p.ocr_n : p.cr_n) || 0) === 1 ? '' : 's') + ')'
+                  + (lensD > 0 ? ' — you are HIGHER on him than your analysts'
+                    : lensD < 0 ? ' — you are LOWER on him than your analysts' : ' — you agree'))
             : state.winLens
               ? (lensD == null ? 'no window gap (unscored or no ADP)'
                 : `Lab Score vs the median of players drafted around him (${opts.showPos ? 'all positions' : 'his position only'}): ${lensD > 0 ? '+' : ''}${lensD} — ${lensD >= 20 ? 'stands clearly ABOVE his window (the Jacobs-2022 signal)' : lensD <= -20 ? 'clearly BELOW his window' : 'roughly par for the neighborhood'}`)
@@ -344,6 +370,7 @@
         state.adpLens ? LAB.el('span', { class: 'stat w40', title: 'your rank vs Sleeper ADP (positional on this tab)' }, 'Δ ADP') : '',
         state.labLens ? LAB.el('span', { class: 'stat w40', title: 'spots the Lab Score would move him on your board — green = move up, red = move down' }, 'Δ Lab') : '',
         state.winLens ? LAB.el('span', { class: 'stat w40', title: 'his Lab Score minus the median score of players drafted around him — the "who else could I take here" number; ±20 is a real signal' }, 'Δ Win') : '',
+        state.crLens ? LAB.el('span', { class: 'stat w40', title: 'your rank vs your analyst average (positional on this tab) — green = you are higher on him than your analysts' }, 'Δ CR') : '',
         kSim ? LAB.el('span', { class: 'stat w40', title: 'keeper-draft round' }, 'K Rd') : '',
         LAB.el('span', { class: 'stat hide-m' }, "'26 Proj"),
         LAB.el('span', { class: 'stat hide-m' }, "'25 Fin"),
