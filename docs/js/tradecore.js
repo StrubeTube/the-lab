@@ -191,6 +191,8 @@
       .map(p => ({ p, s: C.surplusSlots(p, b), sK: C.surplusSlots(p, 'keeper'), cost: C.costRd(p) }))
       .sort((x, y) => y.s - x.s);
     const pv = pk => C.pickVal(L.season, pk.round, b, pk.origRid);
+    // partners judge pick trades on a linear chart, not my convex curve
+    const Lv = pk => C.pickVal(L.season, pk.round, 'linear', pk.origRid);
     const fmtPick = (pk, rid) => `2026 R${pk.round}` + (pk.origRid !== rid ? ` (orig)` : '');
     const props = [];
     const push = x => props.push(x);
