@@ -1,0 +1,6 @@
+{
+ "_note": "Analyst spelling -> Sleeper spelling, both already normalized (lowercase, no punctuation, no Jr/Sr/II-V). Applied at the end of norm() in compute.py and build_consensus.py. Only for the SAME human under a different first name; suffix and punctuation differences are handled by norm() itself.",
+ "ken walker": "kenneth walker",
+ "kenneth gainwell": "kenny gainwell",
+ "chigoziem okonkwo": "chig okonkwo"
+}

@@ -37,10 +37,17 @@ def dump(name, obj):
     print(f"  wrote {name} ({p.stat().st_size//1024} KB)")
 
 
+_ALIAS_PATH = Path(__file__).parent / "data" / "name_aliases.json"
+NAME_ALIASES = {k: v for k, v in json.loads(
+    _ALIAS_PATH.read_text(encoding="utf-8")).items() if not k.startswith("_")} \
+    if _ALIAS_PATH.exists() else {}
+
+
 def norm(name):
     n = re.sub(r"[^a-z ]", "", (name or "").lower())
     n = re.sub(r"\b(jr|sr|ii|iii|iv|v)\b", "", n)
-    return re.sub(r"\s+", " ", n).strip()
+    n = re.sub(r"\s+", " ", n).strip()
+    return NAME_ALIASES.get(n, n)
 
 
 print("Loading raw data...")
