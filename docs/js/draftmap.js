@@ -41,7 +41,11 @@
   const scen = () => (scenAll[tag] = scenAll[tag] || { picks: {}, keepers: null });
   const saveScen = () => { try { localStorage.setItem(K_SCEN, JSON.stringify(scenAll)); } catch (e) {} };
   const scenN = () => Object.keys(scen().picks).length + (scen().keepers ? 1 : 0);
-  const setLock = (pick, pid) => { scen().picks[pick] = pid; saveScen(); render(); };
+  const setLock = (pick, pid) => {
+    scen().picks[pick] = pid; saveScen();
+    document.querySelectorAll('.overlay').forEach(o => o.remove()); // close any picker
+    render();
+  };
   const clearLock = pick => { delete scen().picks[pick]; saveScen(); render(); };
   const clearScen = () => { scenAll[tag] = { picks: {}, keepers: null }; saveScen(); render(); };
 
@@ -357,6 +361,35 @@
       }, '\u21b3 lock') : '');
   }
 
+  // Lock ANY player still on the board to a pick. The zone list is capped at
+  // the players your board says you'd actually consider, so a guy you rank
+  // lower (Saquon at 1.06) never shows up there — this is how you reach him.
+  function anyPlayerPicker(sim, pick, taken) {
+    const pool = sim.adpOrder.filter(p => !taken.has(p.id) && !sim.keptSet.has(p.id));
+    const input = LAB.el('input', {
+      type: 'search', placeholder: 'Type a name…',
+      style: 'width:100%;margin:6px 0 8px;padding:6px 9px',
+    });
+    const rows = LAB.el('div', { style: 'max-height:52vh;overflow:auto' });
+    const draw = () => {
+      rows.innerHTML = '';
+      const q = (input.value || '').toLowerCase().trim();
+      const hits = pool.filter(p => !q || p.name.toLowerCase().includes(q));
+      if (!hits.length) rows.append(LAB.el('div', { class: 'muted', style: 'font-size:12px;padding:6px' }, 'nobody by that name is still on the board'));
+      hits.slice(0, 60).forEach(p => rows.append(probChip(p, sim.probAvail(p.id, pick), false, pick)));
+    };
+    input.addEventListener('input', draw);
+    draw();
+    const r = Math.ceil(pick / sim.N);
+    LAB.modal(LAB.el('div', {},
+      LAB.el('h2', {}, `Lock anyone to ${r}.${String(pick - (r - 1) * sim.N).padStart(2, '0')} (#${pick})`),
+      LAB.el('p', { class: 'muted', style: 'font-size:12px;margin:4px 0 0' },
+        'Every player still on the board at this pick, your board rank ignored. '
+        + 'The % is his real chance of being there — locking someone at 3% is a plan for a draft that will not happen.'),
+      input, rows));
+    setTimeout(() => input.focus(), 30);
+  }
+
   function pickDetail(sim, pick) {
     const rows = sim.adpOrder
       .filter(p => sim.roomPick[p.id] != null && sim.roomPick[p.id] >= pick - 32 && sim.roomPick[p.id] <= pick + 28)
@@ -655,6 +688,11 @@
         zone.slice().sort((a, b) => (dGap(b.p) ?? -99) - (dGap(a.p) ?? -99))
           .forEach(x => zoneBox.append(probChip(x.p, x.prob, x.p.id === heroPid, pick)));
         col.append(zoneBox);
+        col.append(LAB.el('button', {
+          style: 'width:100%;margin-top:4px;font-size:10.5px;padding:3px 0;border-radius:6px;border:1px dashed var(--border);background:var(--surface);cursor:pointer',
+          title: 'Lock any player on the board to this pick — including someone your board ranks below this zone',
+          onclick: () => anyPlayerPicker(sim, pick, new Set(heroTaken)),
+        }, '⌕ lock anyone to this pick'));
         // --- two-pick lookahead: the best PAIR across this pick and my next
         const nextPick = sim.myPicks.filter(pk => pk > pick && !sim.cells[pk])[0];
         if (nextPick && zone.length) {
