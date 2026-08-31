@@ -66,6 +66,23 @@
   }
 
   function commit() { LAB.saveBoard(board); render(); }
+  // Players YOU positioned -- recorded at the sites where one specific player
+  // moves (drag, bump, send-to-tier), so a consensus sync can reflow everyone
+  // else around them. Pins are the manual override for anything older.
+  function markMoved(pid) {
+    if (!pid) return;
+    const set = new Set(board.moved || []);
+    if (set.has(pid)) return;
+    set.add(pid);
+    board.moved = [...set];
+  }
+  const isProtected = pid => (board.moved || []).includes(pid) || (board.pins || []).includes(pid);
+  function togglePin(pid) {
+    const set = new Set(board.pins || []);
+    set.has(pid) ? set.delete(pid) : set.add(pid);
+    board.pins = [...set];
+    return set.has(pid);
+  }
 
   // ---------- overlay info (rostered/keeper per league) ----------
   function overlayInfo() {
@@ -222,6 +239,23 @@
     commit();
     LAB.toast('Players reflowed to analyst consensus — your tiers kept', 'good');
   });
+  LAB.$('#syncBtn').addEventListener('click', () => {
+    const keep = new Set([...(board.moved || []), ...(board.pins || [])]);
+    const dry = LAB.syncBoard(JSON.parse(JSON.stringify(board)), players, keep);
+    if (!dry.moved) return LAB.toast('Already in line with your analyst consensus');
+    const note = keep.size
+      ? keep.size + ' player' + (keep.size > 1 ? 's' : '') + ' you positioned yourself will stay put.'
+      : 'NOTHING is protected yet — this board predates move-tracking, so I cannot tell which '
+        + 'slots were your call. Cancel and pin the players you have an opinion on first '
+        + '(⋮ then Pin), or accept a full reflow.';
+    if (!confirm('Sync ' + dry.moved + ' player' + (dry.moved > 1 ? 's' : '')
+      + " to today's analyst consensus?\n\n" + note
+      + '\n\nTiers keep their exact shape and count. Undo works.')) return;
+    snapshot();
+    const r = LAB.syncBoard(board, players, keep);
+    commit();
+    LAB.toast('Synced ' + r.moved + ' to consensus · ' + r.protected + ' held', 'good');
+  });
   LAB.$('#addTierBtn').addEventListener('click', () => {
     if (state.tab === 'OVR') return LAB.toast('Add tiers on a position tab — overall arranges those tiers');
     snapshot();
@@ -243,13 +277,13 @@
     const tiers = board.pos[pos].tiers;
     const curIdx = tiers.findIndex(t => t.players.includes(pid));
     const moveTo = tIdx => {
-      snapshot();
+      snapshot(); markMoved(pid);
       tiers[curIdx].players = tiers[curIdx].players.filter(x => x !== pid);
       tiers[tIdx].players.push(pid);
       commit(); ov.remove();
     };
     const bump = dir => {
-      snapshot();
+      snapshot(); markMoved(pid);
       const arr = tiers[curIdx].players;
       const i = arr.indexOf(pid);
       const j = i + dir;
@@ -266,10 +300,18 @@
         LAB.el('button', { class: 'btn', onclick: () => bump(-1) }, '▲ Bump up'),
         LAB.el('button', { class: 'btn', onclick: () => bump(1) }, '▼ Bump down'),
         LAB.el('button', { class: 'btn', onclick: () => {
-          snapshot();
+          snapshot(); markMoved(pid);
           const arr = tiers[curIdx].players;
           arr.splice(arr.indexOf(pid), 1); arr.unshift(pid); commit(); ov.remove();
-        } }, '⤒ Top of tier')),
+        } }, '⤒ Top of tier'),
+        LAB.el('button', {
+          class: 'btn' + (isProtected(pid) ? ' primary' : ''),
+          title: 'Pinned players keep their exact slot when you Sync to consensus',
+          onclick: () => {
+            snapshot(); const on = togglePin(pid); commit(); ov.remove();
+            LAB.toast(on ? 'Pinned — sync will leave him put' : 'Unpinned');
+          },
+        }, isProtected(pid) ? '📌 Pinned' : '📌 Pin')),
       LAB.el('div', { style: 'margin-top:10px' },
         LAB.el('div', { class: 'muted', style: 'font-size:11px;text-transform:uppercase;letter-spacing:.07em;font-weight:700;margin-bottom:6px' }, 'Send to tier'),
         LAB.el('div', { class: 'sheet-actions', style: 'grid-template-columns:repeat(4,1fr)' },
@@ -410,7 +452,8 @@
       draggable: '.prow, .tier-head',
       filter: '.qa-btn, .kill-btn',
       delay: 150, delayOnTouchOnly: true,
-      onEnd: () => {
+      onEnd: evt => {
+        markMoved(evt && evt.item && evt.item.dataset && evt.item.dataset.pid);
         snapshot();
         // rebuild tiers from DOM order: headers split the flat list
         const kids = Array.from(listWrap.children);
@@ -468,7 +511,8 @@
       animation: 130,
       handle: '.block-head',
       draggable: '.block',
-      onEnd: () => {
+      onEnd: evt => {
+        markMoved(evt && evt.item && evt.item.dataset && evt.item.dataset.pid);
         snapshot();
         board.overall = Array.from(wrap.children).map(k => {
           const [pos, tierId] = k.dataset.ref.split(':');
@@ -484,7 +528,8 @@
         animation: 120, draggable: '.prow', filter: '.qa-btn',
         delay: 150, delayOnTouchOnly: true,
         group: 'blk-' + tierId,
-        onEnd: () => {
+        onEnd: evt => {
+        markMoved(evt && evt.item && evt.item.dataset && evt.item.dataset.pid);
           snapshot();
           const t = board.pos[pos].tiers.find(x => x.id === tierId);
           if (t) t.players = Array.from(bodyEl.children).filter(k => k.dataset.pid).map(k => k.dataset.pid);
@@ -835,7 +880,8 @@
       root.append(outer);
       new Sortable(grid, {
         animation: 130, handle: '.tier-head', draggable: '.cmp-block',
-        onEnd: () => {
+        onEnd: evt => {
+        markMoved(evt && evt.item && evt.item.dataset && evt.item.dataset.pid);
           snapshot();
           board.overall = Array.from(grid.querySelectorAll('.cmp-block'))
             .map(b => ({ pos: b.dataset.pos, tierId: b.dataset.tier }));
@@ -882,7 +928,8 @@
     new Sortable(myCol, {
       animation: 120, draggable: '.cmp-mine, .tier-head', filter: '.qa-btn',
       delay: 150, delayOnTouchOnly: true,
-      onEnd: () => {
+      onEnd: evt => {
+        markMoved(evt && evt.item && evt.item.dataset && evt.item.dataset.pid);
         snapshot();
         const newTiers = [];
         let cur = null;

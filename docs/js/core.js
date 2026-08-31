@@ -223,6 +223,36 @@
     return board;
   };
 
+  // Re-sort players to TODAY's analyst consensus, but leave protected players
+  // exactly where they sit. Same tier shells as reflowBoard; the difference is
+  // that anyone you moved by hand (or pinned) holds his slot and the rest of
+  // the pool reflows around him. Returns counts for the toast.
+  LAB.syncBoard = function (board, players, keep) {
+    const byId = LAB.playersById(players);
+    const key = p => p.cr != null ? p.cr : 200 + (p.adp ?? (500 - (p.proj || 0)));
+    const held = new Set(keep || []);
+    let moved = 0, protectedN = 0;
+    for (const pos of LAB.POS) {
+      const tiers = board.pos[pos]?.tiers || [];
+      const before = [];
+      tiers.forEach(t => t.players.forEach(id => before.push(id)));
+      // slots occupied by protected players are frozen by INDEX; the rest of
+      // the pool re-sorts by consensus and fills the gaps in order
+      const frozen = new Map();
+      const pool = [];
+      before.forEach((pid, i) => {
+        if (held.has(pid)) { frozen.set(i, pid); protectedN++; } else pool.push(pid);
+      });
+      pool.sort((a, b) => key(byId[a] || {}) - key(byId[b] || {}));
+      let f = 0;
+      const after = before.map((_, i) => frozen.has(i) ? frozen.get(i) : pool[f++]);
+      let k = 0;
+      for (const t of tiers) { const n = t.players.length; t.players = after.slice(k, k + n); k += n; }
+      after.forEach((pid, i) => { if (pid !== before[i]) moved++; });
+    }
+    return { moved, protected: protectedN };
+  };
+
   // reconcile a stored board with today's player pool
   LAB.reconcileBoard = function (board, players) {
     const poolIds = new Set(players.map(p => p.id));
