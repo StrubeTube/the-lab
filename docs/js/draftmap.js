@@ -526,6 +526,7 @@
         `${L.name} hasn't set its draft order yet — the snake map unlocks the moment Sleeper knows the slots. (Keeper-round projections on the Board and Keepers pages work already.)`));
       return;
     }
+    LAB.dmSim = sim;   // exposed for ad-hoc questions (joint availability etc.)
     // page layout: everything on the left, my projected team in its own
     // sidebar on the right so the snake board never has to scroll
     const main = LAB.el('div', { style: 'flex:1;min-width:0' });
