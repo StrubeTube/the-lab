@@ -242,6 +242,8 @@ for pid, extra in pool_ids.items():
         "bye": byes.get(p.get("team")),
         # primary ADP = Sleeper half-PPR (updates daily); FFC fills gaps
         "adp": sleeper_adp(pid) if sleeper_adp(pid) is not None else extra.get("adp"),
+        "fadp": extra.get("adp"),          # FFC 10-team half-PPR: matches our leagues
+        "asd": extra.get("adp_sd"),        # FFC stdev = how settled the market is
         "adp_pos": extra.get("adp_pos"),
         "dyn": dyn_adp(pid),
         "proj": round(proj_pts.get(pid, 0), 1) or None,
@@ -519,6 +521,29 @@ if consensus_path.exists():
         else:
             ounmatched += 1
     print(f"  overall consensus: {omatched} matched, {ounmatched} outside pool")
+
+    # ---- madp: what the board should expect on draft day -------------------
+    # Base is FFC (10-team half-PPR, our exact format). Sleeper's feed does not
+    # publish its format or window and disagrees by ~13 picks on average.
+    # Where the human analysts have moved far away from the market, that gap is
+    # news the market has not absorbed yet (Jacobs: ADP 28, analysts 66+), so
+    # shade halfway toward them. Vegas is excluded -- prop lines lag hardest.
+    HUMAN = ("joel", "flock", "fb", "ffa")
+    SHADE_AT = 15
+    shaded = 0
+    for e in players_out:
+        base = e.get("fadp") or e.get("adp")
+        if base is None:
+            e["madp"] = None
+            continue
+        rr = {k: v for k, v in (e.get("ocrs") or {}).items() if k in HUMAN}
+        hc = (sum(rr.values()) / len(rr)) if rr else None
+        if hc is not None and abs(hc - base) >= SHADE_AT:
+            e["madp"] = round(0.5 * base + 0.5 * hc, 1)
+            shaded += 1
+        else:
+            e["madp"] = round(base, 1)
+    print(f"  madp: FFC base, {shaded} players shaded toward analyst consensus")
 
 # ---- Vegas "analyst": season prop O/U lines -> fantasy points -> ranks ----
 # Positional rank = points within position; overall rank = value over a
