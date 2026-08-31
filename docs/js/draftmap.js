@@ -302,8 +302,10 @@
     const TOTAL = ROUNDS * N;
     const cum = new Map(); // pid -> Int32Array; after prefix-sum, [n] = sims taken at pick <= n
     const tSum = {}, tCnt = {};
+    const simRuns = [];    // every run kept whole, so JOINT questions are answerable
     for (let s = 0; s < SIMS; s++) {
       const { takenAt } = runDraft(false, mulberry32(0xC0FFEE + s * 7919));
+      simRuns.push(takenAt);
       for (const pid in takenAt) {
         let a = cum.get(pid);
         if (!a) { a = new Int32Array(TOTAL + 2); cum.set(pid, a); }
@@ -313,6 +315,18 @@
       }
     }
     for (const a of cum.values()) for (let i = 1; i < a.length; i++) a[i] += a[i - 1];
+    // P(at least ONE of these players survives to `pick`). Not the same as
+    // combining the marginals: the runs are correlated -- a room that is
+    // hammering RBs takes all of them in the SAME sim, so the chance that at
+    // least one target lasts is much lower than 1-(1-p1)(1-p2)(1-p3) suggests.
+    const jointAvail = (pids, pick) => {
+      if (!pids || !pids.length) return 0;
+      let hit = 0;
+      for (const ta of simRuns) {
+        if (pids.some(id => !(ta[id] != null && ta[id] < pick))) hit++;
+      }
+      return hit / (simRuns.length || 1);
+    };
     const roomPick = {}; // mean pick where the room takes him (absent = room ~never takes him)
     for (const pid in tCnt) if (tCnt[pid] >= SIMS * 0.05) roomPick[pid] = tSum[pid] / tCnt[pid];
     const probAvail = (pid, pick) => {
@@ -329,7 +343,7 @@
       const c = cells[p];
       if (c ? rosterOfPid[c.pid] === myRid : ridOfPick(p) === myRid) myPicks.push(p);
     }
-    return { ROUNDS, N, cells, openPicks, adpOrder, roomPick, expected, probAvail, pickNum, slotOfPick, mySlot, myRid, myPicks, ownerOfPick, ridOfPick, dd, keptSet, priors };
+    return { ROUNDS, N, cells, openPicks, adpOrder, roomPick, expected, probAvail, jointAvail, pickNum, slotOfPick, mySlot, myRid, myPicks, ownerOfPick, ridOfPick, dd, keptSet, priors };
   }
 
   function probChip(p, prob, hero, lockPick) {
