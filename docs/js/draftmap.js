@@ -42,6 +42,10 @@
   const dSlot = p => ((p && p.lab) || {})[dKey('s')] ?? null;
   const dScore = p => ((p && p.lab) || {})[dKey('v')] ?? null;
   const dGap = p => ((p && p.lab) || {})[dKey('g')] ?? null;
+  // madp = FFC (our exact 10-team half-PPR format) shaded toward the analyst
+  // consensus where news has moved them and the market has not caught up.
+  // Module scope: buildSim, the tooltips and the availability chart all use it.
+  const mADP = p => ((p && p.madp) ?? (p && p.adp)) ?? null;
   const gapColor = g => g == null ? 'var(--ink-3)' : g >= 20 ? '#3ee68f' : g <= -20 ? '#ff5c5c' : 'var(--ink-2)';
 
   // ---------- math / rng ----------
@@ -152,9 +156,6 @@
     // already holds — 0 means he won't take him here. History drives the
     // windows, but they're never absolute: managers deviate, and elite
     // fallers get stolen (no player should ever be a flat 100% safe).
-    // madp = FFC (our exact 10-team half-PPR format) shaded toward the analyst
-    // consensus where news has moved them and the market has not caught up
-    const mADP = p => p.madp ?? p.adp;
     function posWeight(x, cnt, pr, r, pick) {
       const pos = x.pos;
       if (pos === 'DEF') {
