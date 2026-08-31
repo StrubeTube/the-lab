@@ -152,6 +152,9 @@
     // already holds — 0 means he won't take him here. History drives the
     // windows, but they're never absolute: managers deviate, and elite
     // fallers get stolen (no player should ever be a flat 100% safe).
+    // madp = FFC (our exact 10-team half-PPR format) shaded toward the analyst
+    // consensus where news has moved them and the market has not caught up
+    const mADP = p => p.madp ?? p.adp;
     function posWeight(x, cnt, pr, r, pick) {
       const pos = x.pos;
       if (pos === 'DEF') {
@@ -183,9 +186,6 @@
     for (const pick of openPicks) lastOpen[ridOfPick(pick)] = pick;
 
     // draft order lists: everyone by ADP, me by MY board
-    // madp = FFC (our exact 10-team half-PPR format) shaded toward the analyst
-    // consensus where news has moved them and the market has not caught up
-    const mADP = p => p.madp ?? p.adp;
     const sortAdp = p => mADP(p) ?? 500 - (p.proj || 0) / 1000;
     const adpOrder = players.filter(p => !keptSet.has(p.id)).sort((a, b) => sortAdp(a) - sortAdp(b));
     const myOrder = adpOrder.slice().sort((a, b) =>
