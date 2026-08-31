@@ -31,6 +31,20 @@
     }, leagues[t].name));
   }
 
+  // ---------- what-if scenario ----------
+  // Locks let you replay the draft under a decision: force a player to one of
+  // YOUR picks, force a player to a pick BEFORE yours (what if the room takes
+  // him?), or swap your keeper trio. Everything downstream -- the sim, the
+  // odds, the projected roster -- rebuilds off these.
+  const K_SCEN = 'thelab-dm-scenario-v1';
+  let scenAll = (() => { try { return JSON.parse(localStorage.getItem(K_SCEN)) || {}; } catch (e) { return {}; } })();
+  const scen = () => (scenAll[tag] = scenAll[tag] || { picks: {}, keepers: null });
+  const saveScen = () => { try { localStorage.setItem(K_SCEN, JSON.stringify(scenAll)); } catch (e) {} };
+  const scenN = () => Object.keys(scen().picks).length + (scen().keepers ? 1 : 0);
+  const setLock = (pick, pid) => { scen().picks[pick] = pid; saveScen(); render(); };
+  const clearLock = pick => { delete scen().picks[pick]; saveScen(); render(); };
+  const clearScen = () => { scenAll[tag] = { picks: {}, keepers: null }; saveScen(); render(); };
+
   // ---------- Lab @Draft accessors (compute.py: dg/dgw/ds per league) ----------
   // In THIS draft ~28 keepers are off the board, so the top ~130 available
   // players slide up a mean of 27 picks. dScore/dGap are the score and the
@@ -73,7 +87,17 @@
     const dd = L.draftDetail || {};
     if (!dd.draftOrder) return null;
     const ROUNDS = dd.rounds || 16, N = 10;
-    const { keeps, keptSet } = LAB.predictKeepers(L, byId, oRanks);
+    let { keeps, keptSet } = LAB.predictKeepers(L, byId, oRanks);
+    const myRid0 = (L.rosters.find(r => r.owner === L.myUserId) || {}).rid;
+    // MY keeper trio can be overridden by the scenario
+    if (scen().keepers && scen().keepers.length) {
+      const mine = new Set((L.rosters.find(r => r.rid === myRid0) || {}).players || []);
+      const kept0 = new Set(L.lastKept || []);
+      keeps = keeps.filter(k => !mine.has(k.pid)).concat(scen().keepers.filter(pid => mine.has(pid)).map(pid => ({
+        pid, costRd: LAB.keeperCostRound(L, L.lastDraftRound[pid] || null, kept0.has(pid)), official: false,
+      })));
+      keptSet = new Set(keeps.map(k => k.pid));
+    }
     const officialPick = {};
     for (const k of (L.draftKeepers || [])) officialPick[k.pid] = k.pick;
     const slotOfRoster = {};
@@ -204,13 +228,17 @@
       const cnts = {};
       L.rosters.forEach(r => (cnts[r.rid] = { ...keeperCounts[r.rid] }));
       const taken = new Set(), exp = {}, takenAt = {};
+      const locks = scen().picks;
       for (const pick of openPicks) {
         const r = Math.ceil(pick / N);
         const rid = ridOfPick(pick);
         const cnt = cnts[rid] || { QB: 0, RB: 0, WR: 0, TE: 0, DEF: 0 };
         let p = null;
-        if (rid === myRid) {
-          if (!includeMe) continue; // ghost run: my slots stay empty
+        if (rid === myRid && !includeMe) continue; // ghost run: my slots stay empty
+        const lock = locks[pick];
+        if (lock && !taken.has(lock) && byId[lock]) {
+          p = byId[lock];                          // scenario: this pick is decided
+        } else if (rid === myRid) {
           const forceDef = cnt.DEF < 1 && (r === ROUNDS || pick === lastOpen[rid]);
           p = myOrder.find(x => !taken.has(x.id)
             && (forceDef ? x.pos === 'DEF' : x.pos !== 'DEF')
@@ -300,7 +328,7 @@
     return { ROUNDS, N, cells, openPicks, adpOrder, roomPick, expected, probAvail, pickNum, slotOfPick, mySlot, myRid, myPicks, ownerOfPick, ridOfPick, dd, keptSet, priors };
   }
 
-  function probChip(p, prob, hero) {
+  function probChip(p, prob, hero, lockPick) {
     const col = pctColor(prob);
     return LAB.el('div', {
       class: 'flex', style: 'gap:7px;padding:3px 6px;border-radius:7px;margin-top:3px;cursor:pointer;font-size:12.5px;' +
@@ -321,7 +349,12 @@
         class: 'mono', style: 'font-size:10.5px;flex:none;color:' + gapColor(dGap(p)),
         title: 'Lab @Draft window gap — his score minus the median of who else is available here',
       }, (dGap(p) > 0 ? '+' : '') + dGap(p)) : '',
-      LAB.el('b', { class: 'mono', style: 'color:' + col + ';width:38px;text-align:right' }, fmtPct(prob)));
+      LAB.el('b', { class: 'mono', style: 'color:' + col + ';width:38px;text-align:right' }, fmtPct(prob)),
+      lockPick ? LAB.el('button', {
+        style: 'flex:none;font-size:10px;padding:1px 5px;border-radius:5px;border:1px solid var(--border);background:var(--surface);cursor:pointer',
+        title: 'Lock ' + p.name + ' to this pick and replay the rest of the draft',
+        onclick: e => { e.stopPropagation(); setLock(lockPick, p.id); },
+      }, '\u21b3 lock') : '');
   }
 
   function pickDetail(sim, pick) {
@@ -336,7 +369,27 @@
       LAB.el('h2', {}, `Pick ${r}.${String(pick - (r - 1) * sim.N).padStart(2, '0')} (overall #${pick})`),
       LAB.el('p', { class: 'muted', style: 'font-size:12px;margin:4px 0 10px' },
         `Odds each player lasts to this pick, from ${SIMS} simulated drafts where every manager follows his own historical QB/TE/DEF timing, positional appetite, and roster needs. Locks (≈100%) are omitted.`),
-      rows.map(x => probChip(x.p, x.prob))));
+      rows.map(x => probChip(x.p, x.prob, false, pick))));
+  }
+
+  // ---------- projected starting lineup ----------
+  // The payoff of a what-if: fill the league's real starting slots with the
+  // best of my keepers + projected picks and total the projections. Two
+  // scenarios are only comparable through this number.
+  const FLEX_OK = { RB: 1, WR: 1, TE: 1 };
+  function lineupOf(L, pids) {
+    const slots = (L.rosterPositions || []).filter(x => x !== 'BN');
+    const pool = pids.map(id => byId[id]).filter(Boolean)
+      .sort((a, b) => (b.proj || 0) - (a.proj || 0));
+    const used = new Set(), rows = [];
+    for (const slot of slots) {
+      const hit = pool.find(p => !used.has(p.id)
+        && (slot === 'FLEX' ? FLEX_OK[p.pos] : p.pos === slot));
+      if (hit) used.add(hit.id);
+      rows.push({ slot, p: hit || null });
+    }
+    const bench = pool.filter(p => !used.has(p.id));
+    return { rows, bench, total: rows.reduce((t, x) => t + ((x.p && x.p.proj) || 0), 0) };
   }
 
   // ---------- positional cliff timer ----------
@@ -433,18 +486,106 @@
     root.append(LAB.el('div', { style: 'display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap' }, main, aside));
 
     // ---------- my picks planner ----------
+    // keeper set under the CURRENT scenario (buildSim already applied it)
+    const keeps = (() => {
+      const base = LAB.predictKeepers(L, byId, oRanks).keeps;
+      if (!scen().keepers || !scen().keepers.length) return base;
+      const meIds = new Set((L.rosters.find(r => r.rid === sim.myRid) || {}).players || []);
+      const kept0 = new Set(L.lastKept || []);
+      return base.filter(k => !meIds.has(k.pid)).concat(scen().keepers.filter(p => meIds.has(p)).map(pid => ({
+        pid, costRd: LAB.keeperCostRound(L, L.lastDraftRound[pid] || null, kept0.has(pid)), official: false,
+      })));
+    })();
     const planner = LAB.el('div', { class: 'card', style: 'margin-top:14px' },
       LAB.el('h2', {}, `Your picks — slot ${sim.mySlot} of ${sim.N}`),
       LAB.el('p', { class: 'muted', style: 'font-size:12px;margin:4px 0 6px' },
         'The ', LAB.el('b', { class: 'accent' }, 'orange card'), ' is your projected pick off YOUR board (one QB, one TE, filled positions drop out). Below it: alternatives with the odds they last, from ' + SIMS + ' simulated drafts of this room — every manager drafting like his six-year history says. ',
         LAB.el('b', { style: 'color:#3ee68f' }, 'green = safe'), ' → ', LAB.el('b', { style: 'color:#ff5c5c' }, 'red = long shot'), '.'));
+    // ---- active scenario bar ----
+    {
+      const locks = Object.entries(scen().picks)
+        .map(([pk, pid]) => ({ pk: +pk, p: byId[pid] })).filter(x => x.p)
+        .sort((a, b) => a.pk - b.pk);
+      const bar = LAB.el('div', {
+        style: 'margin:2px 0 8px;padding:6px 8px;border-radius:8px;font-size:11.5px;'
+          + (scenN() ? 'border:1px solid var(--accent);background:rgba(255,106,43,.06)'
+                     : 'border:1px dashed var(--border)'),
+      });
+      if (!scenN()) {
+        bar.append(LAB.el('span', { class: 'muted' },
+          'WHAT-IF: hit ', LAB.el('b', {}, '\u21b3 lock'),
+          ' on any player to force him to that pick and replay the draft. '
+          + 'Click a round header for the full board at that pick \u2014 that is how you '
+          + 'decide what the room does before you.'));
+      } else {
+        bar.append(LAB.el('b', { class: 'accent' }, 'SCENARIO: '));
+        if (scen().keepers) {
+          bar.append(LAB.el('span', {
+            style: 'display:inline-block;margin:1px 4px 1px 0;padding:1px 6px;border-radius:99px;background:var(--surface);border:1px solid var(--border)',
+          }, 'keepers: ' + scen().keepers.map(x => (byId[x] || {}).name || x).join(', '),
+            LAB.el('button', {
+              style: 'margin-left:5px;border:0;background:none;cursor:pointer;color:var(--bad)',
+              title: 'back to your declared/predicted keepers',
+              onclick: () => { scen().keepers = null; saveScen(); render(); },
+            }, '\u00d7')));
+        }
+        locks.forEach(x => bar.append(LAB.el('span', {
+          style: 'display:inline-block;margin:1px 4px 1px 0;padding:1px 6px;border-radius:99px;background:var(--surface);border:1px solid var(--border)',
+        }, `#${x.pk} ${x.p.name}`,
+          LAB.el('button', {
+            style: 'margin-left:5px;border:0;background:none;cursor:pointer;color:var(--bad)',
+            onclick: () => clearLock(x.pk),
+          }, '\u00d7'))));
+        bar.append(LAB.el('button', {
+          style: 'margin-left:6px;font-size:10.5px;padding:1px 7px;border-radius:6px;border:1px solid var(--border);background:var(--surface);cursor:pointer',
+          onclick: clearScen,
+        }, 'clear all'));
+      }
+      planner.append(bar);
+    }
+
+    // ---- keeper swapper: my trio is a decision too ----
+    {
+      const meR = L.rosters.find(r => r.rid === sim.myRid) || { players: [] };
+      const kept0 = new Set(L.lastKept || []);
+      const elig = (meR.players || []).map(id => byId[id])
+        .filter(p => p && p.pos !== 'DEF' && L.lastDraftRound[p.id])
+        .map(p => ({ p, rd: LAB.keeperCostRound(L, L.lastDraftRound[p.id], kept0.has(p.id)) }))
+        .sort((a, b) => (a.p.madp ?? a.p.adp ?? 999) - (b.p.madp ?? b.p.adp ?? 999))
+        .slice(0, 10);
+      const cur = new Set(scen().keepers
+        || keeps.filter(k => (meR.players || []).includes(k.pid)).map(k => k.pid));
+      const max = L.keeperMax || 3;
+      const row = LAB.el('div', { style: 'display:flex;flex-wrap:wrap;gap:5px;margin:0 0 8px' });
+      elig.forEach(({ p, rd }) => {
+        const on = cur.has(p.id);
+        row.append(LAB.el('button', {
+          style: 'font-size:11px;padding:2px 8px;border-radius:99px;cursor:pointer;border:1px solid '
+            + (on ? 'var(--accent);background:rgba(255,106,43,.12);color:var(--accent)'
+                  : 'var(--border);background:var(--surface)'),
+          title: `${p.name} keeps at R${rd}` + (on ? ' — click to drop him from the scenario' : ' — click to keep him instead'),
+          onclick: () => {
+            const nxt = new Set(cur);
+            if (nxt.has(p.id)) nxt.delete(p.id);
+            else { if (nxt.size >= max) return LAB.toast(`Only ${max} keepers — drop one first`); nxt.add(p.id); }
+            scen().keepers = [...nxt];
+            saveScen(); render();
+          },
+        }, `${p.name} R${rd}`));
+      });
+      if (elig.length) {
+        planner.append(LAB.el('div', { class: 'muted', style: 'font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin-bottom:3px' },
+          `your keepers \u2014 pick ${max} (${cur.size}/${max} set)`));
+        planner.append(row);
+      }
+    }
+
     const cols = LAB.el('div', { style: 'display:flex;gap:10px;overflow-x:auto;padding-bottom:6px' });
     const myFilled = { QB: 0, TE: 0, DEF: 0 }; // my keepers count toward my caps
     const heroTaken = new Set(); // my projected picks so far, excluded from later lists
     const myOpenSet = new Set(sim.myPicks.filter(p => !sim.cells[p])); // my open picks (don't count against dominance)
     const ridName = {};
     L.rosters.forEach(rr => (ridName[rr.rid] = L.users[rr.owner]?.name || 'Team ' + rr.rid));
-    const { keeps } = LAB.predictKeepers(L, byId, oRanks);
     for (const k of keeps) {
       const p = byId[k.pid];
       if (p && (L.rosters.find(r => r.rid === sim.myRid)?.players || []).includes(k.pid) && p.pos in myFilled) myFilled[p.pos]++;
@@ -512,7 +653,7 @@
         // the ORDER shown is by Lab @Draft window gap — of the players who
         // will actually be here, who most out-values this slot
         zone.slice().sort((a, b) => (dGap(b.p) ?? -99) - (dGap(a.p) ?? -99))
-          .forEach(x => zoneBox.append(probChip(x.p, x.prob, x.p.id === heroPid)));
+          .forEach(x => zoneBox.append(probChip(x.p, x.prob, x.p.id === heroPid, pick)));
         col.append(zoneBox);
         // --- two-pick lookahead: the best PAIR across this pick and my next
         const nextPick = sim.myPicks.filter(pk => pk > pick && !sim.cells[pk])[0];
@@ -563,7 +704,7 @@
         }
         if (depth.length) {
           col.append(LAB.el('div', { class: 'muted', style: 'font-size:9.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin-top:5px' }, 'depth if it breaks weird'));
-          depth.forEach(x => col.append(probChip(x.p, x.prob)));
+          depth.forEach(x => col.append(probChip(x.p, x.prob, false, pick)));
         }
         if (heroPos && heroPos in myFilled) myFilled[heroPos]++;
         if (heroPid) heroTaken.add(heroPid);
@@ -636,6 +777,33 @@
     // ---------- my projected team, grouped by position (right sidebar) ----------
     const teamCard = LAB.el('div', { class: 'card', style: 'margin-top:14px;position:sticky;top:10px' },
       LAB.el('h2', {}, 'Your projected team'));
+    // ---- the number that makes two what-ifs comparable ----
+    {
+      const mine = sim.myPicks.map(pk => sim.cells[pk] ? sim.cells[pk].pid : sim.expected[pk]).filter(Boolean);
+      const lu = lineupOf(L, mine);
+      teamCard.append(LAB.el('div', {
+        style: 'margin:2px 0 8px;padding:7px 9px;border-radius:8px;border:1px solid var(--accent);background:rgba(255,106,43,.07)',
+        title: 'Best starting lineup from your keepers + projected picks, totalled on 2026 projections.\n'
+          + 'This is the number to watch when you change a lock or a keeper — everything else on the page is process, this is outcome.',
+      },
+        LAB.el('div', { class: 'muted', style: 'font-size:9.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase' }, 'projected starters'),
+        LAB.el('div', { style: 'font-size:23px;font-weight:800;font-family:var(--font-display);line-height:1.1' },
+          LAB.fmt0(lu.total), LAB.el('span', { class: 'muted', style: 'font-size:11px;font-weight:400;margin-left:5px' }, 'pts')),
+        LAB.el('div', { class: 'muted', style: 'font-size:10.5px;margin-top:2px' },
+          lu.rows.filter(x => !x.p).length
+            ? lu.rows.filter(x => !x.p).length + ' starting slot(s) unfilled'
+            : 'all ' + lu.rows.length + ' starting slots filled'),
+        scenN() ? LAB.el('div', { style: 'font-size:10.5px;margin-top:3px;color:var(--accent)' }, '↳ under your scenario') : ''));
+      const det = LAB.el('div', { style: 'margin-bottom:8px' });
+      lu.rows.forEach(x => det.append(LAB.el('div', {
+        class: 'flex', style: 'gap:6px;font-size:11px;padding:1px 4px',
+        title: x.p ? `${x.slot}: ${x.p.name} — ${LAB.fmt0(x.p.proj)} projected` : `${x.slot}: nobody projected`,
+      },
+        LAB.el('span', { class: 'mono muted', style: 'width:34px;flex:none' }, x.slot),
+        LAB.el('span', { style: 'flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis' }, x.p ? x.p.name : '—'),
+        LAB.el('span', { class: 'mono muted', style: 'flex:none' }, x.p ? LAB.fmt0(x.p.proj) : '–'))));
+      teamCard.append(det);
+    }
     const byPos = { QB: [], RB: [], WR: [], TE: [], DEF: [] };
     for (const pick of sim.myPicks) {
       const r = Math.ceil(pick / sim.N);
