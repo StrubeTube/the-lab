@@ -42,8 +42,8 @@
   const dSlot = p => ((p && p.lab) || {})[dKey('s')] ?? null;
   const dScore = p => ((p && p.lab) || {})[dKey('v')] ?? null;
   const dGap = p => ((p && p.lab) || {})[dKey('g')] ?? null;
-  // madp = FFC (our exact 10-team half-PPR format) shaded toward the analyst
-  // consensus where news has moved them and the market has not caught up.
+  // madp = Sleeper ADP shaded toward the analyst consensus where news has
+  // moved them and the market has not caught up yet.
   // Module scope: buildSim, the tooltips and the availability chart all use it.
   const mADP = p => ((p && p.madp) ?? (p && p.adp)) ?? null;
   const gapColor = g => g == null ? 'var(--ink-3)' : g >= 20 ? '#3ee68f' : g <= -20 ? '#ff5c5c' : 'var(--ink-2)';
@@ -307,7 +307,7 @@
         (hero ? 'background:rgba(255,106,43,.10);border:1px solid var(--accent)' : 'background:var(--surface);border:1px solid var(--border)'),
       onclick: () => LAB.playerCard(p.id),
       title: `${p.name} — ${fmtPct(prob)} chance he's still available`
-        + `\nADP ${mADP(p) ?? '–'} (FFC 10-tm + de-biased Sleeper, news-adjusted), ~pick ${dSlot(p) ?? '?'} in THIS draft (keepers removed)`
+        + `\nADP ${mADP(p) ?? '–'} (Sleeper, news-adjusted), ~pick ${dSlot(p) ?? '?'} in THIS draft (keepers removed)`
         + (p.asd != null ? `\nmarket spread ±${p.asd}${p.asd >= 15 ? ' — UNSETTLED' : p.asd >= 8 ? ' — some disagreement' : ''}` : '')
         + `\nLab @Draft ${dScore(p) ?? '–'}`
         + (dGap(p) != null ? ` · ${dGap(p) > 0 ? '+' : ''}${dGap(p)} vs the players available around him` : '')
