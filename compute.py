@@ -523,27 +523,52 @@ if consensus_path.exists():
     print(f"  overall consensus: {omatched} matched, {ounmatched} outside pool")
 
     # ---- madp: what the board should expect on draft day -------------------
-    # Base is FFC (10-team half-PPR, our exact format). Sleeper's feed does not
-    # publish its format or window and disagrees by ~13 picks on average.
-    # Where the human analysts have moved far away from the market, that gap is
-    # news the market has not absorbed yet (Jacobs: ADP 28, analysts 66+), so
-    # shade halfway toward them. Vegas is excluded -- prop lines lag hardest.
+    # THREE sources, each doing the job it is actually good at.
+    #
+    # 1. FFC (10-team half-PPR) sets the SCALE -- it is the only feed matched to
+    #    our format, and it publishes its window and sample size.
+    # 2. Sleeper adds real drafters from the platform our leagues live on, but
+    #    its feed is from deeper leagues: it takes TEs ~13 picks EARLIER and
+    #    QBs/WRs ~13-16 picks LATER than a 10-team board. That is a format
+    #    artifact, not an opinion, so subtract each position's median offset
+    #    before blending -- otherwise we import the bias along with the signal.
+    # 3. The human analysts (Vegas excluded -- prop lines lag hardest) only get
+    #    a vote where they have moved FAR from the market, which is the
+    #    signature of news the market has not priced yet.
     HUMAN = ("joel", "flock", "fb", "ffa")
-    SHADE_AT = 15
-    shaded = 0
+    SHADE_AT = 15          # picks of analyst-vs-market gap before news shading
+    W_FFC = 0.60           # format-matched scale carries the base
+    _pairs = {}
     for e in players_out:
-        base = e.get("fadp") or e.get("adp")
+        if e.get("adp") and e.get("fadp") and e["fadp"] <= 180:
+            _pairs.setdefault(e["pos"], []).append(e["adp"] - e["fadp"])
+    POS_OFF = {}
+    for pos, v in _pairs.items():
+        if len(v) >= 5:
+            v = sorted(v)
+            POS_OFF[pos] = v[len(v) // 2] if len(v) % 2 else (v[len(v) // 2 - 1] + v[len(v) // 2]) / 2
+    print("  madp Sleeper de-bias (median Sleeper-FFC by pos): "
+          + ", ".join(f"{k} {v:+.1f}" for k, v in sorted(POS_OFF.items())))
+
+    shaded = blended = 0
+    for e in players_out:
+        ffc_v, sl = e.get("fadp"), e.get("adp")
+        sl_adj = (sl - POS_OFF.get(e["pos"], 0.0)) if sl is not None else None
+        if ffc_v is not None and sl_adj is not None:
+            base = W_FFC * ffc_v + (1 - W_FFC) * max(1.0, sl_adj)
+            blended += 1
+        else:
+            base = ffc_v if ffc_v is not None else sl_adj
         if base is None:
             e["madp"] = None
             continue
         rr = {k: v for k, v in (e.get("ocrs") or {}).items() if k in HUMAN}
         hc = (sum(rr.values()) / len(rr)) if rr else None
         if hc is not None and abs(hc - base) >= SHADE_AT:
-            e["madp"] = round(0.5 * base + 0.5 * hc, 1)
+            base = 0.5 * base + 0.5 * hc
             shaded += 1
-        else:
-            e["madp"] = round(base, 1)
-    print(f"  madp: FFC base, {shaded} players shaded toward analyst consensus")
+        e["madp"] = round(base, 1)
+    print(f"  madp: {blended} blended FFC+Sleeper, {shaded} shaded toward analysts")
 
 # ---- Vegas "analyst": season prop O/U lines -> fantasy points -> ranks ----
 # Positional rank = points within position; overall rank = value over a
