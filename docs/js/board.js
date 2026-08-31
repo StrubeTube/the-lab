@@ -194,18 +194,39 @@
     state._labD = {};
     withSc.forEach((pid, i) => (state._labD[pid] = (i + 1) - labRank[pid]));
   }
+  // Analyst deltas for the current view. Both sides are RANKS over the same
+  // set of players, so the number means "the analysts would slot him N spots
+  // away from where you have him" -- no averages, no tier-block artefacts.
+  // + = you have him HIGHER than the analysts do (green).
+  function buildCrLens() {
+    state._crD = null;
+    if (!state.crLens) return;
+    const pids = [];
+    if (state.tab === 'OVR') {
+      board.overall.forEach(ref => {
+        const t = (board.pos[ref.pos] || {}).tiers?.find(x => x.id === ref.tierId);
+        if (t) pids.push(...t.players);
+      });
+    } else {
+      (board.pos[state.tab] || { tiers: [] }).tiers.forEach(t => pids.push(...t.players));
+    }
+    const key = pid => {
+      const p = byId[pid] || {};
+      return state.tab === 'OVR' ? p.ocr : p.cr;
+    };
+    const withCr = pids.filter(pid => key(pid) != null);
+    const byCr = withCr.slice().sort((a, b) =>
+      (key(a) - key(b)) || (withCr.indexOf(a) - withCr.indexOf(b)));
+    const crRank = {};
+    byCr.forEach((pid, i) => (crRank[pid] = i + 1));
+    state._crD = {};
+    withCr.forEach((pid, i) => (state._crD[pid] = crRank[pid] - (i + 1)));
+  }
   // delta = market ADP − my rank: positive = I'm higher on him than ADP (green)
   function adpDelta(p, rankNo, overallMode) {
     const mkt = overallMode ? p.adp : p.adp_pos;
     if (mkt == null || rankNo == null) return null;
     return Math.round(mkt - rankNo);
-  }
-  // delta = analyst consensus rank − my rank: positive = I'm higher on him
-  // than my analysts (green). Null when nobody ranked him.
-  function crDelta(p, rankNo, overallMode) {
-    const c = overallMode ? p.ocr : p.cr;
-    if (c == null || rankNo == null) return null;
-    return Math.round(c - rankNo);
   }
   function adpLensStyle(d, overallMode, maxAbs) {
     if (d == null || d === 0) return '';
@@ -333,7 +354,7 @@
     const lensD = state.adpLens ? adpDelta(p, rankNo, opts.showPos)
       : state.labLens ? ((state._labD || {})[pid] ?? null)
         : state.winLens ? ((p.lab || {})[opts.showPos ? 'wg' : 'wgp'] ?? null)
-          : state.crLens ? crDelta(p, rankNo, opts.showPos) : null;
+          : state.crLens ? ((state._crD || {})[pid] ?? null) : null;
     const lensOn = state.adpLens || state.labLens || state.winLens || state.crLens;
     const row = LAB.el('div', {
       class: 'prow', 'data-pid': pid,
@@ -374,11 +395,11 @@
               : (opts.showPos ? 'overall' : 'positional') + ` gap: your rank ${rankNo} vs ADP ${opts.showPos ? p.adp?.toFixed(1) : p.adp_pos}` + (lensD > 0 ? ' — you are higher than the market' : lensD < 0 ? ' — you are lower than the market' : ''))
             : state.crLens
               ? (lensD == null ? 'no analyst ranked him for this comparison'
-                : (opts.showPos ? 'overall' : 'positional') + ` gap: your rank ${rankNo} vs analyst average `
-                  + (opts.showPos ? p.ocr : p.cr) + ` (${(opts.showPos ? p.ocr_n : p.cr_n) || 0} source`
-                  + (((opts.showPos ? p.ocr_n : p.cr_n) || 0) === 1 ? '' : 's') + ')'
-                  + (lensD > 0 ? ' — you are HIGHER on him than your analysts'
-                    : lensD < 0 ? ' — you are LOWER on him than your analysts' : ' — you agree'))
+                : `your analysts rank him ${Math.abs(lensD)} spot${Math.abs(lensD) === 1 ? '' : 's'} `
+                  + (lensD > 0 ? 'LOWER than your board does' : lensD < 0 ? 'HIGHER than your board does' : 'exactly where your board does')
+                  + ` (avg ${(opts.showPos ? p.ocr : p.cr)} across `
+                  + ((opts.showPos ? p.ocr_n : p.cr_n) || 0) + ' source'
+                  + (((opts.showPos ? p.ocr_n : p.cr_n) || 0) === 1 ? '' : 's') + ')')
             : state.winLens
               ? (lensD == null ? 'no window gap (unscored or no ADP)'
                 : `Lab Score vs the median of players drafted around him (${opts.showPos ? 'all positions' : 'his position only'}): ${lensD > 0 ? '+' : ''}${lensD} — ${lensD >= 20 ? 'stands clearly ABOVE his window (the Jacobs-2022 signal)' : lensD <= -20 ? 'clearly BELOW his window' : 'roughly par for the neighborhood'}`)
@@ -1039,6 +1060,7 @@
     const ovl = overlayInfo();
     kSim = ovl ? LAB.keeperSim(players, leagues[ovl.tag], board) : null;
     buildLabLens();
+    buildCrLens();
     const dynActive = state.dynW > 0 && state.view === 'list';
     LAB.$('#addTierBtn').style.display =
       (state.tab === 'OVR' || state.view !== 'list' || dynActive) ? 'none' : '';
