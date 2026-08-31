@@ -162,7 +162,7 @@
       }
       if (pos === 'QB' || pos === 'TE') {
         const first = pos === 'QB' ? pr.qbRd : pr.teRd;
-        const fall = x.adp != null ? pick - x.adp : -99; // how far past ADP he's slid
+        const fall = mADP(x) != null ? pick - mADP(x) : -99; // how far past ADP he's slid
         if (cnt[pos] >= pr.cap[pos]) {
           // even a set team steals a mega-faller (2 QBs is a real roster)
           return fall >= 30 && cnt[pos] < 2 ? 0.25 : 0;
@@ -183,7 +183,10 @@
     for (const pick of openPicks) lastOpen[ridOfPick(pick)] = pick;
 
     // draft order lists: everyone by ADP, me by MY board
-    const sortAdp = p => p.adp ?? 500 - (p.proj || 0) / 1000;
+    // madp = FFC (our exact 10-team half-PPR format) shaded toward the analyst
+    // consensus where news has moved them and the market has not caught up
+    const mADP = p => p.madp ?? p.adp;
+    const sortAdp = p => mADP(p) ?? 500 - (p.proj || 0) / 1000;
     const adpOrder = players.filter(p => !keptSet.has(p.id)).sort((a, b) => sortAdp(a) - sortAdp(b));
     const myOrder = adpOrder.slice().sort((a, b) =>
       (oRanks[a.id] ?? 9000 + sortAdp(a)) - (oRanks[b.id] ?? 9000 + sortAdp(b)));
@@ -299,7 +302,8 @@
         (hero ? 'background:rgba(255,106,43,.10);border:1px solid var(--accent)' : 'background:var(--surface);border:1px solid var(--border)'),
       onclick: () => LAB.playerCard(p.id),
       title: `${p.name} — ${fmtPct(prob)} chance he's still available`
-        + `\nADP ${p.adp ?? '–'} nationally, but ~pick ${dSlot(p) ?? '?'} in THIS draft (keepers removed)`
+        + `\nADP ${mADP(p) ?? '–'} (10-tm half-PPR, news-adjusted), ~pick ${dSlot(p) ?? '?'} in THIS draft (keepers removed)`
+        + (p.asd != null ? `\nmarket spread ±${p.asd}${p.asd >= 15 ? ' — UNSETTLED' : p.asd >= 8 ? ' — some disagreement' : ''}` : '')
         + `\nLab @Draft ${dScore(p) ?? '–'}`
         + (dGap(p) != null ? ` · ${dGap(p) > 0 ? '+' : ''}${dGap(p)} vs the players available around him` : '')
         + `\nyour rank ${oRanks[p.id] ? '#' + oRanks[p.id] : '–'}`
