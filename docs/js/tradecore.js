@@ -106,13 +106,25 @@
     const openOf = rid => {
       const used = { ...(kRounds[rid] || {}) };
       const open = [];
-      let spill = 0;
       for (const o of ownedPicks(rid)) {
         if (used[o.round] > 0) { used[o.round]--; continue; }
         open.push(o);
       }
-      for (const r in used) spill += used[r];
-      return open.slice(0, Math.max(0, open.length - spill));
+      // Leftover keepers had no pick on their own cost round. LEAGUE RULE: the
+      // collision spills EARLIER — the extra keeper costs MORE. So each one
+      // eats the nearest EARLIER open pick, falling back to the nearest later
+      // only if nothing earlier is left. (Was: lop the last N picks, which
+      // took the cheapest ones and understated what a collision costs.)
+      for (const r in used) {
+        for (let n = used[r]; n > 0 && open.length; n--) {
+          let i = -1;
+          for (let j = 0; j < open.length; j++) if (open[j].round < +r) i = j; // latest earlier
+          if (i < 0) i = open.findIndex(o => o.round > +r);                    // else earliest later
+          if (i < 0) i = open.length - 1;
+          open.splice(i, 1);
+        }
+      }
+      return open;
     };
     // remove ONE open pick to keep an incoming keeper at his cost round
     // (at cost, else the next open after, else the latest open)

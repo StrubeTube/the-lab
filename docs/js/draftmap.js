@@ -108,13 +108,17 @@
         const slot = slotOfRoster[rid];
         if (slot == null) continue;
         const blocked = p => cells[p] || ridOfPick(p) !== rid;
-        let r = Math.min(k.costRd, ROUNDS);
+        const start = Math.min(k.costRd, ROUNDS);
+        // LEAGUE RULE: when two keepers want the same round, the collision
+        // spills EARLIER — the extra keeper costs MORE, not less. (VERO's
+        // Skattebo and Javonte both cost R9; Javonte lands on the R8.)
+        let r = start;
         pick = pickNum(r, slot);
-        while (blocked(pick) && r < ROUNDS) { r++; pick = pickNum(r, slot); }
-        if (blocked(pick)) { // no later round free — collision spills EARLIER
-          r = Math.min(k.costRd, ROUNDS) - 1;
+        while (blocked(pick) && r > 1) { r--; pick = pickNum(r, slot); }
+        if (blocked(pick)) { // nothing earlier is free — fall back to later
+          r = start;
           pick = pickNum(r, slot);
-          while (blocked(pick) && r > 1) { r--; pick = pickNum(r, slot); }
+          while (blocked(pick) && r < ROUNDS) { r++; pick = pickNum(r, slot); }
         }
       }
       if (!cells[pick]) cells[pick] = { pid: k.pid, official: officialPick[k.pid] != null };
