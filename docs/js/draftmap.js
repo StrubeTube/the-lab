@@ -31,23 +31,62 @@
     }, leagues[t].name));
   }
 
-  // ---------- what-if scenario ----------
-  // Locks let you replay the draft under a decision: force a player to one of
-  // YOUR picks, force a player to a pick BEFORE yours (what if the room takes
-  // him?), or swap your keeper trio. Everything downstream -- the sim, the
-  // odds, the projected roster -- rebuilds off these.
-  const K_SCEN = 'thelab-dm-scenario-v1';
-  let scenAll = (() => { try { return JSON.parse(localStorage.getItem(K_SCEN)) || {}; } catch (e) { return {}; } })();
-  const scen = () => (scenAll[tag] = scenAll[tag] || { picks: {}, keepers: null });
+  // ---------- what-if scenarios ----------
+  // A scenario is a whole alternate draft: forced picks (mine OR the room's),
+  // my keeper trio, and how the room behaves. Several live side by side as
+  // tabs, because the useful question is never "what happens" but "which of
+  // these plans ends up with the better team".
+  const K_SCEN = 'thelab-dm-scen-v2';
+  const ROOM_MODES = {
+    market: ['Market', 'The room drafts to consensus ADP. The realistic case, and the default.'],
+    blend: ['Sharper', 'Halfway between ADP and your board — the room is half as sharp as you are.'],
+    mine: ['Worst case', 'The room drafts YOUR rankings, so every player you rate highest goes as early as anyone could take him. Not a prediction — the floor under a plan. Watch BOARD VALUE, not points: this mode strips the players you rate, and can still hand you a higher-projected team.'],
+  };
+  const newScen = name => ({ name: name || 'Plan A', picks: {}, keepers: null, mode: 'market' });
+  let scenAll = (() => {
+    try {
+      const v2 = JSON.parse(localStorage.getItem(K_SCEN));
+      if (v2) return v2;
+      // carry the single v1 scenario over as each league's first tab
+      const v1 = JSON.parse(localStorage.getItem('thelab-dm-scenario-v1')) || {};
+      const out = {};
+      for (const k in v1) out[k] = { active: 0, list: [Object.assign(newScen('Plan A'), v1[k])] };
+      return out;
+    } catch (e) { return {}; }
+  })();
+  const book = () => {
+    const b = (scenAll[tag] = scenAll[tag] || { active: 0, list: [newScen('Plan A')] });
+    if (!b.list || !b.list.length) b.list = [newScen('Plan A')];
+    b.active = Math.max(0, Math.min(b.active | 0, b.list.length - 1));
+    return b;
+  };
+  const scen = () => book().list[book().active];
   const saveScen = () => { try { localStorage.setItem(K_SCEN, JSON.stringify(scenAll)); } catch (e) {} };
-  const scenN = () => Object.keys(scen().picks).length + (scen().keepers ? 1 : 0);
+  const scenN = s => { const x = s || scen(); return Object.keys(x.picks).length + (x.keepers ? 1 : 0) + ((x.mode || 'market') !== 'market' ? 1 : 0); };
+  const LETTERS = 'ABCDEFGHIJKL';
   const setLock = (pick, pid) => {
     scen().picks[pick] = pid; saveScen();
     document.querySelectorAll('.overlay').forEach(o => o.remove()); // close any picker
     render();
   };
   const clearLock = pick => { delete scen().picks[pick]; saveScen(); render(); };
-  const clearScen = () => { scenAll[tag] = { picks: {}, keepers: null }; saveScen(); render(); };
+  const clearScen = () => { const b = book(); b.list[b.active] = newScen(b.list[b.active].name); saveScen(); render(); };
+  const addScen = from => {
+    const b = book();
+    const name = 'Plan ' + (LETTERS[b.list.length] || b.list.length + 1);
+    b.list.push(from
+      ? { name, picks: { ...from.picks }, keepers: from.keepers ? [...from.keepers] : null, mode: from.mode || 'market' }
+      : newScen(name));
+    b.active = b.list.length - 1;
+    saveScen(); render();
+  };
+  const delScen = i => {
+    const b = book();
+    if (b.list.length <= 1) return LAB.toast('That is your only scenario — use "reset" to clear it');
+    b.list.splice(i, 1);
+    if (b.active >= b.list.length) b.active = b.list.length - 1;
+    saveScen(); render();
+  };
 
   // ---------- Lab @Draft accessors (compute.py: dg/dgw/ds per league) ----------
   // In THIS draft ~28 keepers are off the board, so the top ~130 available
@@ -87,17 +126,20 @@
   const DECAY = 0.65;              // preference decay down the eligible ADP list
 
   // ---------- keeper-conditioned, need-aware draft simulation ----------
-  function buildSim(L) {
+  // sc = the scenario to replay under. mc = run the Monte Carlo (odds); the
+  // compare view skips it, because comparing finished rosters only needs the
+  // deterministic walk and 500 sims per tab would cost seconds for nothing.
+  function buildSim(L, sc, mc) {
     const dd = L.draftDetail || {};
     if (!dd.draftOrder) return null;
     const ROUNDS = dd.rounds || 16, N = 10;
     let { keeps, keptSet } = LAB.predictKeepers(L, byId, oRanks);
     const myRid0 = (L.rosters.find(r => r.owner === L.myUserId) || {}).rid;
     // MY keeper trio can be overridden by the scenario
-    if (scen().keepers && scen().keepers.length) {
+    if (sc.keepers && sc.keepers.length) {
       const mine = new Set((L.rosters.find(r => r.rid === myRid0) || {}).players || []);
       const kept0 = new Set(L.lastKept || []);
-      keeps = keeps.filter(k => !mine.has(k.pid)).concat(scen().keepers.filter(pid => mine.has(pid)).map(pid => ({
+      keeps = keeps.filter(k => !mine.has(k.pid)).concat(sc.keepers.filter(pid => mine.has(pid)).map(pid => ({
         pid, costRd: LAB.keeperCostRound(L, L.lastDraftRound[pid] || null, kept0.has(pid)), official: false,
       })));
       keptSet = new Set(keeps.map(k => k.pid));
@@ -218,11 +260,26 @@
     const lastOpen = {};
     for (const pick of openPicks) lastOpen[ridOfPick(pick)] = pick;
 
-    // draft order lists: everyone by ADP, me by MY board
+    // draft order lists: the ROOM's board, and mine.
+    // The room's board is what the scenario's mode changes. 'market' = ADP,
+    // what will probably happen. 'mine' makes the room draft MY rankings, so
+    // every player I rate highest disappears as early as anyone could take
+    // him — not a forecast, the floor under a plan. Both sides are converted
+    // to ranks (1..n) first so 'blend' can average two comparable numbers
+    // instead of an ADP pick against a board position.
     const sortAdp = p => mADP(p) ?? 500 - (p.proj || 0) / 1000;
-    const adpOrder = players.filter(p => !keptSet.has(p.id)).sort((a, b) => sortAdp(a) - sortAdp(b));
-    const myOrder = adpOrder.slice().sort((a, b) =>
-      (oRanks[a.id] ?? 9000 + sortAdp(a)) - (oRanks[b.id] ?? 9000 + sortAdp(b)));
+    const pool = players.filter(p => !keptSet.has(p.id));
+    const aRank = new Map(), mRank = new Map();
+    pool.slice().sort((a, b) => sortAdp(a) - sortAdp(b)).forEach((p, i) => aRank.set(p.id, i + 1));
+    pool.slice().sort((a, b) =>
+      (oRanks[a.id] ?? 9000 + sortAdp(a)) - (oRanks[b.id] ?? 9000 + sortAdp(b)))
+      .forEach((p, i) => mRank.set(p.id, i + 1));
+    const mode = ROOM_MODES[sc.mode] ? sc.mode : 'market';
+    const roomKey = mode === 'mine' ? p => mRank.get(p.id)
+      : mode === 'blend' ? p => (aRank.get(p.id) + mRank.get(p.id)) / 2
+        : p => aRank.get(p.id);
+    const adpOrder = pool.slice().sort((a, b) => roomKey(a) - roomKey(b));
+    const myOrder = pool.slice().sort((a, b) => mRank.get(a.id) - mRank.get(b.id));
 
     // one full draft of the open picks. rand=null → deterministic most-likely
     // walk (argmax); rand=fn → Monte Carlo (roulette over weighted candidates).
@@ -232,7 +289,7 @@
       const cnts = {};
       L.rosters.forEach(r => (cnts[r.rid] = { ...keeperCounts[r.rid] }));
       const taken = new Set(), exp = {}, takenAt = {};
-      const locks = scen().picks;
+      const locks = sc.picks;
       for (const pick of openPicks) {
         const r = Math.ceil(pick / N);
         const rid = ridOfPick(pick);
@@ -303,7 +360,7 @@
     const cum = new Map(); // pid -> Int32Array; after prefix-sum, [n] = sims taken at pick <= n
     const tSum = {}, tCnt = {};
     const simRuns = [];    // every run kept whole, so JOINT questions are answerable
-    for (let s = 0; s < SIMS; s++) {
+    for (let s = 0; mc && s < SIMS; s++) {
       const { takenAt } = runDraft(false, mulberry32(0xC0FFEE + s * 7919));
       simRuns.push(takenAt);
       for (const pid in takenAt) {
@@ -343,7 +400,7 @@
       const c = cells[p];
       if (c ? rosterOfPid[c.pid] === myRid : ridOfPick(p) === myRid) myPicks.push(p);
     }
-    return { ROUNDS, N, cells, openPicks, adpOrder, roomPick, expected, probAvail, jointAvail, pickNum, slotOfPick, mySlot, myRid, myPicks, ownerOfPick, ridOfPick, dd, keptSet, priors };
+    return { ROUNDS, N, cells, openPicks, adpOrder, roomPick, expected, probAvail, jointAvail, pickNum, slotOfPick, mySlot, myRid, myPicks, ownerOfPick, ridOfPick, dd, keptSet, priors, mode, keeps };
   }
 
   function probChip(p, prob, hero, lockPick) {
@@ -436,7 +493,103 @@
       rows.push({ slot, p: hit || null });
     }
     const bench = pool.filter(p => !used.has(p.id));
-    return { rows, bench, total: rows.reduce((t, x) => t + ((x.p && x.p.proj) || 0), 0) };
+    // TWO totals, because they answer different questions and can disagree:
+    // `total` scores the lineup on 2026 projections, `bval` scores it on YOUR
+    // board (Lab @Draft). A room that drafts your rankings can hand you a
+    // higher-PROJECTED team while stripping the players you actually rate —
+    // one number alone would hide that.
+    return {
+      rows, bench,
+      total: rows.reduce((t, x) => t + ((x.p && x.p.proj) || 0), 0),
+      bval: rows.reduce((t, x) => t + ((x.p && dScore(x.p)) || 0), 0),
+    };
+  }
+
+  // ---------- compare scenarios ----------
+  // Every plan replayed to a finished roster, side by side. Deterministic
+  // walk only: these are outcomes, not odds.
+  function compareCard(L) {
+    const b = book();
+    const cols = b.list.map(s => {
+      let sim = null;
+      try { sim = buildSim(L, s, false); } catch (e) { sim = null; }
+      if (!sim) return null;
+      const mine = sim.myPicks.map(pk => sim.cells[pk] ? sim.cells[pk].pid : sim.expected[pk]).filter(Boolean);
+      return { s, sim, mine, lu: lineupOf(L, mine) };
+    });
+    const live = cols.filter(Boolean);
+    if (live.length < 2) return null;
+    const best = Math.max.apply(null, live.map(x => x.lu.total));
+    const bestB = Math.max.apply(null, live.map(x => x.lu.bval));
+    const card = LAB.el('div', { class: 'card', style: 'margin-top:14px' },
+      LAB.el('h2', {}, 'Compare scenarios'),
+      LAB.el('p', { class: 'muted', style: 'font-size:12px;margin:4px 0 8px' },
+        'Each plan drafted out to a finished roster. Totals are the best startable lineup on 2026 projections, so the columns compare directly — the difference between two plans is the only number that decides between them. Click a column to make it the one you’re editing.'));
+    const row = LAB.el('div', { style: 'display:flex;gap:10px;overflow-x:auto;padding-bottom:6px' });
+    cols.forEach((x, i) => {
+      const s = b.list[i];
+      if (!x) {
+        row.append(LAB.el('div', { class: 'muted', style: 'flex:none;width:210px;font-size:12px;padding:8px' },
+          s.name + ' — could not be simulated'));
+        return;
+      }
+      const isActive = i === b.active;
+      const win = x.lu.total >= best - 0.5;
+      const delta = x.lu.total - best;
+      const col = LAB.el('div', {
+        style: 'flex:none;width:210px;border-radius:9px;padding:7px 9px;border:'
+          + (isActive ? '1.5px solid var(--accent)' : '1px solid var(--border)')
+          + ';background:' + (isActive ? 'rgba(255,106,43,.07)' : 'var(--surface)'),
+      });
+      col.append(LAB.el('div', { class: 'flex', style: 'gap:5px;align-items:center' },
+        LAB.el('b', {
+          style: 'flex:1;font-size:12.5px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis',
+          title: 'switch to this scenario',
+          onclick: () => { book().active = i; saveScen(); render(); },
+        }, s.name),
+        isActive ? LAB.el('span', { class: 'badge', style: 'font-size:8.5px;background:var(--accent);color:#000' }, 'EDITING') : ''));
+      col.append(LAB.el('div', { class: 'muted', style: 'font-size:10px;margin:1px 0 4px' },
+        ROOM_MODES[x.sim.mode][0] + ' room · ' + Object.keys(s.picks).length + ' lock'
+        + (Object.keys(s.picks).length === 1 ? '' : 's')));
+      col.append(LAB.el('div', { style: 'font-size:21px;font-weight:800;font-family:var(--font-display);line-height:1.1;color:' + (win ? 'var(--accent)' : 'var(--ink)') },
+        LAB.fmt0(x.lu.total),
+        LAB.el('span', { class: 'muted', style: 'font-size:10.5px;font-weight:400;margin-left:4px' }, 'pts')));
+      col.append(LAB.el('div', {
+        class: 'mono', style: 'font-size:10.5px;color:' + (win ? '#3ee68f' : 'var(--bad)'),
+      }, win ? 'best of these plans' : LAB.fmt0(delta) + ' vs best'));
+      col.append(LAB.el('div', {
+        class: 'mono muted', style: 'font-size:10.5px;margin-bottom:5px;cursor:help',
+        title: 'The same starting lineup scored on YOUR board (Lab @Draft) instead of projections.\n'
+          + 'When the two totals disagree, your rankings and the projections disagree about this roster.',
+      }, 'board value ' + LAB.fmt0(x.lu.bval)
+        + (bestB != null && x.lu.bval >= bestB - 0.5 ? ' ★' : '')));
+      // keepers this plan holds — usually the whole reason two plans differ
+      const kn = x.sim.keeps.filter(k => (L.rosters.find(r => r.rid === x.sim.myRid) || { players: [] }).players.includes(k.pid))
+        .map(k => (byId[k.pid] || {}).name).filter(Boolean);
+      if (kn.length) {
+        col.append(LAB.el('div', { class: 'muted', style: 'font-size:10px;line-height:1.35;margin-bottom:5px' },
+          LAB.el('b', {}, 'keeps: '), kn.join(', ')));
+      }
+      x.lu.rows.forEach(r2 => col.append(LAB.el('div', {
+        class: 'flex', style: 'gap:5px;font-size:11px;padding:1px 0',
+        title: r2.p ? `${r2.slot}: ${r2.p.name} — ${LAB.fmt0(r2.p.proj)} projected` : `${r2.slot}: nobody projected`,
+        onclick: r2.p ? () => LAB.playerCard(r2.p.id) : null,
+      },
+        LAB.el('span', { class: 'mono muted', style: 'width:30px;flex:none' }, r2.slot),
+        LAB.el('span', {
+          style: 'flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;color:var(--'
+            + (r2.p ? ({ QB: 'qb', RB: 'rb', WR: 'wr', TE: 'te', DEF: 'def' }[r2.p.pos] || 'ink') : 'ink-3') + ')',
+        }, r2.p ? r2.p.name : '—'),
+        LAB.el('span', { class: 'mono muted', style: 'flex:none;font-size:10px' }, r2.p ? LAB.fmt0(r2.p.proj) : '–'))));
+      if (x.lu.bench.length) {
+        col.append(LAB.el('div', { class: 'muted', style: 'font-size:9.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin-top:5px' }, 'bench'));
+        col.append(LAB.el('div', { class: 'muted', style: 'font-size:10px;line-height:1.4' },
+          x.lu.bench.map(p => p.name).join(' · ')));
+      }
+      row.append(col);
+    });
+    card.append(row);
+    return card;
   }
 
   // ---------- positional cliff timer ----------
@@ -520,7 +673,7 @@
   function render() {
     root.innerHTML = '';
     const L = leagues[tag];
-    const sim = buildSim(L);
+    const sim = buildSim(L, scen(), true);
     if (!sim) {
       root.append(LAB.el('div', { class: 'empty' },
         `${L.name} hasn't set its draft order yet — the snake map unlocks the moment Sleeper knows the slots. (Keeper-round projections on the Board and Keepers pages work already.)`));
@@ -549,24 +702,80 @@
       LAB.el('p', { class: 'muted', style: 'font-size:12px;margin:4px 0 6px' },
         'The ', LAB.el('b', { class: 'accent' }, 'orange card'), ' is your projected pick off YOUR board (one QB, one TE, filled positions drop out). Below it: alternatives with the odds they last, from ' + SIMS + ' simulated drafts of this room — every manager drafting like his six-year history says. ',
         LAB.el('b', { style: 'color:#3ee68f' }, 'green = safe'), ' → ', LAB.el('b', { style: 'color:#ff5c5c' }, 'red = long shot'), '.'));
-    // ---- active scenario bar ----
+    // ---- scenario tabs: one tab per plan, all of them comparable below ----
     {
+      const b = book();
+      const tabRow = LAB.el('div', {
+        style: 'display:flex;gap:4px;flex-wrap:wrap;align-items:center;margin:4px 0 6px',
+      });
+      b.list.forEach((s, i) => {
+        const on = i === b.active;
+        const chip = LAB.el('div', {
+          style: 'display:flex;align-items:center;gap:4px;font-size:11.5px;padding:2px 4px 2px 9px;'
+            + 'border-radius:99px;cursor:pointer;border:1px solid '
+            + (on ? 'var(--accent);background:rgba(255,106,43,.12);color:var(--accent)'
+                  : 'var(--border);background:var(--surface)'),
+          title: on ? 'double-click to rename' : 'switch to ' + s.name,
+          onclick: () => { if (!on) { book().active = i; saveScen(); render(); } },
+          ondblclick: () => {
+            const nm = prompt('Name this scenario', s.name);
+            if (nm && nm.trim()) { s.name = nm.trim().slice(0, 24); saveScen(); render(); }
+          },
+        },
+          LAB.el('span', { style: 'font-weight:600' }, s.name),
+          scenN(s) ? LAB.el('span', { class: 'mono', style: 'font-size:9.5px;opacity:.7' }, scenN(s)) : '',
+          b.list.length > 1 ? LAB.el('button', {
+            style: 'border:0;background:none;cursor:pointer;padding:0 4px;color:var(--ink-3);font-size:12px',
+            title: 'delete ' + s.name,
+            onclick: e => { e.stopPropagation(); delScen(i); },
+          }, '\u00d7') : '');
+        tabRow.append(chip);
+      });
+      const btn = (label, title, fn) => LAB.el('button', {
+        style: 'font-size:10.5px;padding:2px 8px;border-radius:99px;border:1px dashed var(--border);background:var(--surface);cursor:pointer',
+        title, onclick: fn,
+      }, label);
+      tabRow.append(btn('+ new', 'Start an empty plan', () => addScen(null)));
+      tabRow.append(btn('\u29c9 copy', 'Duplicate this plan, then change one thing', () => addScen(scen())));
+      if (scenN()) tabRow.append(btn('reset', 'Clear every lock, keeper override and mode on THIS plan', clearScen));
+      planner.append(tabRow);
+
+      // ---- how the room drafts ----
+      const modeRow = LAB.el('div', { class: 'flex', style: 'gap:5px;align-items:center;margin-bottom:6px;flex-wrap:wrap' },
+        LAB.el('span', { class: 'muted', style: 'font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase' }, 'room drafts'));
+      Object.entries(ROOM_MODES).forEach(([k, [label, hint]]) => {
+        const on = (scen().mode || 'market') === k;
+        modeRow.append(LAB.el('button', {
+          style: 'font-size:11px;padding:2px 9px;border-radius:99px;cursor:pointer;border:1px solid '
+            + (on ? (k === 'mine' ? 'var(--bad);background:rgba(255,92,92,.14);color:var(--bad)'
+                                  : 'var(--accent);background:rgba(255,106,43,.12);color:var(--accent)')
+                  : 'var(--border);background:var(--surface)'),
+          title: hint,
+          onclick: () => { scen().mode = k; saveScen(); render(); },
+        }, label));
+      });
+      modeRow.append(LAB.el('span', { class: 'muted', style: 'font-size:10.5px' },
+        ROOM_MODES[sim.mode][1]));
+      planner.append(modeRow);
+
+      // ---- what this plan currently forces ----
       const locks = Object.entries(scen().picks)
         .map(([pk, pid]) => ({ pk: +pk, p: byId[pid] })).filter(x => x.p)
-        .sort((a, b) => a.pk - b.pk);
+        .sort((a, b2) => a.pk - b2.pk);
       const bar = LAB.el('div', {
         style: 'margin:2px 0 8px;padding:6px 8px;border-radius:8px;font-size:11.5px;'
           + (scenN() ? 'border:1px solid var(--accent);background:rgba(255,106,43,.06)'
                      : 'border:1px dashed var(--border)'),
       });
-      if (!scenN()) {
+      if (!Object.keys(scen().picks).length && !scen().keepers) {
         bar.append(LAB.el('span', { class: 'muted' },
           'WHAT-IF: hit ', LAB.el('b', {}, '\u21b3 lock'),
           ' on any player to force him to that pick and replay the draft. '
           + 'Click a round header for the full board at that pick \u2014 that is how you '
-          + 'decide what the room does before you.'));
+          + 'decide what the room does before you. Make a second plan with ',
+          LAB.el('b', {}, '\u29c9 copy'), ' and the two rosters line up side by side below.'));
       } else {
-        bar.append(LAB.el('b', { class: 'accent' }, 'SCENARIO: '));
+        bar.append(LAB.el('b', { class: 'accent' }, scen().name.toUpperCase() + ': '));
         if (scen().keepers) {
           bar.append(LAB.el('span', {
             style: 'display:inline-block;margin:1px 4px 1px 0;padding:1px 6px;border-radius:99px;background:var(--surface);border:1px solid var(--border)',
@@ -584,10 +793,6 @@
             style: 'margin-left:5px;border:0;background:none;cursor:pointer;color:var(--bad)',
             onclick: () => clearLock(x.pk),
           }, '\u00d7'))));
-        bar.append(LAB.el('button', {
-          style: 'margin-left:6px;font-size:10.5px;padding:1px 7px;border-radius:6px;border:1px solid var(--border);background:var(--surface);cursor:pointer',
-          onclick: clearScen,
-        }, 'clear all'));
       }
       planner.append(bar);
     }
@@ -766,7 +971,8 @@
     }
     planner.append(cols);
     main.append(planner);
-    main.append(cliffCard(sim));
+    const cmp = compareCard(L);
+    if (cmp) main.append(cmp);
 
     // ---------- full snake board + my projected team ----------
     const boardCard = LAB.el('div', { class: 'card', style: 'margin-top:14px' },
@@ -826,6 +1032,7 @@
     wrap.append(grid);
     boardCard.append(wrap);
     main.append(boardCard);
+    main.append(cliffCard(sim));
 
     // ---------- my projected team, grouped by position (right sidebar) ----------
     const teamCard = LAB.el('div', { class: 'card', style: 'margin-top:14px;position:sticky;top:10px' },
@@ -846,7 +1053,8 @@
           lu.rows.filter(x => !x.p).length
             ? lu.rows.filter(x => !x.p).length + ' starting slot(s) unfilled'
             : 'all ' + lu.rows.length + ' starting slots filled'),
-        scenN() ? LAB.el('div', { style: 'font-size:10.5px;margin-top:3px;color:var(--accent)' }, '↳ under your scenario') : ''));
+        scenN() ? LAB.el('div', { style: 'font-size:10.5px;margin-top:3px;color:var(--accent)' },
+          '↳ under ' + scen().name + (sim.mode !== 'market' ? ' · ' + ROOM_MODES[sim.mode][0].toLowerCase() + ' room' : '')) : ''));
       const det = LAB.el('div', { style: 'margin-bottom:8px' });
       lu.rows.forEach(x => det.append(LAB.el('div', {
         class: 'flex', style: 'gap:6px;font-size:11px;padding:1px 4px',
