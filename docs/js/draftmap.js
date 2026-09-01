@@ -392,6 +392,11 @@
       return a ? 1 - a[pick - 1] / SIMS : 1;
     };
     const expected = runDraft(true, null).exp; // display board incl. my board-driven picks
+    // one randomized draft WITH my picks in it. The deterministic walk is a
+    // single path and it cascades: change one keeper and players three rounds
+    // later shuffle. Sampling many rooms is how you tell a real edge between
+    // two plans from that churn.
+    const sample = rand => runDraft(true, rand).exp;
     const mySlot = dd.draftOrder[L.myUserId];
     // every pick that is MINE: open picks I own (incl. acquired via trade,
     // excl. ones I traded away) + cells holding MY keepers
@@ -400,7 +405,7 @@
       const c = cells[p];
       if (c ? rosterOfPid[c.pid] === myRid : ridOfPick(p) === myRid) myPicks.push(p);
     }
-    return { ROUNDS, N, cells, openPicks, adpOrder, roomPick, expected, probAvail, jointAvail, pickNum, slotOfPick, mySlot, myRid, myPicks, ownerOfPick, ridOfPick, dd, keptSet, priors, mode, keeps };
+    return { ROUNDS, N, cells, openPicks, adpOrder, roomPick, expected, probAvail, jointAvail, pickNum, slotOfPick, mySlot, myRid, myPicks, ownerOfPick, ridOfPick, dd, keptSet, priors, mode, keeps, sample };
   }
 
   function probChip(p, prob, hero, lockPick) {
@@ -680,6 +685,11 @@
       return;
     }
     LAB.dmSim = sim;   // exposed for ad-hoc questions (joint availability etc.)
+    // replay an arbitrary scenario without touching the UI, and score any set
+    // of players as a lineup — how keeper trios get compared in bulk
+    LAB.dmBuild = (sc, mc) => buildSim(L, Object.assign(newScen('probe'), sc), !!mc);
+    LAB.dmLineup = pids => lineupOf(L, pids);
+    LAB.dmLeague = L;
     // page layout: everything on the left, my projected team in its own
     // sidebar on the right so the snake board never has to scroll
     const main = LAB.el('div', { style: 'flex:1;min-width:0' });
