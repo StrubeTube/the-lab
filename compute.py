@@ -546,134 +546,16 @@ if consensus_path.exists():
         e["madp"] = round(base, 1)
     print(f"  madp: Sleeper base, {shaded} shaded toward analysts")
 
-# ---- Vegas "analyst": season prop O/U lines -> fantasy points -> ranks ----
-# Positional rank = points within position; overall rank = value over a
-# 10-team replacement baseline so QB raw-point inflation doesn't distort it.
-vegas_raw = {}
-try:
-    vegas_raw = load("vegas_offers.json") or {}
-except FileNotFoundError:
-    pass
-if vegas_raw:
-    def _vprob(cost):
-        """American odds -> implied probability."""
-        if cost is None:
-            return None
-        try:
-            cost = float(cost)
-        except (TypeError, ValueError):
-            return None
-        if cost == 0:
-            return None
-        return (-cost) / (-cost + 100.0) if cost < 0 else 100.0 / (cost + 100.0)
-
-    VSTALE = {"n": 0}
-
-    def vegas_line(offer):
-        """Consensus O/U line: BettingPros book 0 main line, else opening.
-        STALE-LINE GUARD (2026-08-27, the Charbonnet find): books sometimes
-        leave a dead line posted and price the correction into the juice
-        (his rush yds sat at 749.5 with the under -1901 — the market
-        actually believes far less). De-vig the two-way prices; if implied
-        P(over) leaves [0.30, 0.70] the posted number no longer reflects
-        the market's median, so the line is treated as absent."""
-        sides = {}
-        opening = None
-        for sel in offer.get("selections") or []:
-            side = (sel.get("selection") or "").lower()
-            for bk in sel.get("books") or []:
-                if bk.get("id") == 0:
-                    for ln in bk.get("lines") or []:
-                        if ln.get("main") and ln.get("line") is not None:
-                            sides[side] = (ln["line"], ln.get("cost"))
-            if side == "over" and opening is None:
-                op = sel.get("opening_line") or {}
-                if op.get("line") is not None:
-                    opening = op["line"]
-        if "over" in sides:
-            line, oc = sides["over"]
-            uc = sides.get("under", (None, None))[1]
-            po, pu = _vprob(oc), _vprob(uc)
-            if po is not None and pu is not None and (po + pu) > 0:
-                pov = po / (po + pu)
-                if not (0.30 <= pov <= 0.70):
-                    VSTALE["n"] += 1
-                    return None       # dead line — juice says the number moved
-            elif po is not None and not (0.25 <= po <= 0.75):
-                VSTALE["n"] += 1
-                return None           # one-sided quote at an extreme price
-            return line
-        return opening
-
-    vlines = {}  # (norm name, pos) -> {stat: line}
-    for stat, offers in vegas_raw.items():
-        for off in offers:
-            parts = off.get("participants") or []
-            pl = (parts[0].get("player") or {}) if parts else {}
-            if pl.get("position") not in POS:
-                continue
-            line = vegas_line(off)
-            if line is not None:
-                vlines.setdefault((norm(parts[0].get("name") or ""), pl["position"]), {})[stat] = line
-
-    def vegas_pts(pos, st):
-        rec = st.get("rec")
-        if rec is None and st.get("rec_yd"):
-            # books didn't hang a receptions line — estimate off yards/catch
-            rec = st["rec_yd"] / (8.5 if pos == "RB" else 11.0)
-        return (st.get("pass_yd", 0) * scoring.get("pass_yd", 0.04)
-                + st.get("pass_td", 0) * scoring.get("pass_td", 4)
-                + st.get("rush_yd", 0) * scoring.get("rush_yd", 0.1)
-                + st.get("rush_td", 0) * scoring.get("rush_td", 6)
-                + st.get("rec_yd", 0) * scoring.get("rec_yd", 0.1)
-                + st.get("rec_td", 0) * scoring.get("rec_td", 6)
-                + (rec or 0) * scoring.get("rec", 0.5))
-
-    by_pos_name = {}
-    for e in players_out:
-        if e["pos"] in POS:
-            by_pos_name.setdefault((norm(e["name"] or ""), e["pos"]), e)
-    vmatched = vunmatched = 0
-    for key, st in vlines.items():
-        e = by_pos_name.get(key)
-        if e is None:
-            vunmatched += 1
-            continue
-        e["vpts"] = round(vegas_pts(key[1], st), 1)
-        vmatched += 1
-
-    for pos in POS:
-        ranked = sorted((e for e in players_out if e["pos"] == pos and e.get("vpts") is not None),
-                        key=lambda x: -x["vpts"])
-        for i, e in enumerate(ranked):
-            rr = dict(e.get("crs") or {})
-            rr["vegas"] = i + 1
-            e["crs"] = rr
-            e["cr"] = round(sum(rr.values()) / len(rr), 2)
-            e["cr_n"] = len(rr)
-
-    VBASE = {"QB": 12, "RB": 26, "WR": 28, "TE": 12}  # 10-team replacement slots
-    baseline = {}
-    for pos in POS:
-        pts = sorted((e["vpts"] for e in players_out if e["pos"] == pos and e.get("vpts") is not None),
-                     reverse=True)
-        if pts:
-            baseline[pos] = pts[min(VBASE[pos], len(pts)) - 1]
-    vorp = sorted((e for e in players_out if e.get("vpts") is not None),
-                  key=lambda e: -(e["vpts"] - baseline[e["pos"]]))
-    for i, e in enumerate(vorp):
-        rr = dict(e.get("ocrs") or {})
-        rr["vegas"] = i + 1
-        e["ocrs"] = rr
-        e["ocr"] = round(sum(rr.values()) / len(rr), 2)
-        e["ocr_n"] = len(rr)
-    print(f"  vegas: {vmatched} players priced ({vunmatched} outside pool, "
-          f"{VSTALE['n']} stale lines dropped by the de-vig guard), "
-          f"baselines {[f'{p}:{baseline.get(p)}' for p in POS]}")
-    top_missing = [e["name"] for e in players_out
-                   if e["pos"] in POS and e.get("adp") and e["adp"] <= 100 and "cr" not in e]
-    if top_missing:
-        print(f"  WARNING top-100-ADP players with no consensus rank: {top_missing}")
+# ---- Vegas rankings: REMOVED (2026-09-01) ----
+# Season-long prop lines proved unusable as a ranking source: books leave
+# markets frozen (is_off) with balanced juice, RBs without receiving lines
+# score as if they catch nothing, and a 163-player pool means merely being
+# listed promotes deep-bench veterans (+17 avg rank for players outside the
+# humans' top 163). The consensus is now the four human analysts only.
+top_missing = [e["name"] for e in players_out
+               if e["pos"] in POS and e.get("adp") and e["adp"] <= 100 and "cr" not in e]
+if top_missing:
+    print(f"  WARNING top-100-ADP players with no consensus rank: {top_missing}")
 
 # BC freshness guard: only trust tiers if they cover the top of current ADP
 top30 = sorted((p for p in players_out if p.get("adp") and p["pos"] in POS),
@@ -1182,8 +1064,6 @@ for e in players_out:
     tc = TEAM_CTX.get(e.get("team")) or {}
     m["wins"] = tc.get("wins")
     m["oline"] = 33 - tc["oline"] if tc.get("oline") else None  # higher = better
-    if e["pos"] == "QB":
-        m["vgs"] = e.get("vpts")  # Vegas prop-implied points (market signal)
     if e["pos"] == "RB" and ta.get("rb"):
         m["bfshare"] = (e.get("proj") or 0) / ta["rb"]
     # position-room competition: his projected share of his team's position
@@ -1261,10 +1141,12 @@ PILLARS = {
     "TE": {"opp": [("yptpa", .40), ("tshare", .35), ("tpg", .25)],
            "tal": [("rypg", .50), ("ypt", .30), ("tdluck", .20)],
            "sit": [("vac", .20), ("offq", .15), ("qbq", .25), ("posshare", .20), ("wins", .12), ("oline", .08)]},
-    # QB talent leans on the Vegas prop market (vgs) — the backtest showed
-    # prior-year QB stats are the weakest predictor, the market is stronger
+    # QB talent: vgs (Vegas prop market) removed 2026-09-01 with the rest of
+    # the Vegas source; its .40 weight redistributed pro-rata. The backtest
+    # liked the market here, so QB talent now leans harder on prior-year
+    # stats than it ideally would.
     "QB": {"opp": [("qrypg", .50), ("papg", .20), ("qrza", .30)],
-           "tal": [("pypg", .35), ("ypa", .10), ("tdluck", .15), ("vgs", .40)],
+           "tal": [("pypg", .58), ("ypa", .17), ("tdluck", .25)],
            "sit": [("weapons", .35), ("offq", .25), ("oline", .20), ("wins", .20)]},
 }
 

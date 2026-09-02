@@ -592,7 +592,7 @@
   // Rows align by rank; my tier breaks run as full-width bars across every
   // column; my column stays drag-editable (writes the real board).
   const SRC_META = [['joel', 'Joel Smyth'], ['flock', 'Flock'], ['fb', 'Footballers'],
-                    ['ffa', 'FFA'], ['vegas', 'Vegas']];
+                    ['ffa', 'FFA']];
   function diffColor(myRank, theirRank, span) {
     if (myRank == null || theirRank == null) return null;
     const t = Math.max(-1, Math.min(1, (theirRank - myRank) / (span || 6)));

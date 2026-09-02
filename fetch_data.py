@@ -354,7 +354,8 @@ if __name__ == "__main__":
         fetch_trades(tag, lid)
     fetch_adp()
     fetch_borischen()
-    fetch_vegas()
+    # fetch_vegas() removed from the daily run 2026-09-01 -- rankings dropped;
+    # the function stays for a possible future rebuild with is_off/staleness guards
     fetch_nflverse()
     fetch_contracts()
     archive_snapshots()
