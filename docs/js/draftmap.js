@@ -133,6 +133,7 @@
     const dd = L.draftDetail || {};
     if (!dd.draftOrder) return null;
     const ROUNDS = dd.rounds || 16, N = 10;
+    const tgt = LAB.targets(tag); // my starred guys for THIS draft
     let { keeps, keptSet } = LAB.predictKeepers(L, byId, oRanks);
     const myRid0 = (L.rosters.find(r => r.owner === L.myUserId) || {}).rid;
     // MY keeper trio can be overridden by the scenario
@@ -301,9 +302,14 @@
           p = byId[lock];                          // scenario: this pick is decided
         } else if (rid === myRid) {
           const forceDef = cnt.DEF < 1 && (r === ROUNDS || pick === lastOpen[rid]);
-          p = myOrder.find(x => !taken.has(x.id)
+          const ok = x => !taken.has(x.id)
             && (forceDef ? x.pos === 'DEF' : x.pos !== 'DEF')
-            && !(x.pos in MY_CAP && cnt[x.pos] >= MY_CAP[x.pos]));
+            && !(x.pos in MY_CAP && cnt[x.pos] >= MY_CAP[x.pos]);
+          // TARGETS first: my best-ranked target who is legal here and not a
+          // wild reach (within ~a round of his market slot). The map builds
+          // itself around the guys I starred; the board fills the gaps.
+          p = tgt.size ? myOrder.find(x => tgt.has(x.id) && ok(x) && (mADP(x) ?? 999) <= pick + 12) : null;
+          if (!p) p = myOrder.find(ok);
         } else {
           const pr = priors[rid];
           const forceDef = cnt.DEF < 1 && pick === lastOpen[rid];
@@ -408,11 +414,14 @@
     return { ROUNDS, N, cells, openPicks, adpOrder, roomPick, expected, probAvail, jointAvail, pickNum, slotOfPick, mySlot, myRid, myPicks, ownerOfPick, ridOfPick, dd, keptSet, priors, mode, keeps, sample };
   }
 
+  let tgtSet = LAB.targets(tag); // cached per render; probChip reads it a lot
   function probChip(p, prob, hero, lockPick) {
     const col = pctColor(prob);
+    const isT = tgtSet.has(p.id);
     return LAB.el('div', {
       class: 'flex', style: 'gap:7px;padding:3px 6px;border-radius:7px;margin-top:3px;cursor:pointer;font-size:12.5px;' +
-        (hero ? 'background:rgba(255,106,43,.10);border:1px solid var(--accent)' : 'background:var(--surface);border:1px solid var(--border)'),
+        (hero ? 'background:rgba(255,106,43,.10);border:1px solid var(--accent)' : 'background:var(--surface);border:1px solid var(--border)') +
+        (isT ? ';box-shadow:0 0 0 1.5px rgba(245,197,66,.75)' : ''),
       onclick: () => LAB.playerCard(p.id),
       title: `${p.name} — ${fmtPct(prob)} chance he's still available`
         + `\nADP ${mADP(p) ?? '–'} (Sleeper, news-adjusted), ~pick ${dSlot(p) ?? '?'} in THIS draft (keepers removed)`
@@ -430,6 +439,18 @@
         title: 'Lab @Draft window gap — his score minus the median of who else is available here',
       }, (dGap(p) > 0 ? '+' : '') + dGap(p)) : '',
       LAB.el('b', { class: 'mono', style: 'color:' + col + ';width:38px;text-align:right' }, fmtPct(prob)),
+      LAB.el('button', {
+        style: 'flex:none;font-size:12px;padding:0 2px;border:0;background:none;cursor:pointer;line-height:1;'
+          + (isT ? '' : 'opacity:.3;filter:grayscale(1)'),
+        title: isT ? p.name + ' is a TARGET in this draft — click to clear'
+                   : 'Star ' + p.name + ' as a draft target — the map will build around him',
+        onclick: e => {
+          e.stopPropagation();
+          LAB.toggleTarget(tag, p.id);
+          tgtSet = LAB.targets(tag);
+          render(); // overlays live on <body>, so an open picker survives this
+        },
+      }, '🎯'),
       lockPick ? LAB.el('button', {
         style: 'flex:none;font-size:10px;padding:1px 5px;border-radius:5px;border:1px solid var(--border);background:var(--surface);cursor:pointer',
         title: 'Lock ' + p.name + ' to this pick and replay the rest of the draft',
@@ -508,6 +529,56 @@
       total: rows.reduce((t, x) => t + ((x.p && x.p.proj) || 0), 0),
       bval: rows.reduce((t, x) => t + ((x.p && dScore(x.p)) || 0), 0),
     };
+  }
+
+  // ---------- draft targets panel ----------
+  // The starred guys, each with his real survival odds at every one of MY
+  // open picks — the sim already drafts around them; this is the receipt.
+  function targetsCard(sim) {
+    const ids = [...tgtSet].filter(id => byId[id] && !sim.keptSet.has(id))
+      .sort((a, b) => (oRanks[a] ?? 9e3) - (oRanks[b] ?? 9e3));
+    const card = LAB.el('div', { class: 'card', style: 'margin-top:14px' },
+      LAB.el('h2', {}, '🎯 Draft targets'),
+      LAB.el('p', { class: 'muted', style: 'font-size:12px;margin:4px 0 8px' },
+        'Your starred players for THIS draft. The planner and board above now build around them — a target gets your pick whenever he’s there and it isn’t a wild reach. Cells: the odds he’s still available at that pick of yours.'));
+    if (!ids.length) {
+      card.append(LAB.el('p', { class: 'muted', style: 'font-size:12.5px' },
+        'No targets yet — hit the 🎯 on any player chip here or on the Board page, and the map rebuilds around your guys.'));
+      return card;
+    }
+    const picks = sim.myPicks.filter(pk => !sim.cells[pk]).slice(0, 8);
+    const lab = pk => { const r = Math.ceil(pk / sim.N); return r + '.' + String(pk - (r - 1) * sim.N).padStart(2, '0'); };
+    const head = LAB.el('div', { class: 'flex', style: 'gap:6px;font-size:10px;font-weight:700;letter-spacing:.05em;color:var(--ink-3);text-transform:uppercase' },
+      LAB.el('span', { style: 'flex:1' }, 'target'),
+      picks.map(pk => LAB.el('span', { class: 'mono', style: 'width:44px;text-align:center;flex:none' }, lab(pk))),
+      LAB.el('span', { class: 'mono', style: 'width:64px;text-align:right;flex:none' }, 'room takes'));
+    card.append(head);
+    for (const id of ids) {
+      const p = byId[id];
+      const mine = Object.entries(sim.expected).find(([pk, pid]) => pid === id && sim.myPicks.includes(+pk));
+      card.append(LAB.el('div', { class: 'flex', style: 'gap:6px;padding:3px 0;border-top:1px solid var(--border);font-size:12.5px;align-items:center' },
+        LAB.el('span', { class: 'flex', style: 'flex:1;gap:6px;cursor:pointer;min-width:0', onclick: () => LAB.playerCard(id) },
+          LAB.headshot(id, 'sm'),
+          LAB.el('b', { style: 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis' }, p.name),
+          LAB.posBadge(p.pos),
+          mine ? LAB.el('span', { class: 'badge', style: 'font-size:8.5px;background:var(--accent);color:#000', title: 'the sim has YOU drafting him at ' + lab(+mine[0]) }, 'YOURS ' + lab(+mine[0])) : ''),
+        picks.map(pk => {
+          const pr = sim.probAvail(id, pk);
+          return LAB.el('b', { class: 'mono', style: 'width:44px;text-align:center;flex:none;color:' + pctColor(pr) }, fmtPct(pr));
+        }),
+        LAB.el('span', { class: 'mono muted', style: 'width:64px;text-align:right;flex:none' },
+          sim.roomPick[id] != null ? '~#' + Math.round(sim.roomPick[id]) : 'rarely')));
+    }
+    if (ids.length > 1) {
+      card.append(LAB.el('div', { class: 'flex', style: 'gap:6px;padding:4px 0 0;border-top:1px solid var(--border);font-size:12px;align-items:center' },
+        LAB.el('b', { style: 'flex:1', title: 'joint odds from whole sim runs — targets are correlated, this is NOT 1-(1-p1)(1-p2)...' }, 'at least one left'),
+        picks.map(pk => {
+          const pr = sim.jointAvail(ids, pk);
+          return LAB.el('b', { class: 'mono', style: 'width:44px;text-align:center;flex:none;color:' + pctColor(pr) }, fmtPct(pr));
+        }),
+        LAB.el('span', { style: 'width:64px;flex:none' })));
+    }
+    return card;
   }
 
   // ---------- compare scenarios ----------
@@ -677,6 +748,7 @@
 
   function render() {
     root.innerHTML = '';
+    tgtSet = LAB.targets(tag); // league tab may have changed
     const L = leagues[tag];
     const sim = buildSim(L, scen(), true);
     if (!sim) {
@@ -981,6 +1053,7 @@
     }
     planner.append(cols);
     main.append(planner);
+    main.append(targetsCard(sim));
     const cmp = compareCard(L);
     if (cmp) main.append(cmp);
 

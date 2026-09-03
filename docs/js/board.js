@@ -147,6 +147,17 @@
     }
   };
   syncLensBtns();
+  // ---------- draft-target league toggle (stars on rows edit this league) ----------
+  const tgtLgBtn = LAB.$('#tgtLgBtn');
+  const tgtTag = () => LAB.prefs.targetLg || 'lob';
+  let tgtSetB = LAB.targets(tgtTag());
+  const syncTgtBtn = () => { tgtLgBtn.textContent = '🎯 ' + tgtTag().toUpperCase(); tgtSetB = LAB.targets(tgtTag()); };
+  syncTgtBtn();
+  tgtLgBtn.addEventListener('click', () => {
+    LAB.prefs.targetLg = tgtTag() === 'lob' ? 'ggg' : 'lob';
+    LAB.savePrefs(); syncTgtBtn(); render();
+    LAB.toast('🎯 stars now edit your ' + tgtTag().toUpperCase() + ' targets');
+  });
   const saveLensPrefs = () => {
     LAB.prefs.adpLens = state.adpLens; LAB.prefs.labLens = state.labLens;
     LAB.prefs.winLens = state.winLens; LAB.prefs.crLens = state.crLens; LAB.savePrefs();
@@ -372,7 +383,23 @@
         LAB.edgeChip(p),
         mine ? LAB.el('span', { class: 'badge mine', title: 'on my roster' }, 'MINE')
           : holder ? LAB.el('span', { class: 'muted', style: 'font-size:11px', title: 'rostered by' }, holder) : '',
-        (board.notes || {})[pid] ? LAB.el('span', { class: 'note-dot', title: board.notes[pid] }, '✎') : ''),
+        (board.notes || {})[pid] ? LAB.el('span', { class: 'note-dot', title: board.notes[pid] }, '✎') : '',
+        (() => {
+          const on = tgtSetB.has(pid);
+          const b = LAB.el('button', {
+            style: 'border:0;background:none;cursor:pointer;font-size:12px;padding:0 2px;line-height:1;'
+              + (on ? '' : 'opacity:.22;filter:grayscale(1)'),
+            title: (on ? 'TARGET in ' : 'star as a target in ') + tgtTag().toUpperCase() + ' — the Draft Map builds around your targets',
+          }, '🎯');
+          b.addEventListener('click', e => {
+            e.stopPropagation(); e.preventDefault();
+            const now = LAB.toggleTarget(tgtTag(), pid);
+            tgtSetB = LAB.targets(tgtTag());
+            b.style.opacity = now ? '' : '.22';
+            b.style.filter = now ? '' : 'grayscale(1)';
+          });
+          return b;
+        })()),
       LAB.el('div', { class: 'stats' },
         (() => {
           const wgv = (p.lab || {})[opts.showPos ? 'wg' : 'wgp'];

@@ -411,6 +411,21 @@
   };
   LAB.keeperRounds = (players, L, board) => LAB.keeperSim(players, L, board).rounds;
 
+  // ---------- draft targets (per-league, this browser) ----------
+  // "My guys" for a specific draft: the Board and the Draft Map both toggle
+  // the same list, and the Draft Map's sim drafts around it.
+  const K_TGT = 'thelab-targets-v1';
+  LAB.targetsAll = () => { try { return JSON.parse(localStorage.getItem(K_TGT)) || {}; } catch (e) { return {}; } };
+  LAB.targets = tag => new Set(LAB.targetsAll()[tag] || []);
+  LAB.toggleTarget = (tag, pid) => {
+    const all = LAB.targetsAll();
+    const list = all[tag] || (all[tag] = []);
+    const i = list.indexOf(pid);
+    if (i >= 0) list.splice(i, 1); else list.push(pid);
+    try { localStorage.setItem(K_TGT, JSON.stringify(all)); } catch (e) {}
+    return i < 0; // true = now a target
+  };
+
   // ---------- toast ----------
   LAB.toast = function (msg, cls) {
     let wrap = $('.toast-wrap');
