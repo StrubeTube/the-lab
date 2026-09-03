@@ -263,6 +263,35 @@
   });
   LAB.$('#undoBtn').addEventListener('click', undo);
   LAB.$('#exportBtn').addEventListener('click', LAB.exportBoard);
+  // FantasyPros paste-in: their only rules are one player per row and
+  // capitalized first/last names — our stored names already satisfy the
+  // capitalization, so this is the overall board order, skill players only
+  // (DEFs are stored as team codes like "LAR", which their matcher would
+  // not recognize).
+  LAB.$('#fpExportBtn').addEventListener('click', () => {
+    const oR = LAB.overallRanks(board);
+    const rows = Object.entries(oR)
+      .map(([pid, r]) => ({ p: byId[pid], r }))
+      .filter(x => x.p && x.p.pos !== 'DEF' && x.p.name)
+      .sort((a, b) => a.r - b.r)
+      .map(x => x.p.name.trim());
+    const text = rows.join('\n');
+    const ta = LAB.el('textarea', {
+      style: 'width:100%;height:50vh;font-family:var(--font-mono);font-size:12px;background:var(--surface);color:var(--ink);border:1px solid var(--border);border-radius:8px;padding:8px',
+    });
+    ta.value = text;
+    LAB.modal(LAB.el('div', {},
+      LAB.el('h2', {}, 'FantasyPros export — ' + rows.length + ' players'),
+      LAB.el('p', { class: 'muted', style: 'font-size:12px;margin:4px 0 8px' },
+        'One player per row, in your overall board order. Copied to the clipboard — or select-all here. DEFs are left out (FantasyPros would not match the team codes).'),
+      ta));
+    ta.select();
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text)
+        .then(() => LAB.toast('Copied ' + rows.length + ' players — paste into FantasyPros', 'good'))
+        .catch(() => LAB.toast('Clipboard blocked — copy from the box'));
+    }
+  });
   LAB.$('#importBtn').addEventListener('click', () => LAB.importBoard(() => { board = LAB.loadBoard(); LAB.reconcileBoard(board, players); render(); }));
   LAB.$('#resetBtn').addEventListener('click', () => {
     if (!confirm('Reset player order back to your analyst consensus? Your tiers stay exactly where they are (same count, same sizes, same overall arrangement) — players re-sort and reflow through them. Notes survive. This cannot be undone past the undo stack.')) return;
