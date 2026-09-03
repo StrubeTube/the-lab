@@ -26,7 +26,11 @@ LISTS = ROOT / "data" / "analyst_lists.json"
 PINS = ROOT / "data" / "flock_dodd_pins.json"
 FFA_CSV = ROOT / "data" / "raw" / "ffa_rankings.csv"
 POS = ["QB", "RB", "WR", "TE"]
-POS_CAP = {"QB": 50, "RB": 110, "WR": 120, "TE": 60}
+POS_CAP = {"QB": 50, "RB": 110, "WR": 120, "TE": 60, "DEF": 32}
+# DEF lists store Sleeper team codes directly (players.json names DEFs "LAR",
+# "SEA", ...) so norm-matching needs no aliases. Sources that rank defenses:
+# FFA (CSV "DST" rows) and the Fantasy Footballers (skill-scraped page).
+DEF_CODE = {"LVR": "LV", "JAC": "JAX", "WSH": "WAS", "LA": "LAR"}  # source -> Sleeper
 OVR_CAP = 260
 UA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126.0 Safari/537.36",
       "Accept": "text/html,application/json"}
@@ -93,8 +97,13 @@ def fetch_ffa():
     skill.sort(key=lambda r: int(r["Rank"]))
     positional = {pos: [r["Player"] for r in skill if r["Pos"] == pos][: POS_CAP[pos]]
                   for pos in POS}
+    # defenses ride as team codes; overall stays skill-only (house rule: K/DST
+    # keep their rank numbers upstream but never enter the overall list)
+    dst = sorted((r for r in rows if r.get("Pos") == "DST"), key=lambda r: int(r["Rank"]))
+    positional["DEF"] = [DEF_CODE.get(r["Team"].strip().upper(), r["Team"].strip().upper())
+                         for r in dst][: POS_CAP["DEF"]]
     overall = [[i + 1, r["Player"]] for i, r in enumerate(skill[:OVR_CAP])]
-    stamp = f"CSV export, {len(skill)} skill players"
+    stamp = f"CSV export, {len(skill)} skill players + {len(positional['DEF'])} DEF"
     return positional, overall, stamp
 
 
@@ -121,7 +130,8 @@ def main():
         except Exception as e:
             print(f"  FAILED ({e}) — keeping existing lists")
             continue
-        for pos in POS:
+        for pos in positional:  # a source ranks what it ranks (FFA adds DEF)
+            lists["positional"].setdefault(pos, {})
             total += diff(lists["positional"][pos].get(src, []), positional[pos], f"{pos}")
             lists["positional"][pos][src] = positional[pos]
         total += diff([n for _, n in lists["overall"].get(src, [])], [n for _, n in overall], "OVR")

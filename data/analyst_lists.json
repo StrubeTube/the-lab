@@ -1,9 +1,9 @@
 {
  "updated": {
-  "joel": "2026-08-26 (Yahoo article rev, re-checked 2026-08-31 \u2014 UNCHANGED)",
-  "flock": "2026-08-31 02:44:53.812",
-  "fb": "fetched 2026-08-31 (RB+QB moved; WR/TE verified unchanged by checksum)",
-  "ffa": "CSV export, 724 skill players"
+  "joel": "2026-08-26 (Yahoo article rev, re-checked 2026-09-03 - skill lists UNCHANGED; DST tab added)",
+  "flock": "2026-09-02 23:16:02.932",
+  "fb": "fetched 2026-09-03 (QB/RB/WR/TE + NEW D/ST list)",
+  "ffa": "CSV export, 726 skill players + 32 DEF"
  },
  "positional": {
   "QB": {
@@ -99,13 +99,13 @@
     "Bo Nix",
     "Justin Herbert",
     "Brock Purdy",
-    "Jared Goff",
-    "Matthew Stafford",
     "Kyler Murray",
-    "Tyler Shough",
     "Patrick Mahomes",
+    "Tyler Shough",
     "Jordan Love",
+    "Jared Goff",
     "Baker Mayfield",
+    "Matthew Stafford",
     "Malik Willis",
     "Cam Ward",
     "C.J. Stroud",
@@ -134,8 +134,8 @@
     "Justin Herbert",
     "Dak Prescott",
     "Trevor Lawrence",
-    "Bo Nix",
     "Matthew Stafford",
+    "Bo Nix",
     "Brock Purdy",
     "Jaxson Dart",
     "Patrick Mahomes",
@@ -162,8 +162,8 @@
     "J.J. McCarthy",
     "Taysom Hill",
     "Anthony Richardson",
-    "Deshaun Watson",
     "Joe Flacco",
+    "Deshaun Watson",
     "Justin Fields",
     "Ty Simpson",
     "Mac Jones",
@@ -172,8 +172,8 @@
     "Taylen Green",
     "Jake Browning",
     "Jalen Milroe",
-    "Dillon Gabriel",
-    "Joe Milton"
+    "Tyrod Taylor",
+    "Dillon Gabriel"
    ]
   },
   "RB": {
@@ -276,8 +276,8 @@
     "Jaylen Warren",
     "Jonathon Brooks",
     "Tony Pollard",
-    "RJ Harvey",
     "MarShawn Lloyd",
+    "RJ Harvey",
     "Rico Dowdle",
     "Chuba Hubbard",
     "Blake Corum",
@@ -297,6 +297,7 @@
     "Jonah Coleman",
     "Keaton Mitchell",
     "Tank Bigsby",
+    "Emmett Johnson",
     "Zach Charbonnet",
     "Tyjae Spears",
     "Brian Robinson",
@@ -306,14 +307,13 @@
     "Kaelon Black",
     "Nicholas Singleton",
     "Najee Harris",
-    "Emmett Johnson",
     "Kaytron Allen",
     "Alvin Kamara",
     "Isiah Pacheco",
+    "Malik Davis",
+    "Jordan James",
     "Tyrone Tracy",
     "Sean Tucker",
-    "Jordan James",
-    "Malik Davis",
     "George Holani",
     "Jarquez Hunter",
     "James Conner",
@@ -349,8 +349,8 @@
     "Cam Skattebo",
     "Bhayshul Tuten",
     "Quinshon Judkins",
-    "TreVeyon Henderson",
     "Jadarian Price",
+    "TreVeyon Henderson",
     "David Montgomery",
     "MarShawn Lloyd",
     "Rhamondre Stevenson",
@@ -371,55 +371,57 @@
     "Tyjae Spears",
     "Woody Marks",
     "Chris Rodriguez Jr.",
-    "Isiah Pacheco",
     "Zach Charbonnet",
-    "Tyler Allgeier",
     "Keaton Mitchell",
+    "Tyler Allgeier",
     "Tyrone Tracy Jr.",
+    "Dylan Sampson",
     "Jonah Coleman",
     "Tank Bigsby",
-    "Dylan Sampson",
     "Mike Washington Jr.",
     "Brian Robinson",
     "Alvin Kamara",
     "Chris Brooks",
+    "Malik Davis",
     "Najee Harris",
+    "Isiah Pacheco",
     "Jordan James",
     "Kimani Vidal",
     "Emmett Johnson",
     "Justice Hill",
-    "Malik Davis",
     "Samaje Perine",
     "Nicholas Singleton",
     "Ty Johnson",
     "Braelon Allen",
-    "James Conner",
     "LeQuint Allen Jr.",
+    "James Conner",
     "Isaiah Davis",
-    "DJ Giddens",
     "Kaelon Black",
     "Ray Davis",
-    "Jerome Ford",
     "George Holani",
+    "Jerome Ford",
     "Kaleb Johnson",
     "Emanuel Wilson",
     "Brashard Smith",
+    "DJ Giddens",
     "Kaytron Allen",
     "Jaylen Wright",
     "Devin Neal",
     "Emari Demercado",
     "Devin Singletary",
+    "Sean Tucker",
     "Demond Claiborne",
     "Trevor Etienne",
-    "Sean Tucker",
     "Josh Jacobs",
     "Will Shipley",
     "Ollie Gordon II",
+    "Jacob Saylors",
     "AJ Dillon",
+    "Seth McGowan",
     "Adam Randall",
     "Tahj Brooks",
     "Jaydon Blue",
-    "Audric Estim\u00e9"
+    "Audric Estime"
    ],
    "ffa": [
     "Jahmyr Gibbs",
@@ -430,8 +432,8 @@
     "Saquon Barkley",
     "Ken Walker",
     "Chase Brown",
-    "Ashton Jeanty",
     "Omarion Hampton",
+    "Ashton Jeanty",
     "Derrick Henry",
     "Devon Achane",
     "Jeremiyah Love",
@@ -461,54 +463,54 @@
     "Jacory Croskey-Merritt",
     "Kyle Monangai",
     "Kenneth Gainwell",
-    "Josh Jacobs",
     "Chris Rodriguez Jr.",
     "Keaton Mitchell",
     "Rachaad White",
+    "Josh Jacobs",
     "Aaron Jones",
     "Woody Marks",
-    "Mike Washington Jr.",
     "Tyler Allgeier",
+    "Mike Washington Jr.",
     "Jonah Coleman",
     "Tyjae Spears",
     "Tank Bigsby",
     "Zach Charbonnet",
     "Dylan Sampson",
-    "Tyrone Tracy Jr.",
     "Brian Robinson Jr.",
+    "Malik Davis",
+    "Tyrone Tracy Jr.",
     "Kaelon Black",
     "Emmett Johnson",
-    "Alvin Kamara",
-    "Isiah Pacheco",
     "Ray Davis",
+    "Alvin Kamara",
     "Braelon Allen",
+    "Isiah Pacheco",
     "Najee Harris",
     "George Holani",
-    "Nicholas Singleton",
     "Justice Hill",
-    "Kaytron Allen",
-    "Malik Davis",
+    "Nicholas Singleton",
     "Sean Tucker",
+    "Kaytron Allen",
     "Adam Randall",
     "Isaiah Davis",
     "Samaje Perine",
+    "Kaleb Johnson",
     "Seth McGowan",
+    "Chris Brooks",
     "Demond Claiborne",
     "Ty Johnson",
     "Tahj Brooks",
     "Emanuel Wilson",
-    "Chris Brooks",
-    "Jaydon Blue",
     "Jaylen Wright",
     "Ollie Gordon II",
     "Brashard Smith",
     "LeQuint Allen Jr.",
-    "Kaleb Johnson",
     "Kimani Vidal",
     "James Conner",
     "Joe Mixon",
     "DJ Giddens",
     "Trevor Etienne",
+    "Jaydon Blue",
     "Jordan James",
     "Devin Neal",
     "Trey Benson",
@@ -516,22 +518,22 @@
     "Frank Gore Jr.",
     "Avery Williams",
     "J'Mari Taylor",
-    "Elijah Mitchell",
     "Jerome Ford",
     "Kareem Hunt",
+    "Elijah Mitchell",
     "Henry Parrish Jr.",
     "Jermar Jefferson",
-    "Raheim Sanders",
     "Jaydn Ott",
-    "Kendre Miller",
+    "Raheim Sanders",
     "Anthony McFarland Jr.",
     "Dante Miller",
     "Derek Watt",
     "Jonathan Williams",
+    "Montrell Johnson Jr.",
     "Nick Bawden",
     "Nyheim Hines",
     "Wendell Smallwood",
-    "Montrell Johnson Jr."
+    "Kendre Miller"
    ]
   },
   "WR": {
@@ -623,8 +625,8 @@
     "Justin Jefferson",
     "A.J. Brown",
     "Drake London",
-    "Malik Nabers",
     "Nico Collins",
+    "Malik Nabers",
     "George Pickens",
     "Rashee Rice",
     "Chris Olave",
@@ -639,8 +641,8 @@
     "Davante Adams",
     "Christian Watson",
     "Jameson Williams",
-    "Terry McLaurin",
     "Luther Burden",
+    "Terry McLaurin",
     "Rome Odunze",
     "DJ Moore",
     "Mike Evans",
@@ -648,8 +650,8 @@
     "Brian Thomas",
     "Parker Washington",
     "Marvin Harrison",
-    "DK Metcalf",
     "Chris Godwin",
+    "DK Metcalf",
     "Jordan Addison",
     "Quentin Johnston",
     "Makai Lemon",
@@ -742,11 +744,11 @@
     "Tetairoa McMillan",
     "Jameson Williams",
     "Christian Watson",
+    "Davante Adams",
     "Carnell Tate",
     "Luther Burden III",
-    "Davante Adams",
-    "DJ Moore",
     "Mike Evans",
+    "DJ Moore",
     "Parker Washington",
     "Terry McLaurin",
     "Rome Odunze",
@@ -759,69 +761,69 @@
     "Michael Pittman Jr.",
     "Jordan Addison",
     "Courtland Sutton",
-    "Wan'Dale Robinson",
     "Stefon Diggs",
+    "Wan'Dale Robinson",
     "Michael Wilson",
     "Jayden Reed",
     "De'Zhaun Stribling",
     "Romeo Doubs",
-    "Xavier Worthy",
     "Josh Downs",
+    "Xavier Worthy",
     "Makai Lemon",
     "Rashid Shaheed",
+    "Matthew Golden",
     "Jakobi Meyers",
     "KC Concepcion",
     "Khalil Shakir",
-    "Kayshon Boutte",
     "Jalen Coker",
-    "Matthew Golden",
-    "Jordyn Tyson",
+    "Kayshon Boutte",
     "Malik Washington",
+    "Jordyn Tyson",
     "Keenan Allen",
     "Tre Tucker",
     "Deebo Samuel Sr.",
-    "Denzel Boston",
     "Omar Cooper Jr.",
+    "Denzel Boston",
     "Dontayvion Wicks",
     "Jalen Nailor",
+    "Pat Bryant",
     "Travis Hunter",
     "DeMario Douglas",
-    "Pat Bryant",
-    "Jerry Jeudy",
     "Ja'Kobi Lane",
+    "Jerry Jeudy",
+    "Malachi Fields",
     "Cooper Kupp",
     "Adonai Mitchell",
-    "Cyrus Allen",
     "Kyle Williams",
     "Calvin Ridley",
+    "Cyrus Allen",
+    "Chris Bell",
     "Germie Bernard",
-    "Ryan Flournoy",
+    "Jack Bech",
     "Tank Dell",
+    "Ryan Flournoy",
     "Tre' Harris",
     "Keon Coleman",
     "Jauan Jennings",
     "Zachariah Branch",
     "Caleb Douglas",
-    "Darius Slayton",
     "Isaac TeSlaa",
+    "Darius Slayton",
     "Tory Horton",
     "Rashod Bateman",
     "Jalen McMillan",
     "Jalen Tolbert",
     "Jaylin Noel",
     "Antonio Williams",
-    "Darnell Mooney",
     "Devaughn Vele",
     "Troy Franklin",
-    "Jack Bech",
-    "Malachi Fields",
-    "Chris Bell",
     "Andrei Iosivas",
     "Elic Ayomanor",
     "Tyquan Thornton",
     "Chimere Dike",
     "Xavier Hutchinson",
     "Tez Johnson",
+    "Darnell Mooney",
     "Jahan Dotson",
     "Malik Benson",
     "Christian Kirk",
@@ -831,21 +833,21 @@
     "Kendrick Bourne",
     "Treylon Burks",
     "Ted Hurst III",
-    "Mack Hollins",
     "Jordan Whittington",
+    "Mack Hollins",
     "Brenen Thompson",
     "Dont'e Thornton Jr.",
     "Elijah Sarratt",
     "Xavier Legette",
     "Olamide Zaccheaus",
     "Tutu Atwell",
-    "Calvin Austin III",
     "Devontez Walker",
     "Hollywood Brown",
     "Chris Brazzell II",
-    "Skyler Bell",
     "Cedric Tillman",
+    "Skyler Bell",
     "Van Jefferson",
+    "Calvin Austin III",
     "Jaylin Lane",
     "Bryce Lance",
     "Zavion Thomas",
@@ -894,11 +896,11 @@
     "Courtland Sutton",
     "Michael Wilson",
     "Makai Lemon",
-    "Stefon Diggs",
     "Alec Pierce",
     "KC Concepcion",
-    "Michael Pittman Jr.",
     "Matthew Golden",
+    "Stefon Diggs",
+    "Michael Pittman Jr.",
     "De'Zhaun Stribling",
     "Wan'Dale Robinson",
     "Xavier Worthy",
@@ -906,44 +908,44 @@
     "Romeo Doubs",
     "Rashid Shaheed",
     "Jordyn Tyson",
-    "Khalil Shakir",
     "Jalen Coker",
+    "Khalil Shakir",
     "Denzel Boston",
-    "Deebo Samuel",
     "Tre Tucker",
-    "Ryan Flournoy",
-    "Cyrus Allen",
-    "Kayshon Boutte",
+    "Deebo Samuel",
     "Tre Harris",
+    "Kayshon Boutte",
+    "Ryan Flournoy",
     "Jalen Nailor",
+    "Cyrus Allen",
+    "Jalen McMillan",
     "Ja'Kobi Lane",
     "Adonai Mitchell",
     "Dontayvion Wicks",
-    "Jalen McMillan",
     "Travis Hunter",
     "Pat Bryant",
     "Keenan Allen",
-    "Zachariah Branch",
     "Omar Cooper Jr.",
     "Jauan Jennings",
     "Isaac TeSlaa",
     "Caleb Douglas",
+    "Zachariah Branch",
     "Chris Bell",
     "Jerry Jeudy",
     "Devaughn Vele",
     "Ted Hurst",
     "Malik Washington",
     "Calvin Ridley",
-    "Tank Dell",
     "Jaylin Noel",
+    "Tank Dell",
     "Germie Bernard",
     "Malachi Fields",
-    "Cooper Kupp",
     "Demario Douglas",
+    "Cooper Kupp",
     "Darnell Mooney",
     "Keon Coleman",
-    "Rashod Bateman",
     "Jahan Dotson",
+    "Rashod Bateman",
     "Kyle Williams",
     "Kendrick Bourne",
     "Troy Franklin",
@@ -952,25 +954,25 @@
     "Tyquan Thornton",
     "Zavion Thomas",
     "Antonio Williams",
-    "Malik Benson",
-    "Brandon Aiyuk",
-    "Bryce Lance",
     "Xavier Hutchinson",
+    "Bryce Lance",
+    "Malik Benson",
     "Marvin Mims",
+    "Brandon Aiyuk",
     "Tory Horton",
+    "Brenen Thompson",
     "Andrei Iosivas",
     "Jack Bech",
-    "Brenen Thompson",
+    "Olamide Zaccheaus",
     "Elic Ayomanor",
     "Jalen Tolbert",
     "Elijah Sarratt",
-    "Olamide Zaccheaus",
-    "Darius Slayton",
     "Marquise Brown",
+    "Darius Slayton",
     "Kevin Coleman Jr.",
     "Isaiah Bond",
     "Odell Beckham Jr.",
-    "Tyreek Hill",
+    "Colbie Young",
     "Tez Johnson"
    ]
   },
@@ -1064,12 +1066,12 @@
     "Sam LaPorta",
     "Kyle Pitts Sr.",
     "Juwan Johnson",
-    "Travis Kelce",
     "Dalton Kincaid",
-    "Dalton Schultz",
+    "Travis Kelce",
     "Brenton Strange",
     "Dallas Goedert",
     "Isaiah Likely",
+    "Dalton Schultz",
     "Hunter Henry",
     "Jake Ferguson",
     "Mark Andrews",
@@ -1077,8 +1079,8 @@
     "Greg Dulcich",
     "Kenyon Sadiq",
     "T.J. Hockenson",
-    "Cade Otton",
     "Pat Freiermuth",
+    "Cade Otton",
     "AJ Barner",
     "Oronde Gadsden",
     "David Njoku",
@@ -1105,8 +1107,8 @@
     "Jake Tonges",
     "Tommy Tremble",
     "Noah Fant",
-    "Justin Joly",
     "Nate Boerkircher",
+    "Justin Joly",
     "Oscar Delp"
    ],
    "ffa": [
@@ -1129,8 +1131,8 @@
     "Chigoziem Okonkwo",
     "Brenton Strange",
     "Terrance Ferguson",
-    "Hunter Henry",
     "Dalton Schultz",
+    "Hunter Henry",
     "Kenyon Sadiq",
     "T.J. Hockenson",
     "AJ Barner",
@@ -1141,35 +1143,139 @@
     "Gunnar Helm",
     "Darren Waller",
     "Michael Mayer",
-    "Eli Raridon",
     "Charlie Kolar",
-    "Darnell Washington",
+    "Eli Raridon",
     "Mike Gesicki",
+    "Darnell Washington",
     "David Njoku",
     "Colby Parkinson",
     "Evan Engram",
     "Eli Stowers",
-    "Dawson Knox",
     "Jake Tonges",
+    "Dawson Knox",
     "Mitchell Evans",
     "Erick All",
     "Elijah Arroyo",
     "Tyler Higbee",
     "Cole Kmet",
     "Max Klare",
-    "Josh Oliver",
     "Mason Taylor",
-    "Theo Johnson",
+    "Josh Oliver",
     "Oscar Delp",
+    "Theo Johnson",
     "Ja'Tavion Sanders",
     "Riley Nowakowski",
     "Sam Roush",
-    "Julian Hill",
     "Will Kacmarek",
+    "Julian Hill",
     "John Bates",
     "Daniel Bellinger",
-    "Matthew Hibner",
-    "Seydou Traore"
+    "Seydou Traore",
+    "Matthew Hibner"
+   ]
+  },
+  "DEF": {
+   "ffa": [
+    "LAR",
+    "SEA",
+    "HOU",
+    "PHI",
+    "LAC",
+    "DEN",
+    "JAX",
+    "PIT",
+    "MIN",
+    "NE",
+    "KC",
+    "BUF",
+    "BAL",
+    "DET",
+    "SF",
+    "NO",
+    "GB",
+    "TEN",
+    "IND",
+    "TB",
+    "DAL",
+    "CAR",
+    "NYG",
+    "CLE",
+    "CHI",
+    "WAS",
+    "NYJ",
+    "ATL",
+    "LV",
+    "MIA",
+    "CIN",
+    "ARI"
+   ],
+   "fb": [
+    "HOU",
+    "LAR",
+    "DEN",
+    "SEA",
+    "PHI",
+    "NE",
+    "MIN",
+    "JAX",
+    "PIT",
+    "LAC",
+    "CLE",
+    "KC",
+    "BAL",
+    "GB",
+    "DET",
+    "BUF",
+    "ATL",
+    "SF",
+    "NYG",
+    "IND",
+    "CHI",
+    "NO",
+    "CAR",
+    "DAL",
+    "TB",
+    "WAS",
+    "MIA",
+    "CIN",
+    "TEN",
+    "LV",
+    "NYJ",
+    "ARI"
+   ],
+   "joel": [
+    "HOU",
+    "LAR",
+    "DEN",
+    "SEA",
+    "PHI",
+    "BAL",
+    "JAX",
+    "MIN",
+    "PIT",
+    "NE",
+    "LAC",
+    "KC",
+    "DET",
+    "BUF",
+    "IND",
+    "GB",
+    "SF",
+    "NYG",
+    "ATL",
+    "DAL",
+    "TB",
+    "CAR",
+    "CIN",
+    "CHI",
+    "NO",
+    "CLE",
+    "NYJ",
+    "WAS",
+    "MIA",
+    "LV",
+    "TEN",
+    "ARI"
    ]
   }
  },
@@ -1863,11 +1969,11 @@
    ],
    [
     22,
-    "Malik Nabers"
+    "Nico Collins"
    ],
    [
     23,
-    "Nico Collins"
+    "Malik Nabers"
    ],
    [
     24,
@@ -1987,11 +2093,11 @@
    ],
    [
     53,
-    "Terry McLaurin"
+    "Luther Burden"
    ],
    [
     54,
-    "Luther Burden"
+    "Terry McLaurin"
    ],
    [
     55,
@@ -2023,31 +2129,31 @@
    ],
    [
     62,
-    "Jaylen Warren"
-   ],
-   [
-    63,
     "Drake Maye"
    ],
    [
-    64,
+    63,
     "Joe Burrow"
    ],
    [
-    65,
+    64,
     "Carnell Tate"
    ],
    [
-    66,
+    65,
     "Brian Thomas"
    ],
    [
-    67,
+    66,
     "Parker Washington"
    ],
    [
-    68,
+    67,
     "Jayden Daniels"
+   ],
+   [
+    68,
+    "Jaylen Warren"
    ],
    [
     69,
@@ -2063,7 +2169,7 @@
    ],
    [
     72,
-    "RJ Harvey"
+    "MarShawn Lloyd"
    ],
    [
     73,
@@ -2071,7 +2177,7 @@
    ],
    [
     74,
-    "DK Metcalf"
+    "Chris Godwin"
    ],
    [
     75,
@@ -2087,63 +2193,63 @@
    ],
    [
     78,
-    "Chris Godwin"
+    "DK Metcalf"
    ],
    [
     79,
-    "Kyle Pitts"
+    "RJ Harvey"
    ],
    [
     80,
-    "Harold Fannin"
-   ],
-   [
-    81,
-    "George Kittle"
-   ],
-   [
-    82,
-    "Jordan Addison"
-   ],
-   [
-    83,
-    "Quentin Johnston"
-   ],
-   [
-    84,
-    "Makai Lemon"
-   ],
-   [
-    85,
-    "Michael Pittman"
-   ],
-   [
-    86,
-    "Courtland Sutton"
-   ],
-   [
-    87,
-    "Dak Prescott"
-   ],
-   [
-    88,
-    "Justin Herbert"
-   ],
-   [
-    89,
-    "MarShawn Lloyd"
-   ],
-   [
-    90,
-    "De'Zhaun Stribling"
-   ],
-   [
-    91,
     "Rico Dowdle"
    ],
    [
-    92,
+    81,
     "Chuba Hubbard"
+   ],
+   [
+    82,
+    "Kyle Pitts"
+   ],
+   [
+    83,
+    "Harold Fannin"
+   ],
+   [
+    84,
+    "George Kittle"
+   ],
+   [
+    85,
+    "Jordan Addison"
+   ],
+   [
+    86,
+    "Quentin Johnston"
+   ],
+   [
+    87,
+    "Makai Lemon"
+   ],
+   [
+    88,
+    "Michael Pittman"
+   ],
+   [
+    89,
+    "Courtland Sutton"
+   ],
+   [
+    90,
+    "Dak Prescott"
+   ],
+   [
+    91,
+    "Justin Herbert"
+   ],
+   [
+    92,
+    "De'Zhaun Stribling"
    ],
    [
     93,
@@ -2399,15 +2505,15 @@
    ],
    [
     156,
-    "Zach Charbonnet"
+    "Emmett Johnson"
    ],
    [
     157,
-    "Tyjae Spears"
+    "Zach Charbonnet"
    ],
    [
     158,
-    "Brian Robinson"
+    "Tyjae Spears"
    ],
    [
     159,
@@ -2415,7 +2521,7 @@
    ],
    [
     160,
-    "Braelon Allen"
+    "Brian Robinson"
    ],
    [
     161,
@@ -2435,15 +2541,15 @@
    ],
    [
     165,
-    "Ray Davis"
+    "Braelon Allen"
    ],
    [
     166,
-    "Dylan Sampson"
+    "Ray Davis"
    ],
    [
     167,
-    "Kaelon Black"
+    "Dylan Sampson"
    ],
    [
     168,
@@ -2455,15 +2561,15 @@
    ],
    [
     170,
-    "Nicholas Singleton"
+    "Kaelon Black"
    ],
    [
     171,
-    "Najee Harris"
+    "Nicholas Singleton"
    ],
    [
     172,
-    "Emmett Johnson"
+    "Najee Harris"
    ],
    [
     173,
@@ -2487,11 +2593,11 @@
    ],
    [
     178,
-    "Tyrone Tracy"
+    "Malik Davis"
    ],
    [
     179,
-    "Sean Tucker"
+    "Jordan James"
    ],
    [
     180,
@@ -2655,7 +2761,7 @@
    ],
    [
     220,
-    "Jordan James"
+    "Tyrone Tracy"
    ],
    [
     221,
@@ -2687,7 +2793,7 @@
    ],
    [
     228,
-    "Malik Davis"
+    "Sean Tucker"
    ],
    [
     229,
@@ -2873,11 +2979,11 @@
    ],
    [
     14,
-    "A.J. Brown"
+    "Ken Walker"
    ],
    [
     15,
-    "Ken Walker"
+    "A.J. Brown"
    ],
    [
     16,
@@ -2889,11 +2995,11 @@
    ],
    [
     18,
-    "Ashton Jeanty"
+    "Omarion Hampton"
    ],
    [
     19,
-    "Omarion Hampton"
+    "Ashton Jeanty"
    ],
    [
     20,
@@ -2949,23 +3055,23 @@
    ],
    [
     33,
-    "Tee Higgins"
-   ],
-   [
-    34,
     "Javonte Williams"
    ],
    [
-    35,
-    "Colston Loveland"
+    34,
+    "Tee Higgins"
    ],
    [
-    36,
+    35,
     "Rashee Rice"
    ],
    [
-    37,
+    36,
     "Travis Etienne Jr."
+   ],
+   [
+    37,
+    "Colston Loveland"
    ],
    [
     38,
@@ -2989,19 +3095,19 @@
    ],
    [
     43,
-    "Tetairoa McMillan"
-   ],
-   [
-    44,
     "David Montgomery"
    ],
    [
+    44,
+    "Tetairoa McMillan"
+   ],
+   [
     45,
-    "Luther Burden III"
+    "Cam Skattebo"
    ],
    [
     46,
-    "Cam Skattebo"
+    "Luther Burden III"
    ],
    [
     47,
@@ -3057,11 +3163,11 @@
    ],
    [
     60,
-    "Christian Watson"
+    "Tucker Kraft"
    ],
    [
     61,
-    "Tucker Kraft"
+    "Christian Watson"
    ],
    [
     62,
@@ -3077,27 +3183,27 @@
    ],
    [
     65,
-    "Rome Odunze"
-   ],
-   [
-    66,
-    "Drake Maye"
-   ],
-   [
-    67,
-    "Caleb Williams"
-   ],
-   [
-    68,
     "TreVeyon Henderson"
    ],
    [
+    66,
+    "Rome Odunze"
+   ],
+   [
+    67,
+    "Drake Maye"
+   ],
+   [
+    68,
+    "Rico Dowdle"
+   ],
+   [
     69,
-    "Jayden Daniels"
+    "Caleb Williams"
    ],
    [
     70,
-    "Rico Dowdle"
+    "Jayden Daniels"
    ],
    [
     71,
@@ -3109,11 +3215,11 @@
    ],
    [
     73,
-    "Sam LaPorta"
+    "Tony Pollard"
    ],
    [
     74,
-    "Tony Pollard"
+    "Sam LaPorta"
    ],
    [
     75,
@@ -3121,11 +3227,11 @@
    ],
    [
     76,
-    "Marvin Harrison Jr."
+    "Harold Fannin Jr."
    ],
    [
     77,
-    "Harold Fannin Jr."
+    "Marvin Harrison Jr."
    ],
    [
     78,
@@ -3137,19 +3243,19 @@
    ],
    [
     80,
-    "Quentin Johnston"
-   ],
-   [
-    81,
-    "DK Metcalf"
-   ],
-   [
-    82,
     "Dak Prescott"
    ],
    [
-    83,
+    81,
+    "Quentin Johnston"
+   ],
+   [
+    82,
     "Trevor Lawrence"
+   ],
+   [
+    83,
+    "DK Metcalf"
    ],
    [
     84,
@@ -3161,11 +3267,11 @@
    ],
    [
     86,
-    "Chris Godwin"
+    "MarShawn Lloyd"
    ],
    [
     87,
-    "MarShawn Lloyd"
+    "Chris Godwin"
    ],
    [
     88,
@@ -3185,11 +3291,11 @@
    ],
    [
     92,
-    "Jayden Reed"
+    "J.K. Dobbins"
    ],
    [
     93,
-    "J.K. Dobbins"
+    "Jayden Reed"
    ],
    [
     94,
@@ -3201,7 +3307,7 @@
    ],
    [
     96,
-    "Bo Nix"
+    "Kyle Monangai"
    ],
    [
     97,
@@ -3209,35 +3315,35 @@
    ],
    [
     98,
-    "Kyle Monangai"
-   ],
-   [
-    99,
-    "Courtland Sutton"
-   ],
-   [
-    100,
     "Kenneth Gainwell"
    ],
    [
-    101,
+    99,
+    "Bo Nix"
+   ],
+   [
+    100,
     "Brock Purdy"
    ],
    [
-    102,
-    "Michael Wilson"
+    101,
+    "Courtland Sutton"
    ],
    [
-    103,
+    102,
     "Jaxson Dart"
    ],
    [
+    103,
+    "Michael Wilson"
+   ],
+   [
     104,
-    "Dallas Goedert"
+    "Makai Lemon"
    ],
    [
     105,
-    "Makai Lemon"
+    "Dallas Goedert"
    ],
    [
     106,
@@ -3245,11 +3351,11 @@
    ],
    [
     107,
-    "Travis Kelce"
+    "Patrick Mahomes"
    ],
    [
     108,
-    "Patrick Mahomes"
+    "Travis Kelce"
    ],
    [
     109,
@@ -3257,27 +3363,27 @@
    ],
    [
     110,
-    "Stefon Diggs"
-   ],
-   [
-    111,
     "Alec Pierce"
    ],
    [
-    112,
-    "KC Concepcion"
-   ],
-   [
-    113,
-    "Josh Jacobs"
-   ],
-   [
-    114,
+    111,
     "Chris Rodriguez Jr."
    ],
    [
-    115,
+    112,
     "Keaton Mitchell"
+   ],
+   [
+    113,
+    "KC Concepcion"
+   ],
+   [
+    114,
+    "Matthew Golden"
+   ],
+   [
+    115,
+    "Stefon Diggs"
    ],
    [
     116,
@@ -3285,47 +3391,47 @@
    ],
    [
     117,
-    "Mark Andrews"
-   ],
-   [
-    118,
-    "Matthew Golden"
-   ],
-   [
-    119,
     "Jared Goff"
    ],
    [
-    120,
+    118,
+    "Mark Andrews"
+   ],
+   [
+    119,
     "De'Zhaun Stribling"
    ],
    [
-    121,
+    120,
     "Jake Ferguson"
    ],
    [
-    122,
+    121,
     "Rachaad White"
    ],
    [
-    123,
+    122,
     "Wan'Dale Robinson"
    ],
    [
-    124,
+    123,
     "Xavier Worthy"
    ],
    [
-    125,
+    124,
     "Jakobi Meyers"
    ],
    [
+    125,
+    "Josh Jacobs"
+   ],
+   [
     126,
-    "Kyler Murray"
+    "Aaron Jones"
    ],
    [
     127,
-    "Aaron Jones"
+    "Kyler Murray"
    ],
    [
     128,
@@ -3337,19 +3443,19 @@
    ],
    [
     130,
-    "Baker Mayfield"
-   ],
-   [
-    131,
     "Chigoziem Okonkwo"
    ],
    [
+    131,
+    "Baker Mayfield"
+   ],
+   [
     132,
-    "Rashid Shaheed"
+    "Woody Marks"
    ],
    [
     133,
-    "Woody Marks"
+    "Rashid Shaheed"
    ],
    [
     134,
@@ -3357,15 +3463,15 @@
    ],
    [
     135,
-    "Mike Washington Jr."
+    "Tyler Allgeier"
    ],
    [
     136,
-    "Brenton Strange"
+    "Mike Washington Jr."
    ],
    [
     137,
-    "Tyler Allgeier"
+    "Jalen Coker"
    ],
    [
     138,
@@ -3373,11 +3479,11 @@
    ],
    [
     139,
-    "Jonah Coleman"
+    "Brenton Strange"
    ],
    [
     140,
-    "Jalen Coker"
+    "Jonah Coleman"
    ],
    [
     141,
@@ -3393,11 +3499,11 @@
    ],
    [
     144,
-    "Hunter Henry"
+    "Dalton Schultz"
    ],
    [
     145,
-    "Dalton Schultz"
+    "Hunter Henry"
    ],
    [
     146,
@@ -3409,15 +3515,15 @@
    ],
    [
     148,
-    "Deebo Samuel"
-   ],
-   [
-    149,
     "Tre Tucker"
    ],
    [
-    150,
+    149,
     "T.J. Hockenson"
+   ],
+   [
+    150,
+    "Deebo Samuel"
    ],
    [
     151,
@@ -3425,19 +3531,19 @@
    ],
    [
     152,
-    "Ryan Flournoy"
+    "Tre Harris"
    ],
    [
     153,
-    "Cyrus Allen"
-   ],
-   [
-    154,
     "Kayshon Boutte"
    ],
    [
+    154,
+    "Ryan Flournoy"
+   ],
+   [
     155,
-    "Tre Harris"
+    "AJ Barner"
    ],
    [
     156,
@@ -3445,15 +3551,15 @@
    ],
    [
     157,
-    "AJ Barner"
+    "Cyrus Allen"
    ],
    [
     158,
-    "Ja'Kobi Lane"
+    "Jalen McMillan"
    ],
    [
     159,
-    "CJ Stroud"
+    "Ja'Kobi Lane"
    ],
    [
     160,
@@ -3461,23 +3567,23 @@
    ],
    [
     161,
-    "Dontayvion Wicks"
+    "CJ Stroud"
    ],
    [
     162,
-    "Jalen McMillan"
-   ],
-   [
-    163,
     "Tyjae Spears"
    ],
    [
+    163,
+    "Dontayvion Wicks"
+   ],
+   [
     164,
-    "Greg Dulcich"
+    "Tank Bigsby"
    ],
    [
     165,
-    "Tank Bigsby"
+    "Greg Dulcich"
    ],
    [
     166,
@@ -3501,11 +3607,11 @@
    ],
    [
     171,
-    "Sam Darnold"
+    "Keenan Allen"
    ],
    [
     172,
-    "Keenan Allen"
+    "Sam Darnold"
    ],
    [
     173,
@@ -3513,7 +3619,7 @@
    ],
    [
     174,
-    "Zachariah Branch"
+    "Dylan Sampson"
    ],
    [
     175,
@@ -3525,63 +3631,63 @@
    ],
    [
     177,
-    "Dylan Sampson"
-   ],
-   [
-    178,
     "Gunnar Helm"
    ],
    [
-    179,
+    178,
     "Isaac TeSlaa"
    ],
    [
-    180,
-    "Tyrone Tracy Jr."
-   ],
-   [
-    181,
-    "Caleb Douglas"
-   ],
-   [
-    182,
+    179,
     "Brian Robinson Jr."
    ],
    [
-    183,
+    180,
+    "Caleb Douglas"
+   ],
+   [
+    181,
+    "Malik Davis"
+   ],
+   [
+    182,
     "Darren Waller"
    ],
    [
+    183,
+    "Tyrone Tracy Jr."
+   ],
+   [
     184,
-    "Michael Mayer"
+    "Zachariah Branch"
    ],
    [
     185,
-    "Chris Bell"
-   ],
-   [
-    186,
     "Kaelon Black"
    ],
    [
+    186,
+    "Chris Bell"
+   ],
+   [
     187,
-    "Daniel Jones"
+    "Michael Mayer"
    ],
    [
     188,
-    "Jerry Jeudy"
+    "Daniel Jones"
    ],
    [
     189,
-    "Emmett Johnson"
+    "Jerry Jeudy"
    ],
    [
     190,
-    "Eli Raridon"
+    "Charlie Kolar"
    ],
    [
     191,
-    "Charlie Kolar"
+    "Emmett Johnson"
    ],
    [
     192,
@@ -3589,7 +3695,7 @@
    ],
    [
     193,
-    "Darnell Washington"
+    "Eli Raridon"
    ],
    [
     194,
@@ -3597,39 +3703,39 @@
    ],
    [
     195,
-    "Alvin Kamara"
-   ],
-   [
-    196,
-    "David Njoku"
-   ],
-   [
-    197,
-    "Isiah Pacheco"
-   ],
-   [
-    198,
-    "Ted Hurst"
-   ],
-   [
-    199,
-    "Colby Parkinson"
-   ],
-   [
-    200,
     "Ray Davis"
    ],
    [
-    201,
+    196,
+    "Darnell Washington"
+   ],
+   [
+    197,
+    "Alvin Kamara"
+   ],
+   [
+    198,
+    "David Njoku"
+   ],
+   [
+    199,
     "Braelon Allen"
    ],
    [
+    200,
+    "Isiah Pacheco"
+   ],
+   [
+    201,
+    "Colby Parkinson"
+   ],
+   [
     202,
-    "Malik Washington"
+    "Ted Hurst"
    ],
    [
     203,
-    "Najee Harris"
+    "Malik Washington"
    ],
    [
     204,
@@ -3641,15 +3747,15 @@
    ],
    [
     206,
-    "Tank Dell"
-   ],
-   [
-    207,
     "Jaylin Noel"
    ],
    [
-    208,
+    207,
     "Cam Ward"
+   ],
+   [
+    208,
+    "Najee Harris"
    ],
    [
     209,
@@ -3657,47 +3763,47 @@
    ],
    [
     210,
-    "Dawson Knox"
-   ],
-   [
-    211,
     "Jake Tonges"
    ],
    [
+    211,
+    "Tank Dell"
+   ],
+   [
     212,
-    "George Holani"
+    "Dawson Knox"
    ],
    [
     213,
-    "Mitchell Evans"
+    "George Holani"
    ],
    [
     214,
-    "Nicholas Singleton"
-   ],
-   [
-    215,
-    "Bryce Young"
-   ],
-   [
-    216,
     "Justice Hill"
    ],
    [
+    215,
+    "Mitchell Evans"
+   ],
+   [
+    216,
+    "Bryce Young"
+   ],
+   [
     217,
-    "Germie Bernard"
+    "Nicholas Singleton"
    ],
    [
     218,
-    "Kaytron Allen"
+    "Germie Bernard"
    ],
    [
     219,
-    "Malik Davis"
+    "Sean Tucker"
    ],
    [
     220,
-    "Sean Tucker"
+    "Kaytron Allen"
    ],
    [
     221,
@@ -3705,23 +3811,23 @@
    ],
    [
     222,
-    "Erick All"
+    "Adam Randall"
    ],
    [
     223,
-    "Elijah Arroyo"
+    "Erick All"
    ],
    [
     224,
-    "Cooper Kupp"
-   ],
-   [
-    225,
     "Demario Douglas"
    ],
    [
+    225,
+    "Cooper Kupp"
+   ],
+   [
     226,
-    "Adam Randall"
+    "Elijah Arroyo"
    ],
    [
     227,
@@ -3733,7 +3839,7 @@
    ],
    [
     229,
-    "Cole Kmet"
+    "Samaje Perine"
    ],
    [
     230,
@@ -3741,11 +3847,11 @@
    ],
    [
     231,
-    "Samaje Perine"
+    "Cole Kmet"
    ],
    [
     232,
-    "Keon Coleman"
+    "Kaleb Johnson"
    ],
    [
     233,
@@ -3757,15 +3863,15 @@
    ],
    [
     235,
-    "Rashod Bateman"
+    "Chris Brooks"
    ],
    [
     236,
-    "Demond Claiborne"
+    "Keon Coleman"
    ],
    [
     237,
-    "Jahan Dotson"
+    "Demond Claiborne"
    ],
    [
     238,
@@ -3773,31 +3879,31 @@
    ],
    [
     239,
-    "Tahj Brooks"
+    "Jahan Dotson"
    ],
    [
     240,
-    "Kyle Williams"
+    "Tahj Brooks"
    ],
    [
     241,
-    "Emanuel Wilson"
+    "Rashod Bateman"
    ],
    [
     242,
-    "Chris Brooks"
+    "Emanuel Wilson"
    ],
    [
     243,
-    "Josh Oliver"
-   ],
-   [
-    244,
     "Mason Taylor"
    ],
    [
+    244,
+    "Josh Oliver"
+   ],
+   [
     245,
-    "Fernando Mendoza"
+    "Kyle Williams"
    ],
    [
     246,
@@ -3805,19 +3911,19 @@
    ],
    [
     247,
-    "Troy Franklin"
+    "Fernando Mendoza"
    ],
    [
     248,
-    "Jaydon Blue"
+    "Troy Franklin"
    ],
    [
     249,
-    "Theo Johnson"
+    "Jaylen Wright"
    ],
    [
     250,
-    "Jaylen Wright"
+    "Ollie Gordon II"
    ],
    [
     251,
@@ -3825,11 +3931,11 @@
    ],
    [
     252,
-    "Ollie Gordon II"
+    "Oscar Delp"
    ],
    [
     253,
-    "Oscar Delp"
+    "Brashard Smith"
    ],
    [
     254,
@@ -3837,7 +3943,7 @@
    ],
    [
     255,
-    "Brashard Smith"
+    "Theo Johnson"
    ],
    [
     256,
@@ -3857,7 +3963,7 @@
    ],
    [
     260,
-    "Antonio Williams"
+    "Kimani Vidal"
    ]
   ]
  }
