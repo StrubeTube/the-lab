@@ -154,7 +154,7 @@
   const syncTgtBtn = () => { tgtLgBtn.textContent = '🎯 ' + tgtTag().toUpperCase(); tgtSetB = LAB.targets(tgtTag()); };
   syncTgtBtn();
   tgtLgBtn.addEventListener('click', () => {
-    LAB.prefs.targetLg = tgtTag() === 'lob' ? 'ggg' : 'lob';
+    LAB.prefs.targetLg = { lob: 'ggg', ggg: 'nsl', nsl: 'lob' }[tgtTag()] || 'lob';
     LAB.savePrefs(); syncTgtBtn(); render();
     LAB.toast('🎯 stars now edit your ' + tgtTag().toUpperCase() + ' targets');
   });

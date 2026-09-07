@@ -20,7 +20,7 @@
 
   let tag = LAB.prefs.dmLeague || 'ggg';
   const tabs = LAB.$('#leagueTabs');
-  for (const t of ['ggg', 'lob']) {
+  for (const t of ['ggg', 'lob', 'nsl']) {
     tabs.append(LAB.el('button', {
       class: t === tag ? 'active' : '',
       onclick: e => {
@@ -95,14 +95,21 @@
   // slot. Everything on this page reads the draft-adjusted numbers.
   const dKey = k => (tag === 'ggg'
     ? { s: 'ds', v: 'dg', g: 'dgw' }[k]
-    : { s: 'dls', v: 'dl', g: 'dlw' }[k]);
+    : tag === 'nsl'
+      ? { s: 'dns', v: 'dn', g: 'dnw' }[k]
+      : { s: 'dls', v: 'dl', g: 'dlw' }[k]);
   const dSlot = p => ((p && p.lab) || {})[dKey('s')] ?? null;
   const dScore = p => ((p && p.lab) || {})[dKey('v')] ?? null;
   const dGap = p => ((p && p.lab) || {})[dKey('g')] ?? null;
   // madp = Sleeper ADP shaded toward the analyst consensus where news has
   // moved them and the market has not caught up yet.
   // Module scope: buildSim, the tooltips and the availability chart all use it.
-  const mADP = p => ((p && p.madp) ?? (p && p.adp)) ?? null;
+  // The NSL is full PPR: its market (pmadp/padp) and its points (pproj)
+  // are different numbers from the half-PPR leagues'.
+  const mADP = p => (tag === 'nsl'
+    ? (((p && p.pmadp) ?? (p && p.padp)) ?? ((p && p.madp) ?? (p && p.adp)))
+    : ((p && p.madp) ?? (p && p.adp))) ?? null;
+  const PJ = p => (tag === 'nsl' ? ((p && p.pproj) ?? (p && p.proj)) : (p && p.proj)) || 0;
   const gapColor = g => g == null ? 'var(--ink-3)' : g >= 20 ? '#3ee68f' : g <= -20 ? '#ff5c5c' : 'var(--ink-2)';
 
   // ---------- math / rng ----------
@@ -510,7 +517,7 @@
   function lineupOf(L, pids) {
     const slots = (L.rosterPositions || []).filter(x => x !== 'BN');
     const pool = pids.map(id => byId[id]).filter(Boolean)
-      .sort((a, b) => (b.proj || 0) - (a.proj || 0));
+      .sort((a, b) => PJ(b) - PJ(a));
     const used = new Set(), rows = [];
     for (const slot of slots) {
       const hit = pool.find(p => !used.has(p.id)
@@ -526,7 +533,7 @@
     // one number alone would hide that.
     return {
       rows, bench,
-      total: rows.reduce((t, x) => t + ((x.p && x.p.proj) || 0), 0),
+      total: rows.reduce((t, x) => t + PJ(x.p), 0),
       bval: rows.reduce((t, x) => t + ((x.p && dScore(x.p)) || 0), 0),
     };
   }
@@ -648,7 +655,7 @@
       }
       x.lu.rows.forEach(r2 => col.append(LAB.el('div', {
         class: 'flex', style: 'gap:5px;font-size:11px;padding:1px 0',
-        title: r2.p ? `${r2.slot}: ${r2.p.name} — ${LAB.fmt0(r2.p.proj)} projected` : `${r2.slot}: nobody projected`,
+        title: r2.p ? `${r2.slot}: ${r2.p.name} — ${LAB.fmt0(PJ(r2.p))} projected` : `${r2.slot}: nobody projected`,
         onclick: r2.p ? () => LAB.playerCard(r2.p.id) : null,
       },
         LAB.el('span', { class: 'mono muted', style: 'width:30px;flex:none' }, r2.slot),
@@ -656,7 +663,7 @@
           style: 'flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;color:var(--'
             + (r2.p ? ({ QB: 'qb', RB: 'rb', WR: 'wr', TE: 'te', DEF: 'def' }[r2.p.pos] || 'ink') : 'ink-3') + ')',
         }, r2.p ? r2.p.name : '—'),
-        LAB.el('span', { class: 'mono muted', style: 'flex:none;font-size:10px' }, r2.p ? LAB.fmt0(r2.p.proj) : '–'))));
+        LAB.el('span', { class: 'mono muted', style: 'flex:none;font-size:10px' }, r2.p ? LAB.fmt0(PJ(r2.p)) : '–'))));
       if (x.lu.bench.length) {
         col.append(LAB.el('div', { class: 'muted', style: 'font-size:9.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin-top:5px' }, 'bench'));
         col.append(LAB.el('div', { class: 'muted', style: 'font-size:10px;line-height:1.4' },
@@ -1141,11 +1148,11 @@
       const det = LAB.el('div', { style: 'margin-bottom:8px' });
       lu.rows.forEach(x => det.append(LAB.el('div', {
         class: 'flex', style: 'gap:6px;font-size:11px;padding:1px 4px',
-        title: x.p ? `${x.slot}: ${x.p.name} — ${LAB.fmt0(x.p.proj)} projected` : `${x.slot}: nobody projected`,
+        title: x.p ? `${x.slot}: ${x.p.name} — ${LAB.fmt0(PJ(x.p))} projected` : `${x.slot}: nobody projected`,
       },
         LAB.el('span', { class: 'mono muted', style: 'width:34px;flex:none' }, x.slot),
         LAB.el('span', { style: 'flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis' }, x.p ? x.p.name : '—'),
-        LAB.el('span', { class: 'mono muted', style: 'flex:none' }, x.p ? LAB.fmt0(x.p.proj) : '–'))));
+        LAB.el('span', { class: 'mono muted', style: 'flex:none' }, x.p ? LAB.fmt0(PJ(x.p)) : '–'))));
       teamCard.append(det);
     }
     const byPos = { QB: [], RB: [], WR: [], TE: [], DEF: [] };

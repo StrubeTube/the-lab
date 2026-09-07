@@ -14,8 +14,9 @@
     mock: null, // {order:[uid...], picks:[], slot, round, onMe, done}
   };
 
-  const ROSTER_SLOTS = ['QB', 'RB', 'RB', 'WR', 'WR', 'TE', 'FLEX', 'FLEX', 'DEF', 'BN', 'BN', 'BN', 'BN', 'BN', 'BN', 'BN'];
-  const TOTAL_ROUNDS = ROSTER_SLOTS.length;
+  // roster shape comes from the league (GGG/LOB draft 16 rounds, the NSL 15)
+  const ROSTER_SLOTS = () => (leagues[state.lg].rosterPositions || ['QB', 'RB', 'RB', 'WR', 'WR', 'TE', 'FLEX', 'FLEX', 'DEF', 'BN', 'BN', 'BN', 'BN', 'BN', 'BN', 'BN']).filter(x => x !== 'IR');
+  const TOTAL_ROUNDS = () => ROSTER_SLOTS().length;
 
   // ---------- helpers ----------
   const L = () => leagues[state.lg];
@@ -244,7 +245,7 @@
     root.append(LAB.el('h2', {}, 'My roster build'));
     const pids = myPicks();
     const byes = {};
-    const slots = ROSTER_SLOTS.map(s => ({ tag: s, pid: null }));
+    const slots = ROSTER_SLOTS().map(s => ({ tag: s, pid: null }));
     const flexable = new Set(['RB', 'WR', 'TE']);
     for (const pid of pids) {
       const p = byId[pid]; if (!p) continue;
@@ -410,7 +411,7 @@
       pick_no: pickNo, draft_slot: pickToSlot(pickNo), is_keeper: !!isKeeper,
     });
     state.mock.round = Math.ceil((state.mock.picks.length + 1) / 10);
-    if (state.mock.picks.length >= TOTAL_ROUNDS * 10) { state.mock.done = true; }
+    if (state.mock.picks.length >= TOTAL_ROUNDS() * 10) { state.mock.done = true; }
   }
 
   function stepMock() {
@@ -436,7 +437,7 @@
         const drafted = draftedSet();
         const have = { QB: 0, RB: 0, WR: 0, TE: 0, DEF: 0 };
         myPicks().forEach(pid => { const x = byId[pid]; if (x) have[x.pos]++; });
-        const myRemaining = TOTAL_ROUNDS - myPicks().length;
+        const myRemaining = TOTAL_ROUNDS() - myPicks().length;
         const mustFill = ['QB', 'TE', 'DEF'].filter(pos => have[pos] === 0);
         let mineNext;
         if (mustFill.length >= myRemaining) {

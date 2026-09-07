@@ -79,6 +79,7 @@
   const SURPLUS_KEYS = ['sBoard', 'sAdp', 'sTrue'];
 
   for (const [tag, L] of Object.entries(leagues)) {
+    if (L.keeperRule === 'redraft') continue; // the NSL has no keepers
     const myRoster = L.rosters.find(r => r.owner === L.myUserId);
     const teams = L.rosters.slice().sort((a, b) => {
       if (a === myRoster) return -1;

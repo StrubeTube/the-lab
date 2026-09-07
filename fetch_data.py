@@ -17,6 +17,7 @@ RAW.mkdir(parents=True, exist_ok=True)
 LEAGUES = {
     "ggg": "1389357057668284416",
     "lob": "1389331963885670400",
+    "nsl": "1389342106291552267",   # The NSL — 10-team full-PPR REDRAFT (added 2026-09-07)
 }
 SEASON = "2026"
 PREV_SEASON = "2025"

@@ -30,7 +30,7 @@
   };
 
   const tabs = LAB.$('#leagueTabs');
-  for (const t of ['ggg', 'lob']) {
+  for (const t of ['ggg', 'lob', 'nsl']) {
     tabs.append(LAB.el('button', {
       class: t === tag ? 'active' : '',
       onclick: e => {
@@ -44,7 +44,7 @@
 
   // Lab @Draft accessors (see compute.py) — scores at the REAL slot in this
   // keeper draft, not national ADP
-  const dKey = k => (tag === 'ggg' ? { s: 'ds', v: 'dg', g: 'dgw' }[k] : { s: 'dls', v: 'dl', g: 'dlw' }[k]);
+  const dKey = k => (tag === 'ggg' ? { s: 'ds', v: 'dg', g: 'dgw' }[k] : tag === 'nsl' ? { s: 'dns', v: 'dn', g: 'dnw' }[k] : { s: 'dls', v: 'dl', g: 'dlw' }[k]);
   const dSlot = p => ((p && p.lab) || {})[dKey('s')] ?? null;
   const dScore = p => ((p && p.lab) || {})[dKey('v')] ?? null;
   const dGap = p => ((p && p.lab) || {})[dKey('g')] ?? null;

@@ -486,7 +486,7 @@
         }
       }
       const mine = holder === 'Strubes';
-      const sim = board ? LAB.keeperSim(players, L, board) : null;
+      const sim = (board && L.keeperRule !== 'redraft') ? LAB.keeperSim(players, L, board) : null;
       const kTxt = !sim ? '' : sim.rounds[pid] ? 'keeper draft: R' + sim.rounds[pid]
         : sim.keptSet.has(pid) ? 'projected KEPT' : 'likely undrafted';
       leagueRows.push(el('div', { class: 'flex', style: 'margin-top:4px' },

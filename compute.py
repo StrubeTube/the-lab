@@ -62,7 +62,7 @@ bc_raw = load("borischen.json")
 state = load("state.json")
 
 leagues = {}
-for tag in ("ggg", "lob"):
+for tag in ("ggg", "lob", "nsl"):
     leagues[tag] = {
         "league": load(f"{tag}_league.json"),
         "users": load(f"{tag}_users.json"),
@@ -75,6 +75,7 @@ for tag in ("ggg", "lob"):
 
 scoring = leagues["ggg"]["league"]["scoring_settings"]
 lob_scoring = leagues["lob"]["league"]["scoring_settings"]
+nsl_scoring = leagues["nsl"]["league"]["scoring_settings"]  # full PPR
 diffs = {k: (scoring.get(k), lob_scoring.get(k))
          for k in set(scoring) | set(lob_scoring)
          if abs((scoring.get(k) or 0) - (lob_scoring.get(k) or 0)) > 1e-9}
@@ -87,6 +88,13 @@ def score(stat_obj):
     if not stat_obj:
         return 0.0
     return round(sum(v * stat_obj.get(k, 0) for k, v in scoring.items() if k in stat_obj), 2)
+
+
+def pscore(stat_obj):
+    """Same, under the NSL's full-PPR scoring."""
+    if not stat_obj:
+        return 0.0
+    return round(sum(v * stat_obj.get(k, 0) for k, v in nsl_scoring.items() if k in stat_obj), 2)
 
 
 # ---- bye weeks 2026 from schedule ----
@@ -187,12 +195,14 @@ if unmatched:
 
 # top up per position by 2026 projected league points
 proj_pts = {}
+pproj_pts = {}  # NSL: full PPR
 for pid, st in proj.items():
     p = players_db.get(pid)
     if p and p.get("position") in POS and p.get("active") and p.get("team"):
         pts = score(st)
         if pts > 0:
             proj_pts[pid] = pts
+            pproj_pts[pid] = pscore(st)
 
 for pos, target in POOL_TARGET.items():
     have = [pid for pid in pool_ids if players_db.get(pid, {}).get("position") == pos]
@@ -222,6 +232,13 @@ def sleeper_adp(pid):
     v = st.get("adp_half_ppr")
     return round(v, 1) if v and v < 900 else None
 
+
+def sleeper_padp(pid):
+    """Full-PPR ADP (the NSL's market)."""
+    st = proj.get(pid) or {}
+    v = st.get("adp_ppr")
+    return round(v, 1) if v and v < 900 else None
+
 players_out = []
 for pid, extra in pool_ids.items():
     p = players_db[pid]
@@ -247,6 +264,8 @@ for pid, extra in pool_ids.items():
         "adp_pos": extra.get("adp_pos"),
         "dyn": dyn_adp(pid),
         "proj": round(proj_pts.get(pid, 0), 1) or None,
+        "padp": sleeper_padp(pid),                     # NSL market (full PPR)
+        "pproj": round(pproj_pts.get(pid, 0), 1) or None,  # NSL scoring
         "p25": season25.get(pid, {}).get("pts"),
         "ppg25": season25.get(pid, {}).get("ppg"),
         "gp25": season25.get(pid, {}).get("gp"),
@@ -267,6 +286,7 @@ for t in all_teams:
         "id": t, "name": t, "team": t, "pos": "DEF",
         "bye": byes.get(t),
         "adp": sleeper_adp(t), "adp_pos": None, "dyn": dyn_adp(t),
+        "padp": sleeper_padp(t),
         "proj": round(def_proj.get(t, 0), 1) or None,
         "p25": season25.get(t, {}).get("pts"),
         "ppg25": season25.get(t, {}).get("ppg"),
@@ -373,6 +393,8 @@ def league_out(tag):
                         last_kept.append(pk["player_id"])
     draft_keepers = [{"pid": pk["player_id"], "round": pk["round"], "pick": pk.get("pick_no")}
                      for pk in (L.get("draft_picks") or []) if pk.get("is_keeper")]
+    if tag == "nsl":  # redraft: last year's rounds must never look like keeper costs
+        last_rounds, last_kept, draft_keepers = {}, [], []
     for old, new in KEEPER_SWAPS.get(tag, []):
         for r in rosters:
             r["keepers"] = [new if k == old else k for k in (r["keepers"] or [])]
@@ -400,11 +422,11 @@ def league_out(tag):
         })(L.get("draft_detail") or {}),
         # both leagues use the same rule (confirmed by Alex 08-25): first keep
         # costs the round he was drafted; repeat keeps escalate one round/yr
-        "keeperRule": "round_slot",
-        "keeperMax": (L["league"].get("settings") or {}).get("max_keepers", 3),
+        "keeperRule": "redraft" if tag == "nsl" else "round_slot",
+        "keeperMax": 0 if tag == "nsl" else (L["league"].get("settings") or {}).get("max_keepers", 3),
     }
 
-leagues_out = {tag: league_out(tag) for tag in ("ggg", "lob")}
+leagues_out = {tag: league_out(tag) for tag in ("ggg", "lob", "nsl")}
 
 # ---- intel.json: draft tendencies per owner per league ----
 def build_intel(tag):
@@ -474,7 +496,7 @@ def build_intel(tag):
         })
     return sorted(out, key=lambda x: (not x["current"], x["name"].lower()))
 
-intel_out = {tag: build_intel(tag) for tag in ("ggg", "lob")}
+intel_out = {tag: build_intel(tag) for tag in ("ggg", "lob", "nsl")}
 
 # ---- slim lookup for any rostered/drafted player id ----
 lookup = {}
@@ -544,6 +566,11 @@ if consensus_path.exists():
             base = 0.5 * base + 0.5 * hc
             shaded += 1
         e["madp"] = round(base, 1)
+        pb = e.get("padp")
+        if pb is not None:
+            if hc is not None and abs(hc - pb) >= SHADE_AT:
+                pb = 0.5 * pb + 0.5 * hc
+            e["pmadp"] = round(pb, 1)
     print(f"  madp: Sleeper base, {shaded} shaded toward analysts")
 
 # ---- Vegas rankings: REMOVED (2026-09-01) ----
@@ -721,7 +748,7 @@ def build_trades(tag):
 
 
 print("Building trade history...")
-trades_out = {t: build_trades(t) for t in ("ggg", "lob")}
+trades_out = {t: build_trades(t) for t in ("ggg", "lob", "nsl")}
 
 
 # ---- Lab Score data layer (phase 1) ------------------------------------
@@ -1442,7 +1469,7 @@ for _tag, _kkey, _wkey in (("ggg", "kg", "kgw"), ("lob", "kl", "klw")):
 #   lab.dg / lab.dl   0-100 score at his keeper-adjusted draft slot
 #   lab.dgw / lab.dlw window gap vs who is ACTUALLY available around him
 #   lab.ds / lab.dls  that expected slot itself (drives every UI label)
-for _tag, _sk, _dk, _wk in (("ggg", "ds", "dg", "dgw"), ("lob", "dls", "dl", "dlw")):
+for _tag, _sk, _dk, _wk, _ak in (("ggg", "ds", "dg", "dgw", "adp"), ("lob", "dls", "dl", "dlw", "adp"), ("nsl", "dns", "dn", "dnw", "padp")):
     _Lg = leagues_out[_tag]
     _off = set()
     for _r2 in _Lg["rosters"]:
@@ -1452,8 +1479,8 @@ for _tag, _sk, _dk, _wk in (("ggg", "ds", "dg", "dgw"), ("lob", "dls", "dl", "dl
         _off.add(str(_dkp["pid"]))
     _avail = sorted((e for e in players_out
                      if (e.get("lab") or {}).get("sfty") is not None
-                     and e.get("adp") and e["id"] not in _off),
-                    key=lambda x: x["adp"])
+                     and (e.get(_ak) or e.get("adp")) and e["id"] not in _off),
+                    key=lambda x: x.get(_ak) or x["adp"])
     for _i, e in enumerate(_avail):
         lab = e["lab"]
         _slot2 = _i + 1
